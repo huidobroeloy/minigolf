@@ -35,7 +35,7 @@ export default [
   },
   {
     id: 'sector5-3', name: 'Celestial Dome', sector: 'sector5', par: 4, time: 150,
-    tee: [0, 0, 0], cup: [0, 3, 15],
+    tee: [0, 0, 0], cup: [1.3, 3, 15.2],
     hio: 'Hit the boost pad on the right: up the steep ramp, into the dome while the fence gap faces you.',
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [2.7, 6], [1.3, 6], [1.2, 6], [-1.2, 6], [-3, 6]], open: [3, 5] },
@@ -43,8 +43,8 @@ export default [
       { t: 'ramp', a: [2, 6], b: [2, 10.5], w: 1.4, ya: 0, yb: 3 },
       { t: 'mover', s: [2.4, 0.4, 2.9], path: elevator(0, 7.55, -0.2, 2.8, 8), sideLook: 's5' },
       { t: 'floor', y: 3, poly: circlePoly(0, 14, 5, 24), open: [17, 18, 19] },
-      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([0, 15], 1.9, 6, 3.25, 0), look: 's5' },
-      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([0, 15], 1.9, 6, 3.25, 0.5), look: 's5' },
+      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([1.3, 15.2], 1.9, 6, 3.25, 0), look: 's5' },
+      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([1.3, 15.2], 1.9, 6, 3.25, 0.5), look: 's5' },
       { t: 'monster', type: 'scyphozoa', path: orbit([0, 14.5], 2.6, 14, 5.2), grab: [0, 3.3, 10.2] },
       { t: 'monster', type: 'manta', path: patrol([-3.5, 3], [3.5, 3], 6, 1.0, 0.25) },
     ],

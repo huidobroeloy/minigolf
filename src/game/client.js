@@ -235,7 +235,7 @@ export class GameClient {
     return {
       course: this.course,
       forces(ball) {
-        out.x = out.y = out.z = 0; out.wake = false; out.teleport = null;
+        out.x = out.y = out.z = 0; out.wake = false; out.teleport = null; out.launch = null;
         self.course.zoneForces(ball, out);
         self.effects.forces(ball, out, self.simTime);
         return out;
@@ -266,6 +266,7 @@ export class GameClient {
     if (type === 'wall') sfx.play('wall', data.strength);
     else if (type === 'bumper') { sfx.play('bumper'); data.bumper.hitT = this.simTime + 0.25; }
     else if (type === 'stick') sfx.play('stick');
+    else if (type === 'vent') sfx.play('whoosh');
     else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
     else if (type === 'sinkStart') sfx.play('cup');
     else if (type === 'rest') this.onRest();

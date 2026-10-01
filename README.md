@@ -27,8 +27,13 @@ Connections are peer-to-peer (WebRTC via PeerJS), so there's no server to run.
 | Space (hold) | Alternative power meter |
 | 1 2 3 | Use a power-up (Shift + number discards it) |
 | C | Overhead view |
-| Tab | Spectate others after you hole out |
+| Tab / 👁️ | Spectate others after you hole out |
 | H, M | Help, mute |
+| ⏭️ (host only) | End the current hole for everyone, e.g. if someone is AFK |
+| 🚪 | Leave the game |
+
+The aim line **wobbles** a little, and harder shots wobble more. Your putt goes wherever the line points when you release, so time it. Steady Aim removes the wobble.
+On a phone or tablet, drag down from anywhere to putt, and use two fingers to rotate the camera.
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
@@ -76,13 +81,21 @@ After you hole out you can still use power-ups that target other players or affe
 6. **Cyberpunk Fortune Falls:** fortune pits, conveyors, teleporters, and sweepers.
 
 ## Development
-No build step is needed: it's plain ES modules, with Three.js, Rapier and PeerJS loaded from jsDelivr. Serve the folder with any static server:
+No build step is needed: it's plain ES modules, with Three.js, Rapier and PeerJS loaded from jsDelivr. Run the bundled no-cache dev server, which makes edited modules always reload:
 
 ```bash
-python -m http.server 8000
+python tools/devserver.py 8000
 ```
 
 Then open `http://localhost:8000`.
+
+Code map:
+- `src/holes/*.js`: one file per sector. Each hole is plain data: floors, ramps, walls, movers, zones, pits and monsters.
+- `src/course/builder.js`: turns that hole data into meshes and Rapier colliders.
+- `src/physics/ball.js`: the rolling model, cup capture and aim wobble.
+- `src/net/room.js`: the host-authoritative room, covering the timer, scores, pickups and power-up routing.
+- `src/powerups/`: the power-up registry, the effects on your ball, and the deterministic global hazards.
+- `src/monsters/index.js`: the XANA monsters.
 
 Debug options:
 - `?hole=N` jumps straight into solo practice on hole N.

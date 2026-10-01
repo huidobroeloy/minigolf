@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
 import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly } from './geometry.js';
 import { CUP_R } from '../physics/ball.js';
+import { GRAVITY } from '../physics/world.js';
 import { createMonster } from '../monsters/index.js';
 import { decorate } from './deco.js';
 import { RNG } from '../core/rng.js';
@@ -456,11 +457,17 @@ export function buildCourse(def, physics, scene) {
         const sp = z.speed ?? 12;
         if (along < sp) { out.x += z.dir[0] * 60; out.z += z.dir[1] * 60; out.wake = true; }
       } else if (z.kind === 'vent') {
-        if (p.y < zy + (z.height ?? 3)) {
-          out.y += z.lift ?? 34;
-          if (z.push) { out.x += z.push[0]; out.z += z.push[1]; }
-          out.wake = true;
-        }
+        // a geyser: fires the ball upward, keeping its own horizontal speed (with a minimum push)
+        if ((ball.ventCool ?? 0) > 0 || p.y - zy > ball.radius + 0.35) continue;
+        const d = z.push || [0, 1];
+        const dl = Math.hypot(d[0], d[1]) || 1;
+        const ux = d[0] / dl, uz = d[1] / dl;
+        let nx = v.x, nz = v.z;
+        const along = nx * ux + nz * uz;
+        const minSp = z.minSpeed ?? 2.8;
+        if (along < minSp) { nx += ux * (minSp - along); nz += uz * (minSp - along); }
+        out.launch = { x: nx, y: z.launch ?? 10.5, z: nz };
+        out.wake = true;
       } else if (z.kind === 'wind') {
         out.x += z.dir[0] * (z.force ?? 4); out.z += z.dir[1] * (z.force ?? 4);
         if (ball.state === 'moving') out.wake = true;

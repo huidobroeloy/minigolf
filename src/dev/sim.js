@@ -20,7 +20,7 @@ export function simulateShot(def, { yaw, power, t0 = 0, chip = false, maxTime = 
   const out = { x: 0, y: 0, z: 0, wake: false };
   const env = {
     course,
-    forces(b) { out.x = out.y = out.z = 0; out.wake = false; out.teleport = null; course.zoneForces(b, out); return out; },
+    forces(b) { out.x = out.y = out.z = 0; out.wake = false; out.teleport = null; out.launch = null; course.zoneForces(b, out); return out; },
     decelMul: 1,
     zoneDecel: (b) => course.zoneDecel(b),
     stickyWalls: false,

@@ -39,6 +39,7 @@ export class Ball {
     this.groundMeta = null;
     this.restTimer = 0;
     this.launchTimer = 0;
+    this.ventCool = 0;
     this.lastSafe = new THREE.Vector3();
     this.prevVel = new THREE.Vector3();
     this.mods = {
@@ -138,6 +139,20 @@ export class Ball {
     if (this.launchTimer > 0) this.launchTimer -= dt;
     const v = this.body.linvel();
     const acc = env.forces ? env.forces(this, dt) : { x: 0, y: 0, z: 0, wake: false };
+    // something is lifting the ball (vent, tornado, laser hit…): don't glue it to the floor
+    if (acc.y > GRAVITY * 0.4) this.launchTimer = Math.max(this.launchTimer, 0.12);
+    if (this.ventCool > 0) this.ventCool -= dt;
+    if (acc.launch) {
+      const L = acc.launch;
+      acc.launch = null;
+      this.body.setLinvel(L, true);
+      this.state = 'moving';
+      this.restTimer = 0;
+      this.launchTimer = 0.25;
+      this.ventCool = 0.8;
+      this.onEvent('vent', {});
+      return;
+    }
     if (acc.teleport) {
       const tp = acc.teleport;
       acc.teleport = null;
@@ -211,7 +226,7 @@ export class Ball {
       // snap: kill small hops caused by seams / landing
       const pv = this.platformVel();
       const rn = (v.x - pv.x) * hit.normal.x + (v.y - pv.y) * hit.normal.y + (v.z - pv.z) * hit.normal.z;
-      if (this.launchTimer <= 0 && rn > 0 && rn < 2.2) {
+      if (this.launchTimer <= 0 && rn > 0 && rn < 3.2) {
         v = { x: v.x - hit.normal.x * rn, y: v.y - hit.normal.y * rn, z: v.z - hit.normal.z * rn };
         this.body.setLinvel(v, true);
       }

@@ -66,10 +66,10 @@ export default [
     hio: 'Ride vent one slightly left so you land in line with vent two, then roll to the cup.',
     parts: [
       { t: 'floor', poly: rect(-2.5, -1.2, 2.5, 7) },
-      { t: 'zone', kind: 'vent', c: [0, 6], r: 0.9, y: 0, height: 3.6, lift: 34, push: [0, 4] },
+      { t: 'zone', kind: 'vent', c: [0, 5.6], r: 0.9, y: 0, height: 3.2, launch: 10.5, push: [0, 1], minSpeed: 3 },
       rock(-1.6, 3.2, 0.45, 1.2), rock(1.7, 4.0, 0.4, 1.0),
       { t: 'floor', y: 2.5, poly: rect(-3, 7.2, 3, 15), open: [0], holes: [{ poly: rect(0.4, 10.4, 2.6, 12.6) }] },
-      { t: 'zone', kind: 'vent', c: [-1.0, 14], r: 0.75, y: 2.5, height: 3.4, lift: 34, push: [0, 5] },
+      { t: 'zone', kind: 'vent', c: [-1.0, 13.8], r: 0.85, y: 2.5, height: 3.2, launch: 10.5, push: [0, 1], minSpeed: 3 },
       { t: 'crumble', p: [1.5, 2.5, 11.5], s: [2.2, 2.2] },
       { t: 'monster', type: 'tarantula', path: patrol([2.3, 10.5], [-2.3, 10.5], 5, 2.5) },
       { t: 'floor', y: 5, poly: rect(-3, 15.4, 3, 22), open: [0] },
