@@ -75,15 +75,21 @@ export class Pickups {
         const k = (t - it.dissolve) / 0.5;
         if (k >= 1 || k < 0) { it.mesh.visible = false; continue; }
         it.mesh.scale.set(1 - k, 1 + k * 2.5, 1 - k);
-        u.eye.position.y = 1.75 + k * 2.5;
+        u.eye.position.y = 1.72 + k * 2.5;
         continue;
       }
       it.mesh.visible = true;
       const grow = Math.min(1, Math.max(0.01, (t - it.born) / 0.6));
       it.mesh.scale.set(grow, grow, grow);
       u.tower.userData.animate(t + it.phase);
-      u.eye.position.y = 1.75 + Math.sin(t * 2.2 + it.phase) * 0.08;
+      // hover: a slow bob, a lazy spin and a little sway
+      const bob = Math.sin(t * 1.7 + it.phase);
+      u.float.position.y = 0.12 + bob * 0.13;
+      u.float.rotation.y = t * 0.7 + it.phase;
+      u.float.rotation.z = Math.sin(t * 1.1 + it.phase) * 0.06;
       u.eye.material.rotation = Math.sin(t * 0.8 + it.phase) * 0.25;
+      u.pool.material.opacity = 0.42 - bob * 0.12; // the glow tightens as it dips
+      u.pool.scale.setScalar(1 - bob * 0.1);
       u.ring.scale.setScalar(1 + Math.sin(t * 3 + it.phase) * 0.08);
     }
   }

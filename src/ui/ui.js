@@ -3,7 +3,7 @@ import { COLORS } from '../net/room.js';
 import { HOLES, SECTORS } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
-import { portrait, mountLive, stopLive } from './portraits.js';
+import { portrait, portraitBig } from './portraits.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -223,10 +223,10 @@ export class UI {
       const ch = characterByColor(sel) || CHARACTERS[0];
       host.innerHTML = `
         <div class="cs ${compact ? 'compact' : ''}">
-          <div class="cs-detail">
-            <div class="cs-live"></div>
+          <div class="cs-detail" style="--c:${ch.ui}">
+            <div class="cs-big"><img class="px" alt="" src="${portraitBig(ch.id)}" /></div>
             <div class="cs-info">
-              <div class="cs-full">${esc(ch.full)}</div>
+              <div class="cs-full sf-name">${esc(ch.full)}</div>
               <div class="cs-tag">${esc(ch.tag)}</div>
               <div class="cs-ballrow"><i class="cs-ball" style="background:${characterCss(ch)}"></i><span>ball</span></div>
             </div>
@@ -234,10 +234,9 @@ export class UI {
           <div class="cs-grid">${CHARACTERS.map((c) => {
             const who = taken.get(c.ui);
             return `<button class="cs-tile ${c.ui === ch.ui ? 'sel' : ''} ${who ? 'taken' : ''}" data-c="${c.ui}" style="--c:${c.ui}" ${who ? 'disabled' : ''}>
-              <img alt="" src="${portrait(c.id)}" /><span>${esc(c.name)}</span>${who ? `<em>${esc(who)}</em>` : ''}</button>`;
+              <img class="px" alt="" src="${portrait(c.id)}" /><span>${esc(c.name)}</span>${who ? `<em>${esc(who)}</em>` : ''}</button>`;
           }).join('')}</div>
         </div>`;
-      mountLive(host.querySelector('.cs-live'), ch.id);
       host.querySelectorAll('.cs-tile:not(.taken)').forEach((b) => b.addEventListener('click', () => {
         render(b.dataset.c);
         onPick?.(b.dataset.c);
@@ -248,16 +247,15 @@ export class UI {
 
   /** Fighting-game VS intro before the first hole. */
   showVS(players) {
-    stopLive();
     const cards = players.map((p, i) => {
       const ch = characterByColor(p.color);
       return `<div class="vs-card" style="--c:${p.color}; animation-delay:${i * 0.12}s">
-        <img alt="" src="${ch ? portrait(ch.id) : ''}" />
-        <div class="vs-full">${esc(ch?.full || '')}</div><div class="vs-player">${esc(p.name)}</div></div>`;
+        <img class="px" alt="" src="${ch ? portraitBig(ch.id) : ''}" />
+        <div class="vs-full sf-name">${esc(ch?.full || '')}</div><div class="vs-player">${esc(p.name)}</div></div>`;
     });
     const mid = Math.ceil(cards.length / 2);
     const html = cards.length === 1
-      ? `${cards[0]}<div class="vs-bolt">VS</div><div class="vs-card xana-card" style="--c:#ff3b3b"><img alt="" src="${portrait('xana')}" /><div class="vs-full">XANA</div><div class="vs-player">the course</div></div>`
+      ? `${cards[0]}<div class="vs-bolt">VS</div><div class="vs-card xana-card" style="--c:#ff3b3b"><img class="px" alt="" src="${portraitBig('xana')}" /><div class="vs-full sf-name">XANA</div><div class="vs-player">the course</div></div>`
       : `<div class="vs-side">${cards.slice(0, mid).join('')}</div><div class="vs-bolt">VS</div><div class="vs-side">${cards.slice(mid).join('')}</div>`;
     const vs = this.$('#vs');
     vs.innerHTML = `<div class="vs-wrap">${html}</div>`;
@@ -270,7 +268,6 @@ export class UI {
 
   // ---------- HUD ----------
   showHud(info) {
-    stopLive();
     this.setScreen('');
     this.$('#hud').classList.remove('hidden');
     this.$('.hole-no').textContent = `HOLE ${info.holeNo + 1}/${info.total}`;

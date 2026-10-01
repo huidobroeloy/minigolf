@@ -25,7 +25,7 @@ export default [
     id: 'fortune-2', name: 'Slot Alley', sector: 'fortune', par: 5, time: 170,
     tee: [0, 0, 0], cup: [11.5, 0, 29],
     fortuneDrops: [[0, 0, 0.5], [10.5, 0, 26.9], [1.5, 0, 15], [6, 0, 27.4], [1.8, 0, 3], [13, 0, 27]],
-    hio: 'Over the boost pad, threading every pit, into the corner kicker — it fires you down the neon arm.',
+    hio: 'Over the boost pad, threading every pit, off the corner kicker onto the booster, which fires you down the neon arm.',
     parts: [
       {
         t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 25.5], [14, 25.5], [14, 30.5], [-2.5, 30.5]],
@@ -33,6 +33,7 @@ export default [
           pit(5.5, 27.2, 0.45), pit(8.2, 26.9, 0.45), pit(9.6, 26.6, 0.4)],
       },
       kicker([-2.5, 27.6], [0.4, 30.5]),
+      { t: 'zone', kind: 'boost', rect: [0.6, 27.8, 2.4, 30.4], dir: [1, 0], speed: 9, align: 2 },
       { t: 'zone', kind: 'boost', rect: [-0.6, 1.8, 0.6, 3.2], dir: [0, 1], speed: 9 },
       { t: 'zone', kind: 'conveyor', rect: [6.6, 25.5, 7.6, 30.5], dir: [0, -1], speed: 2.2 },
       { t: 'teleport', p: [-1.5, 0, 14.2], to: [[10.5, 0, 26.9], [0, 0, 0.5], [1.6, 0, 11]] },

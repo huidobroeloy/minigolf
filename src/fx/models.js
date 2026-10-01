@@ -190,22 +190,57 @@ export function makeSpawnBumper(r) {
  * category colour, with the XANA eye glowing above it. The exact item is a surprise.
  */
 const eyeMats = new Map();
+let _glowTex;
+function glowTex() {
+  if (_glowTex) return _glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,0.9)'); grd.addColorStop(0.45, 'rgba(255,255,255,0.35)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  _glowTex = new THREE.CanvasTexture(c);
+  return _glowTex;
+}
+
+/**
+ * A pickup: a small hologram of a Lyoko tower hovering above the floor. It's see-through
+ * and bobs, so it reads as something you roll through, not something you bounce off.
+ */
 export function makePickup(color = '#3da5ff') {
   const g = new THREE.Group();
-  const tower = makeTower(color, 1.25, '#eef2fa', { r: 0.12, wisps: 26, wispSize: 0.16, shadows: false });
-  g.add(tower);
+  const float = new THREE.Group();
+  g.add(float);
+  const tower = makeTower(color, 0.95, '#eef2fa', { r: 0.11, wisps: 22, wispSize: 0.15, shadows: false, roots: false });
+  const tint = new THREE.Color(color);
+  tower.traverse((o) => {
+    if (!o.isMesh || !o.material.isMeshStandardMaterial) return;
+    o.material.transparent = true;
+    o.material.opacity = 0.42;
+    o.material.depthWrite = false;
+    o.material.emissive = tint;
+    o.material.emissiveIntensity = 0.45;
+    o.castShadow = o.receiveShadow = false;
+  });
+  tower.position.y = 0.42;
+  float.add(tower);
   if (!eyeMats.has(color)) {
     eyeMats.set(color, new THREE.SpriteMaterial({ map: TEX.xanaEyeGlow(), color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   }
   const eye = new THREE.Sprite(eyeMats.get(color));
-  eye.scale.set(0.55, 0.55, 1);
-  eye.position.y = 1.75;
-  g.add(eye);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.48, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
+  eye.scale.set(0.5, 0.5, 1);
+  eye.position.y = 1.72;
+  float.add(eye);
+  // a soft glow on the floor beneath it (no hard base, nothing that looks solid)
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), new THREE.MeshBasicMaterial({ map: glowTex(), color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.y = 0.03;
+  g.add(pool);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.48, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.02;
+  ring.position.y = 0.025;
   g.add(ring);
-  g.userData = { tower, eye, ring };
+  g.userData = { tower, eye, ring, float, pool };
   return g;
 }
 

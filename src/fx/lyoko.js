@@ -44,7 +44,7 @@ export const TOWER_BODY = {
   desert: '#d8b27e', forest: '#d8d6c6', ice: '#cfe4f4', mountain: '#cbbfb2', sector5: '#e6ecff', fortune: '#d9c6f2',
 };
 
-export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85, wisps = 70, wispSize = 0.75, shadows = true } = {}) {
+export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85, wisps = 70, wispSize = 0.75, shadows = true, roots = true } = {}) {
   const g = new THREE.Group();
   const k = r / 0.85; // roots scale with the tower
   const skin = new THREE.MeshStandardMaterial({ color: body, roughness: 0.35, metalness: 0.05 });
@@ -57,7 +57,7 @@ export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85
   part(new THREE.SphereGeometry(r * 1.02, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), crownMat, g, [0, h + 0.22 * k, 0], [0, 0, 0], [1, 0.35, 1]);
   // black roots
   const rootMat = new THREE.MeshStandardMaterial({ color: '#111014', roughness: 0.35, metalness: 0.4 });
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < (roots ? 11 : 0); i++) {
     const a = (i / 11) * Math.PI * 2 + Math.sin(i * 7.3) * 0.3;
     const reach = (1.4 + ((i * 37) % 10) / 10 * 1.4) * k;
     const up = Math.min(h * 0.25, (1.2 + ((i * 53) % 10) / 10 * 1.6) * k);
@@ -71,7 +71,7 @@ export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85
     tube.castShadow = shadows;
     g.add(tube);
   }
-  part(new THREE.CylinderGeometry(r * 1.15, r * 1.5, 0.9 * k, 20), rootMat, g, [0, 0.4 * k, 0]);
+  if (roots) part(new THREE.CylinderGeometry(r * 1.15, r * 1.5, 0.9 * k, 20), rootMat, g, [0, 0.4 * k, 0]);
 
   // aura: wisps drifting up and around the tower
   const N = wisps;
