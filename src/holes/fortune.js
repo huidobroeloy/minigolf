@@ -3,7 +3,7 @@ import { rect, patrol, spin, kicker, shuttle } from './helpers.js';
 const pit = (x, z, r = 0.5) => ({ c: [x, z], r, fortune: true });
 
 // Fortune Falls board: staggered neon pegs on the slope, a few bumpers, two shuttling paddles.
-const boardY = (z) => 2 - (z - 16) * (4 / 16);
+const boardY = (z) => 1.7 - (z - 16) * (3.7 / 16);
 function board() {
   const parts = [];
   const bumpers = new Set(['2:0', '4:-2.4', '4:2.4', '6:0']);
@@ -72,17 +72,19 @@ export default [
     id: 'fortune-3', name: 'Fortune Falls', sector: 'fortune', par: 4, time: 170,
     tee: [0, 0, 0], cup: [0, -2, 37.6],
     cups: [[-3.43, -2, 37.2], [3.43, -2, 37.2]],
-    fortuneDrops: [[0, 0, 1], [-4.2, 2, 14.6], [4.2, 2, 14.6], [-1.71, -2, 38.6], [1.71, -2, 38.6], [0, 0, 4.5]],
+    fortuneDrops: [[0, 0, 1], [-4.2, 1.9, 14.2], [4.2, 1.9, 14.2], [-1.71, -2, 38.6], [1.71, -2, 38.6], [0, 0, 4.5]],
     hio: 'Climb to the deck with pace, dodge the spinner and let the board decide — the centre lane is the jackpot.',
     parts: [
-      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [1.5, 6], [-1.5, 6], [-3, 6]], open: [3] },
-      { t: 'mover', kind: 'obst', s: [1.4, 0.5, 0.25], path: patrol([-1.9, 3.6], [1.9, 3.6], 3.2, 0.25), look: 'neon' },
-      { t: 'ramp', a: [0, 6], b: [0, 13], w: 3, ya: 0, yb: 2 },
-      // the deck at the top of the board, with a spinner that sends you left or right
-      { t: 'floor', y: 2, poly: [[-6, 13], [-1.5, 13], [1.5, 13], [6, 13], [6, 16], [-6, 16]], open: [1, 4] },
-      { t: 'mover', kind: 'obst', s: [2.6, 0.5, 0.25], path: spin(0, 2.25, 14.6, 2.4), look: 'neon' },
+      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [2, 6], [-2, 6], [-3, 6]], open: [3] },
+      { t: 'mover', kind: 'obst', s: [1.0, 0.5, 0.25], path: patrol([-2.2, 3.6], [2.2, 3.6], 3.6, 0.25), look: 'neon' },
+      { t: 'ramp', a: [0, 6], b: [0, 13], w: 4, ya: 0, yb: 2 },
+      // the deck at the top of the board, tilted toward it, with a spinner that sends you left or right
+      { t: 'ramp', a: [0, 13], b: [0, 16], w: 12, ya: 2, yb: 1.7, mat: 'glass' },
+      { t: 'wall', pts: [[-6, 13], [-2, 13]], y: 2 },
+      { t: 'wall', pts: [[2, 13], [6, 13]], y: 2 },
+      { t: 'mover', kind: 'obst', s: [2.6, 0.5, 0.25], path: spin(0, 2.1, 14.6, 2.4), look: 'neon' },
       // the board
-      { t: 'ramp', a: [0, 16], b: [0, 32], w: 12, ya: 2, yb: -2, mat: 'glass' },
+      { t: 'ramp', a: [0, 16], b: [0, 32], w: 12, ya: 1.7, yb: -2, mat: 'glass' },
       ...board(),
       // the landing: seven lanes, then cups and fortune pits
       {
