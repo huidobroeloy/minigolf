@@ -119,7 +119,7 @@ export class EffectManager {
         if (isMe && fx.pu === 'switch') this.doSwitch(fx.params.b);
         break;
       case 'aura':
-        this.auras.push({ from: fx.from, start: fx.at / 1000, dur: 10, r: 3.2 });
+        this.auras.push({ from: fx.from, start: fx.at / 1000, dur: 10, r: 3.8 });
         if (!isMe) sfx.play('heart');
         break;
       case 'place':
@@ -338,7 +338,7 @@ export class EffectManager {
     if (ball.mods.magnet && ball.state === 'moving') {
       const cup = this.course.cup, p = ball.pos;
       const dx = cup.x - p.x, dz = cup.z - p.z, d = Math.hypot(dx, dz);
-      if (d < 5 && d > 0.05) { const k = 9 * (1 - d / 5) + 2; out.x += (dx / d) * k; out.z += (dz / d) * k; }
+      if (d < 7 && d > 0.05) { const k = 11 * (1 - d / 7) + 2.5; out.x += (dx / d) * k; out.z += (dz / d) * k; }
     }
     // black holes
     for (const o of this.placed) {
@@ -346,7 +346,7 @@ export class EffectManager {
       const p = ball.pos;
       const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
       if (d < o.range && Math.abs(p.y - o.y) < 1.5) {
-        const k = 18 * (1 - d / o.range) + 3;
+        const k = 24 * (1 - d / o.range) + 4;
         out.x += (dx / (d || 1)) * k; out.z += (dz / (d || 1)) * k;
         out.wake = true;
         if (d < 0.38) this.client.onSwallowed(ball);
@@ -461,6 +461,19 @@ export class EffectManager {
     if (this.lady && this.group) { this.group.remove(this.lady); this.group.remove(this.leashLine); }
     this.lady = null;
     this.leashLine = null;
+  }
+
+  /** What's active right now, for the HUD chips. */
+  chips(t) {
+    const out = [];
+    for (const h of this.hazards) out.push({ icon: POWERUPS[h.fx.pu].icon, text: `${Math.max(0, Math.ceil(h.dur - h.local(t)))}s` });
+    for (const s of this.swarms) out.push({ icon: '🪲', text: `${Math.max(0, Math.ceil(s.until - t))}s` });
+    for (const c of this.creations) out.push({ icon: '✨', text: `${Math.max(0, Math.ceil(c.until - t))}s` });
+    if (this.stickyWalls) out.push({ icon: '🪤', text: 'all hole' });
+    if (this.shield) out.push({ icon: '🛡️', text: 'ready', good: true });
+    const mine = this.auras.find((a) => a.from === this.client.myId && t - a.start <= a.dur);
+    if (mine) out.push({ icon: '💔', text: `${Math.ceil(mine.dur - (t - mine.start))}s`, good: true });
+    return out;
   }
 
   /** Marks a bumper hit for the squash animation. */

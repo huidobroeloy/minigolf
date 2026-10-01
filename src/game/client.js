@@ -122,7 +122,7 @@ export class GameClient {
         break;
       }
       case 'picked': {
-        const it = this.pickups?.take(m.pid);
+        const it = this.pickups?.take(m.pid, this.simTime);
         if (it) this.effects.burst(it.pos, it.cat);
         if (m.by === this.myId && m.pu) this.addPowerup(m.pu, 'pickup');
         break;
@@ -147,7 +147,10 @@ export class GameClient {
         const p = this.players.get(m.id);
         if (p) { p.holed = true; p.strokes = m.strokes; }
         this.playersDirty = true;
-        if (m.id !== this.myId) this.ui.feed(`${p?.name} holed out in ${m.strokes}${m.hio ? ' — HOLE IN ONE!' : ''}`);
+        if (m.id !== this.myId) {
+          this.ui.feed(`${p?.name} holed out in ${m.strokes}${m.hio ? ' — HOLE IN ONE!' : ''}`);
+          if (this.course) this.cupCelebration(p?.color || '#ffffff', true);
+        }
         break;
       }
       case 'emote':
@@ -208,6 +211,8 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    for (const c of this.celebrations || []) this.scene.remove(c.g);
+    this.celebrations = [];
     for (const em of this.emotes) this.scene.remove(em.s);
     this.emotes = [];
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
@@ -325,7 +330,7 @@ export class GameClient {
     else if (type === 'stick') sfx.play('stick');
     else if (type === 'vent') sfx.play('whoosh');
     else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
-    else if (type === 'sinkStart') sfx.play('cup');
+    else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false); }
     else if (type === 'rest') this.onRest();
   }
 
@@ -339,7 +344,8 @@ export class GameClient {
   onHoled() {
     if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
     const name = scoreName(this.strokes, this.def.par);
-    this.ui.bigToast(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
+    this.ui.stamp(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
+    if (this.strokes === 1) this.aceFireworks();
     if (this.strokes === 1) { sfx.play('hio'); this.stat('hio'); }
     if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
     this.endTrip(true);
@@ -354,6 +360,61 @@ export class GameClient {
   /** Glowing dotted trail behind fast balls (yours and the ghosts'). */
   trail(p, color, r) {
     this.effects.particles?.spawn({ pos: [p.x, p.y, p.z], color, size: 0.22 * (r / 0.18), life: 0.35 });
+  }
+
+  /** Rings in the player's colour rise out of the cup, sparkles burst, the flag spins. */
+  cupCelebration(color, isGhost, at = null) {
+    const c = at || this.course.cup;
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    for (let i = 0; i < 4; i++) {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 36), mat);
+      r.rotation.x = Math.PI / 2;
+      g.add(r);
+    }
+    g.position.set(c.x, c.y, c.z);
+    this.scene.add(g);
+    (this.celebrations ||= []).push({ g, mat, t: 0 });
+    for (let i = 0; i < (isGhost ? 20 : 40); i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.effects.particles?.spawn({ pos: [c.x, c.y + 0.1, c.z], vel: [Math.cos(a) * 1.6, 2 + Math.random() * 3, Math.sin(a) * 1.6], color: i % 2 ? color : '#ffffff', size: 0.14, life: 1.1, gravity: 2 });
+    }
+    if (!isGhost) { this.course.flagSpin = this.simTime; this.cam.dist = Math.max(2.2, this.cam.dist * 0.75); }
+  }
+
+  updateCelebrations(dt) {
+    if (!this.celebrations) return;
+    for (const c of this.celebrations) {
+      c.t += dt;
+      c.g.children.forEach((r, i) => {
+        const k = Math.max(0, c.t - i * 0.12);
+        r.position.y = k * 1.8;
+        r.scale.setScalar(1 + k * 0.8);
+      });
+      c.mat.opacity = Math.min(c.maxOp ?? 0.9, Math.max(0, 0.9 - c.t * 0.6));
+    }
+    this.celebrations = this.celebrations.filter((c) => { if (c.t > 1.6) { this.scene.remove(c.g); return false; } return true; });
+  }
+
+  /** Hole-in-one: a tower-style pillar of light and fireworks over the cup. */
+  aceFireworks() {
+    const c = this.course.cup;
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 16, 32, 1, true), new THREE.MeshBasicMaterial({ color: this.me.color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    pillar.position.set(c.x, c.y + 7, c.z);
+    this.scene.add(pillar);
+    (this.celebrations ||= []).push({ g: pillar, mat: pillar.material, t: -1.2, maxOp: 0.28 });
+    for (let burst = 0; burst < 5; burst++) {
+      setTimeout(() => {
+        if (!this.course) return;
+        const h = 3 + Math.random() * 3, ox = (Math.random() - 0.5) * 3, oz = (Math.random() - 0.5) * 3;
+        const cols = ['#ffd24d', '#ff4dc4', '#4dfff3', this.me.color, '#ffffff'];
+        for (let i = 0; i < 50; i++) {
+          const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI - Math.PI / 2, s = 3 + Math.random() * 2;
+          this.effects.particles?.spawn({ pos: [c.x + ox, c.y + h, c.z + oz], vel: [Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s + 1, Math.sin(a) * Math.cos(e) * s], color: cols[burst % cols.length], size: 0.2, life: 1.4, gravity: 3, drag: 0.8 });
+        }
+        sfx.play('bumper');
+      }, burst * 260);
+    }
   }
 
   confetti(n) {
@@ -759,7 +820,10 @@ export class GameClient {
       const inv = this.effects.has('possession') ? 1 : -1; // XANA flips your controls
       if (this.aim) {
         if (!this.canShoot()) { this.cancelAim(); return; }
-        const range = window.innerHeight * 0.32;
+        // full power always arrives before the screen edge, wherever you pressed (phones!)
+        const h = window.innerHeight;
+        const room = inv > 0 ? this.aim.sy : h - this.aim.sy; // Possession flips it: drag up
+        const range = Math.max(70, Math.min(220, h * 0.22, room * 0.8));
         let pw = (e.clientY - this.aim.sy) / range;
         if (inv > 0) pw = -pw;
         this.aim.power = Math.max(0, Math.min(1, pw));
@@ -921,6 +985,7 @@ export class GameClient {
     this.updateAimLine();
     this.updateScanner();
     this.updateEmotes(dt);
+    this.updateCelebrations(dt);
     this.updateMarkers(this.simTime);
     this.course.tactical = this.cam.mode === 'tactical';
     if (this.virt) {
@@ -949,6 +1014,8 @@ export class GameClient {
     this.sendTimer += dt;
     if (this.sendTimer >= SEND_INTERVAL) { this.sendTimer = 0; this.sendState(); }
     if (this.playersDirty) { this.playersDirty = false; this.renderPlayers(); }
+    this.chipTimer = (this.chipTimer || 0) + dt;
+    if (this.chipTimer > 0.25) { this.chipTimer = 0; this.ui.setChips(this.effects.chips(this.simTime)); }
   }
 
   step(dt) {

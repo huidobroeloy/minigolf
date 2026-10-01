@@ -47,6 +47,7 @@ export class UI {
         <div class="hud-players"></div>
         <div class="hud-feed"></div>
         <div class="hud-status"></div>
+        <div class="hud-chips"></div>
         <div class="hud-inventory"></div>
         <div class="hud-power hidden"><div class="power-fill"></div><div class="power-lbl">POWER</div></div>
         <div class="hud-hint"></div>
@@ -186,7 +187,8 @@ export class UI {
           <select id="course" ${isHost ? '' : 'disabled'}>${courseOpts.map(([v, n]) => `<option value="${v}" ${st.course === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
           <label>Time limit</label>
           <select id="timeMul" ${isHost ? '' : 'disabled'}>${[[0.75, 'Short (×0.75)'], [1, 'Normal'], [1.5, 'Relaxed (×1.5)'], [2, 'Chill (×2)']].map(([v, n]) => `<option value="${v}" ${Number(st.timeMul) === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
-          <label class="check"><input type="checkbox" id="powerups" ${st.powerups ? 'checked' : ''} ${isHost ? '' : 'disabled'} /> Power-ups</label>
+          <label>Power-ups</label>
+          <select id="puLevel" ${isHost ? '' : 'disabled'}>${[['off', 'Off'], ['few', 'Few'], ['normal', 'Normal'], ['chaos', 'Chaos 🌪️']].map(([v, n]) => `<option value="${v}" ${(st.puLevel || 'normal') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
         <div class="row">
           ${isHost ? '<button class="btn primary" id="start">Start game</button>' : '<div class="tagline">Waiting for the host to start…</div>'}
@@ -199,7 +201,7 @@ export class UI {
       const send = () => this.h.settings?.({
         course: s.querySelector('#course').value,
         timeMul: Number(s.querySelector('#timeMul').value),
-        powerups: s.querySelector('#powerups').checked,
+        puLevel: s.querySelector('#puLevel').value,
       });
       s.querySelectorAll('select, input').forEach((i) => i.addEventListener('change', send));
       s.querySelector('#start').onclick = () => this.h.start?.();
@@ -268,6 +270,12 @@ export class UI {
 
   setStatus(icons) {
     this.$('.hud-status').innerHTML = icons.length ? `<span class="lbl">NEXT SHOT</span>${icons.map((i) => `<span>${i}</span>`).join('')}` : '';
+  }
+
+  setChips(list) {
+    const html = list.map((c) => `<span class="chip ${c.good ? 'good' : ''}">${c.icon} ${esc(c.text)}</span>`).join('');
+    const el2 = this.$('.hud-chips');
+    if (el2.innerHTML !== html) el2.innerHTML = html;
   }
 
   setPower(p) {
@@ -343,6 +351,16 @@ export class UI {
   bigToast(title, sub = '', mood = '') {
     const t = el(`<div class="big-toast ${mood}"><div class="t">${esc(title)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div>`);
     this.$('#toasts').appendChild(t);
+    setTimeout(() => t.classList.add('fade'), 2400);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  /** The score name slams onto the screen like a stamp. */
+  stamp(title, sub = '', mood = '') {
+    const t = el(`<div class="stamp ${mood}"><div class="t">${esc(title)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div>`);
+    this.$('#toasts').appendChild(t);
+    document.getElementById('ui').classList.remove('shake'); void document.getElementById('ui').offsetWidth;
+    document.getElementById('ui').classList.add('shake');
     setTimeout(() => t.classList.add('fade'), 2400);
     setTimeout(() => t.remove(), 3000);
   }

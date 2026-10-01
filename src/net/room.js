@@ -1,5 +1,6 @@
 import { HOLES } from '../holes/index.js';
 import { randomSeed, RNG } from '../core/rng.js';
+import { signedArea } from '../course/geometry.js';
 import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
 import { CHARACTER_COLORS } from '../game/characters.js';
@@ -10,6 +11,18 @@ const BETWEEN_HOLES_MS = 8000;
 const ALL_HOLED_GRACE_MS = 2500;
 const RESPAWN_EVERY_MS = 25000;
 const PROTECT_MS = 5000;
+
+export const PU_LEVELS = { off: 0, few: 0.6, normal: 1, chaos: 1.7 };
+
+/** Pickups for a hole: more players and bigger holes → more pickups; the host picks the level. */
+export function pickupCount(def, players, level) {
+  const mul = PU_LEVELS[level] ?? 1;
+  if (!mul) return 0;
+  let area = 0;
+  for (const p of def.parts) if (p.t === 'floor') area += Math.abs(signedArea(p.poly));
+  const size = Math.max(0.6, Math.min(1.5, area / 120));
+  return Math.max(2, Math.min(12, Math.round((2 + 0.8 * players) * size * mul)));
+}
 
 export function timeoutScore(par, strokes) {
   return Math.max(par, strokes) + 10;
@@ -26,7 +39,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'all', timeMul: 1, powerups: true };
+    this.settings = { course: 'all', timeMul: 1, puLevel: 'normal' };
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -235,7 +248,7 @@ export class HostRoom {
     return {
       t: 'hole', holeNo: this.holeNo, total: this.plan.length, index: this.plan[this.holeNo],
       seed: this.holeSeed, duration: this.duration, elapsed: this.elapsed(),
-      pickupCount: this.settings.powerups ? this.pickups.length : 0,
+      pickupCount: this.pickups.length,
       taken: this.pickups.map((p) => p.taken || null),
       cats: this.pickups.map((p) => p.cat),
       players: this.playerList(),
@@ -251,7 +264,7 @@ export class HostRoom {
     this.duration = Math.round(def.time * 1000 * (this.settings.timeMul || 1));
     this.holeStart = performance.now();
     this.allHoledAt = null;
-    const n = this.settings.powerups ? Math.min(16, Math.round(4 + this.activePlayers().length * 1.5)) : 0;
+    const n = pickupCount(def, this.activePlayers().length, this.settings.puLevel);
     const cats = pickupCategories(this.holeSeed, n, RNG);
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
@@ -279,7 +292,8 @@ export class HostRoom {
   respawnPickups() {
     this.lastRespawn = performance.now();
     const taken = this.pickups.map((p, i) => [p, i]).filter(([p]) => p.taken);
-    const n = Math.min(taken.length, Math.ceil(this.activePlayers().length / 2));
+    const mul = PU_LEVELS[this.settings.puLevel] ?? 1;
+    const n = Math.min(taken.length, Math.max(1, Math.round(Math.ceil(this.activePlayers().length / 2) * mul)));
     const cats = Object.keys(CATEGORY_WEIGHTS);
     for (let k = 0; k < n; k++) {
       const j = Math.floor(Math.random() * taken.length);
@@ -300,7 +314,7 @@ export class HostRoom {
 
   tick() {
     if (this.phase === 'hole') {
-      if (this.settings.powerups && performance.now() - this.lastRespawn > RESPAWN_EVERY_MS) this.respawnPickups();
+      if (this.pickups.length && performance.now() - this.lastRespawn > RESPAWN_EVERY_MS) this.respawnPickups();
       if (this.elapsed() >= this.duration) this.endHole();
       else if (this.allHoledAt && performance.now() - this.allHoledAt > ALL_HOLED_GRACE_MS) this.endHole();
       else if (this.activePlayers().length === 0) this.endHole();

@@ -45,6 +45,50 @@ function makePath(course, rng, n, speed, startPoint = null, bias = null) {
   };
 }
 
+
+/** A big translucent arrow lying on the course, pointing along dir ([x,z]). */
+function courseArrow(course, dir, color = '#9fe8ff') {
+  const L = Math.max(course.size.x, course.size.z) * 0.5 + 3;
+  const shape = new THREE.Shape([
+    new THREE.Vector2(-0.6, 0), new THREE.Vector2(0.6, 0), new THREE.Vector2(0.6, L - 2.4),
+    new THREE.Vector2(1.6, L - 2.4), new THREE.Vector2(0, L), new THREE.Vector2(-1.6, L - 2.4), new THREE.Vector2(-0.6, L - 2.4),
+  ]);
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
+  m.rotation.x = -Math.PI / 2; // shape +y → world -z
+  const holder = new THREE.Group();
+  holder.add(m);
+  holder.rotation.y = Math.atan2(-dir[0], -dir[1]);
+  holder.position.set(course.center.x - dir[0] * L / 2, course.bounds.max.y + 0.15, course.center.z - dir[1] * L / 2);
+  holder.renderOrder = 5;
+  return holder;
+}
+
+/**
+ * A drifting path that heads along `dir`, wobbles sideways and bounces back when it would
+ * leave the course. Deterministic from the rng, sampled by time.
+ */
+function driftPath(course, rng, start, dir, speed, dur) {
+  const pts = [];
+  let p = start.clone();
+  let d = new THREE.Vector2(dir[0], dir[1]).normalize();
+  const dt = 0.1;
+  for (let t = 0; t <= dur + 0.2; t += dt) {
+    pts.push(p.clone());
+    const wob = Math.sin(t * 1.3 + rng.range(0, 0.4)) * 0.6;
+    const nx = p.x + (d.x - d.y * wob) * speed * dt, nz = p.z + (d.y + d.x * wob) * speed * dt;
+    const y = course.floorYAt(nx, nz);
+    if (y === null) { d = d.multiplyScalar(-1).rotateAround(new THREE.Vector2(), rng.range(-0.6, 0.6)); continue; }
+    p = new THREE.Vector3(nx, y, nz);
+  }
+  return {
+    at(t, out = new THREE.Vector3()) {
+      const f = Math.max(0, Math.min(pts.length - 1.001, t / dt));
+      const i = Math.floor(f);
+      return out.lerpVectors(pts[i], pts[i + 1], f - i);
+    },
+  };
+}
+
 class Hazard {
   constructor(ctx, fx, dur) {
     this.ctx = ctx;
@@ -65,24 +109,29 @@ class Hazard {
 
 class Wind extends Hazard {
   constructor(ctx, fx) {
-    super(ctx, fx, 10);
+    super(ctx, fx, 8);
     const d = fx.params.dir || [0, 1];
     this.dir = new THREE.Vector2(d[0], d[1]).normalize();
+    this.arrow = courseArrow(ctx.course, [this.dir.x, this.dir.y], '#e8fbff');
+    this.group.add(this.arrow);
     sfx.play('whoosh');
   }
   force(ball, t, out) {
-    const k = Math.min(1, this.local(t) / 0.8) * Math.min(1, (this.dur - this.local(t)) / 0.8);
-    const gust = 3.2 * k * (0.75 + 0.25 * Math.sin(t * 3.1));
+    // a steady gust that beats rolling friction: every ball drifts the way you dragged
+    const lt = this.local(t);
+    const k = Math.min(1, lt / 0.5) * Math.min(1, (this.dur - lt) / 0.5);
+    const gust = 6 * k * (0.85 + 0.15 * Math.sin(t * 3.1));
     out.x += this.dir.x * gust;
     out.z += this.dir.y * gust;
-    if (gust > 2.6) out.wake = true;
+    if (k > 0.3) out.wake = true;
   }
-  frame(t, dt) {
+  frame(t) {
+    const lt = this.local(t);
+    this.arrow.children[0].material.opacity = 0.32 * Math.min(1, lt * 2, (this.dur - lt) * 2) * (0.75 + 0.25 * Math.sin(t * 6));
     const c = this.ctx.course;
-    const em = this.ctx.particles;
-    for (let i = 0; i < 4; i++) {
-      const p = [c.center.x + (Math.random() - 0.5) * c.size.x * 1.3, c.bounds.min.y + Math.random() * 2.5, c.center.z + (Math.random() - 0.5) * c.size.z * 1.3];
-      em.spawn({ pos: p, vel: [this.dir.x * 14, 0, this.dir.y * 14], color: '#ffffff', size: 0.12, life: 0.9 });
+    for (let i = 0; i < 8; i++) {
+      const p = [c.center.x + (Math.random() - 0.5) * c.size.x * 1.4, c.bounds.min.y + 0.2 + Math.random() * 2.5, c.center.z + (Math.random() - 0.5) * c.size.z * 1.4];
+      this.ctx.particles.spawn({ pos: p, vel: [this.dir.x * 16, 0, this.dir.y * 16], color: '#ffffff', size: 0.14, life: 0.7 });
     }
   }
 }
@@ -91,12 +140,14 @@ class Tornado extends Hazard {
   constructor(ctx, fx) {
     super(ctx, fx, 15);
     const p = fx.params.pos;
-    const start = p ? new THREE.Vector3(p[0], p[1], p[2]) : null;
-    this.path = makePath(ctx.course, this.rng, 7, 2.8, start, fx.params.dir || null);
+    const start = p ? new THREE.Vector3(p[0], p[1], p[2]) : ctx.course.randomFloorPoint(this.rng);
+    const dir = fx.params.dir || [this.rng.range(-1, 1), this.rng.range(-1, 1)];
+    this.path = driftPath(ctx.course, this.rng, start, dir, 2.4, this.dur);
     this.model = makeTornado();
+    this.model.scale.setScalar(1.3);
     this.group.add(this.model);
     this.pos = new THREE.Vector3();
-    this.R = 2.8;
+    this.R = 3.6;
     sfx.play('whoosh');
   }
   force(ball, t, out) {
@@ -104,26 +155,27 @@ class Tornado extends Hazard {
     const p = ball.pos;
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     const d = Math.hypot(dx, dz);
-    if (d > this.R || Math.abs(p.y - this.pos.y) > 4) return;
+    if (d > this.R || Math.abs(p.y - this.pos.y) > 5) return;
     const k = 1 - d / this.R;
     const nx = dx / (d || 1), nz = dz / (d || 1);
-    out.x += (nx * 9 - nz * 16) * k;
-    out.z += (nz * 9 + nx * 16) * k;
-    out.y += 10 * k;
+    // suck in, spin around, lift — balls get caught, whirled and flung out
+    out.x += (-nx * 14 - nz * 22) * k;
+    out.z += (-nz * 14 + nx * 22) * k;
+    out.y += (d < 1.6 ? 26 : 8) * k;
     out.wake = true;
   }
-  frame(t, dt) {
+  frame(t) {
     const lt = this.local(t);
     this.path.at(lt, this.pos);
     this.model.position.copy(this.pos);
     const s = Math.min(1, lt * 2, (this.dur - lt) * 2);
-    this.model.scale.setScalar(Math.max(0.01, s));
+    this.model.scale.setScalar(1.3 * Math.max(0.01, s));
     animateTornado(this.model, t);
-    if (Math.random() < 0.6) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 2;
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 3;
       this.ctx.particles.spawn({
-        pos: [this.pos.x + Math.cos(a) * r, this.pos.y + Math.random() * 4, this.pos.z + Math.sin(a) * r],
-        vel: [-Math.sin(a) * 6, 2, Math.cos(a) * 6], color: '#8d7a64', size: 0.15, life: 0.8,
+        pos: [this.pos.x + Math.cos(a) * r, this.pos.y + Math.random() * 5, this.pos.z + Math.sin(a) * r],
+        vel: [-Math.sin(a) * 8, 3, Math.cos(a) * 8], color: Math.random() < 0.5 ? '#8d7a64' : '#cfd6dc', size: 0.18, life: 0.8,
       });
     }
   }
@@ -143,16 +195,17 @@ class Volcano extends Hazard {
     this.pools = [];
     for (let k = 0; k < 14; k++) {
       for (let tries = 0; tries < 20; tries++) {
-        const a = this.rng.range(0, Math.PI * 2), r = this.rng.range(1.8, 6.5);
+        const a = this.rng.range(0, Math.PI * 2), r = this.rng.range(1.4, k < 3 ? 3.2 : 4.5);
         const x = this.pos.x + Math.cos(a) * r, z = this.pos.z + Math.sin(a) * r;
         const y = c.floorYAt(x, z);
         if (y === null) continue;
-        const pool = { x, y, z, r: this.rng.range(0.8, 1.4), t0: 1.2 + k * 1.1, mesh: null, blob: null };
+        const pool = { x, y, z, r: this.rng.range(0.9, 1.5), t0: k < 3 ? 0.3 + k * 0.45 : 1.6 + (k - 3) * 1.3, mesh: null, blob: null };
         this.pools.push(pool);
         break;
       }
     }
     sfx.play('rumble');
+    ctx.course.onShake?.(0.8);
   }
   inPool(p, t) {
     const lt = this.local(t);
@@ -162,7 +215,11 @@ class Volcano extends Hazard {
     }
     return false;
   }
-  decel(ball, t) { return this.inPool(ball.pos, t) ? 9 : 1; }
+  decel(ball, t) {
+    if (!this.inPool(ball.pos, t)) return 1;
+    if (ball.state === 'moving' && (!this.sizzle || t - this.sizzle > 0.6)) { this.sizzle = t; sfx.play('stick'); }
+    return 14; // stops dead
+  }
   frame(t, dt) {
     const lt = this.local(t);
     const fade = Math.min(1, (this.dur - lt) / 1.5);
@@ -183,6 +240,7 @@ class Volcano extends Hazard {
           THREE.MathUtils.lerp(this.pos.y + 1.6, pl.y, f) + Math.sin(f * Math.PI) * 4,
           THREE.MathUtils.lerp(this.pos.z, pl.z, f)
         );
+        this.ctx.particles.spawn({ pos: [pl.blob.position.x, pl.blob.position.y, pl.blob.position.z], vel: [0, 0.5, 0], color: '#ffb000', size: 0.3, life: 0.35 });
       } else {
         if (pl.blob) { this.group.remove(pl.blob); pl.blob = null; }
         if (!pl.mesh) {
@@ -235,7 +293,7 @@ class IceRink extends Hazard {
 
 class Tsunami extends Hazard {
   constructor(ctx, fx) {
-    super(ctx, fx, 7);
+    super(ctx, fx, 9);
     const d = fx.params.dir || [0, 1];
     this.dir = new THREE.Vector2(d[0], d[1]).normalize();
     const b = ctx.course.bounds;
@@ -246,38 +304,48 @@ class Tsunami extends Hazard {
     this.s1 = Math.max(...proj) + 3;
     this.pMid = (Math.min(...perp) + Math.max(...perp)) / 2;
     this.width = Math.max(...perp) - Math.min(...perp) + 4;
-    this.speed = (this.s1 - this.s0) / 5.5;
+    this.warn = 1.2;
+    this.speed = (this.s1 - this.s0) / 7;
     this.model = makeWave(this.width);
+    this.model.scale.set(1, 1.7, 1.4);
     this.model.rotation.y = Math.atan2(this.dir.x, this.dir.y);
     this.group.add(this.model);
-    this.y = b.min.y - 0.5;
+    this.arrow = courseArrow(ctx.course, [this.dir.x, this.dir.y], '#3d9bff');
+    this.group.add(this.arrow);
+    this.y = b.min.y - 0.6;
     sfx.play('rumble');
-    sfx.play('whoosh');
   }
-  front(t) { return this.s0 + Math.max(0, this.local(t) - 0.6) * this.speed; }
+  front(t) { return this.s0 + Math.max(0, this.local(t) - this.warn) * this.speed; }
   force(ball, t, out) {
+    if (this.local(t) < this.warn) return;
     const p = ball.pos;
     const s = p.x * this.dir.x + p.z * this.dir.y;
     const f = this.front(t);
-    if (s > f - 2.2 && s < f + 0.4) {
+    if (s > f - 2.8 && s < f + 0.5) {
+      // carried along at the wave's speed
       const along = ball.vel.x * this.dir.x + ball.vel.z * this.dir.y;
-      if (along < this.speed * 1.25) { out.x += this.dir.x * 45; out.z += this.dir.y * 45; }
-      out.y += 6;
+      const push = Math.max(0, this.speed * 1.15 - along) * 9;
+      out.x += this.dir.x * push; out.z += this.dir.y * push;
+      out.y += 5;
       out.wake = true;
     }
   }
   frame(t) {
+    const lt = this.local(t);
+    this.arrow.visible = lt < this.warn + 0.6;
+    this.arrow.children[0].material.opacity = 0.45 * (0.5 + 0.5 * Math.sin(t * 14));
+    if (!this.whooshed && lt >= this.warn) { this.whooshed = true; sfx.play('whoosh'); }
     const f = this.front(t);
     const x = this.dir.x * f - this.dir.y * this.pMid;
     const z = this.dir.y * f + this.dir.x * this.pMid;
     this.model.position.set(x, this.y, z);
-    const lt = this.local(t);
-    this.model.scale.y = Math.min(1, lt * 1.5) * Math.min(1, (this.dur - lt) * 1.5 + 0.01);
-    for (let i = 0; i < 3; i++) {
+    const rise = Math.min(1, lt / this.warn);
+    this.model.scale.y = 1.7 * Math.max(0.01, rise) * Math.min(1, (this.dur - lt) * 1.5 + 0.01);
+    for (let i = 0; i < 5; i++) {
       const off = (Math.random() - 0.5) * this.width;
       this.ctx.particles.spawn({
-        pos: [x - this.dir.y * off, this.y + 2.6, z + this.dir.x * off],
-        vel: [this.dir.x * this.speed + (Math.random() - 0.5), 2, this.dir.y * this.speed], color: '#ffffff', size: 0.25, life: 0.6, gravity: 8,
+        pos: [x - this.dir.y * off, this.y + 4.4 * rise, z + this.dir.x * off],
+        vel: [this.dir.x * this.speed + (Math.random() - 0.5), 2.5, this.dir.y * this.speed], color: '#ffffff', size: 0.3, life: 0.7, gravity: 8,
       });
     }
   }

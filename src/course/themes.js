@@ -138,6 +138,21 @@ export const TEX = {
     g.moveTo(cx + r * 0.75, cy + r * 0.65); g.lineTo(cx + r * 1.15, s * 0.92);
     g.stroke();
   }, { srgb: true }),
+  xanaEyeGlow: () => canvasTexture('xanaEyeGlow', 128, (g, s) => {
+    g.clearRect(0, 0, s, s);
+    g.strokeStyle = '#ffffff'; g.fillStyle = '#ffffff';
+    g.shadowColor = '#ffffff'; g.shadowBlur = 10;
+    g.lineWidth = 9;
+    const cx = s / 2, cy = s * 0.42, r = s * 0.22;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(cx, cy, r * 0.32, 0, Math.PI * 2); g.fill();
+    g.beginPath();
+    g.moveTo(cx, cy - r); g.lineTo(cx, cy - r - s * 0.13);
+    g.moveTo(cx, cy + r); g.lineTo(cx, s * 0.94);
+    g.moveTo(cx - r * 0.75, cy + r * 0.65); g.lineTo(cx - r * 1.15, s * 0.9);
+    g.moveTo(cx + r * 0.75, cy + r * 0.65); g.lineTo(cx + r * 1.15, s * 0.9);
+    g.stroke();
+  }),
   digitalSea: () => canvasTexture('sea', 256, (g, s, rng) => {
     const grd = g.createLinearGradient(0, 0, 0, s);
     grd.addColorStop(0, '#0a2a7a'); grd.addColorStop(1, '#0b4ab0');

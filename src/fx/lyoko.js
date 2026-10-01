@@ -44,61 +44,61 @@ export const TOWER_BODY = {
   desert: '#d8b27e', forest: '#d8d6c6', ice: '#cfe4f4', mountain: '#cbbfb2', sector5: '#e6ecff', fortune: '#d9c6f2',
 };
 
-export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6') {
+export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85, wisps = 70, wispSize = 0.75, shadows = true } = {}) {
   const g = new THREE.Group();
-  const r = 0.85;
+  const k = r / 0.85; // roots scale with the tower
   const skin = new THREE.MeshStandardMaterial({ color: body, roughness: 0.35, metalness: 0.05 });
   const crownMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(body).multiplyScalar(0.45), roughness: 0.4 });
   part(new THREE.CylinderGeometry(r, r, h, 40), skin, g, [0, h / 2, 0]);
   // a slightly lighter vertical band like the show's shading
   part(new THREE.CylinderGeometry(r * 1.004, r * 1.004, h * 0.96, 40, 1, true, -0.35, 0.7),
     new THREE.MeshStandardMaterial({ color: new THREE.Color(body).lerp(new THREE.Color('#ffffff'), 0.35), roughness: 0.3 }), g, [0, h / 2, 0]);
-  part(new THREE.CylinderGeometry(r * 1.06, r * 1.06, 0.35, 40), crownMat, g, [0, h + 0.05, 0]);
-  part(new THREE.SphereGeometry(r * 1.02, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), crownMat, g, [0, h + 0.22, 0], [0, 0, 0], [1, 0.35, 1]);
+  part(new THREE.CylinderGeometry(r * 1.06, r * 1.06, 0.35 * k, 40), crownMat, g, [0, h + 0.05 * k, 0]);
+  part(new THREE.SphereGeometry(r * 1.02, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), crownMat, g, [0, h + 0.22 * k, 0], [0, 0, 0], [1, 0.35, 1]);
   // black roots
   const rootMat = new THREE.MeshStandardMaterial({ color: '#111014', roughness: 0.35, metalness: 0.4 });
   for (let i = 0; i < 11; i++) {
     const a = (i / 11) * Math.PI * 2 + Math.sin(i * 7.3) * 0.3;
-    const reach = 1.4 + ((i * 37) % 10) / 10 * 1.4;
-    const up = 1.2 + ((i * 53) % 10) / 10 * 1.6;
+    const reach = (1.4 + ((i * 37) % 10) / 10 * 1.4) * k;
+    const up = Math.min(h * 0.25, (1.2 + ((i * 53) % 10) / 10 * 1.6) * k);
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(Math.cos(a) * r * 0.9, up, Math.sin(a) * r * 0.9),
-      new THREE.Vector3(Math.cos(a + 0.25) * (r + 0.35), up * 0.55, Math.sin(a + 0.25) * (r + 0.35)),
-      new THREE.Vector3(Math.cos(a - 0.15) * (r + reach * 0.6), 0.25, Math.sin(a - 0.15) * (r + reach * 0.6)),
-      new THREE.Vector3(Math.cos(a) * (r + reach), -0.05, Math.sin(a) * (r + reach)),
+      new THREE.Vector3(Math.cos(a + 0.25) * (r + 0.35 * k), up * 0.55, Math.sin(a + 0.25) * (r + 0.35 * k)),
+      new THREE.Vector3(Math.cos(a - 0.15) * (r + reach * 0.6), 0.25 * k, Math.sin(a - 0.15) * (r + reach * 0.6)),
+      new THREE.Vector3(Math.cos(a) * (r + reach), -0.05 * k, Math.sin(a) * (r + reach)),
     ]);
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.12 + (i % 3) * 0.05, 6, false), rootMat);
-    tube.castShadow = true;
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, (0.12 + (i % 3) * 0.05) * k, 6, false), rootMat);
+    tube.castShadow = shadows;
     g.add(tube);
   }
-  part(new THREE.CylinderGeometry(r * 1.15, r * 1.5, 0.9, 20), rootMat, g, [0, 0.4, 0]);
+  part(new THREE.CylinderGeometry(r * 1.15, r * 1.5, 0.9 * k, 20), rootMat, g, [0, 0.4 * k, 0]);
 
   // aura: wisps drifting up and around the tower
-  const N = 70;
+  const N = wisps;
   const pos = new Float32Array(N * 3);
-  const seeds = Array.from({ length: N }, (_, i) => ({ a: i * 2.399, sp: 0.4 + ((i * 17) % 10) / 12, off: ((i * 31) % 100) / 100, rr: r + 0.15 + ((i * 13) % 10) / 18 }));
+  const seeds = Array.from({ length: N }, (_, i) => ({ a: i * 2.399, sp: 0.4 + ((i * 17) % 10) / 12, off: ((i * 31) % 100) / 100, rr: r + (0.15 + ((i * 13) % 10) / 18) * k }));
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const wisps = new THREE.Points(geo, new THREE.PointsMaterial({
-    color: aura, map: wispTexture(), size: 0.75, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false,
+  const wispPts = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: aura, map: wispTexture(), size: wispSize, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  wisps.frustumCulled = false;
-  g.add(wisps);
+  wispPts.frustumCulled = false;
+  g.add(wispPts);
   const glow = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.5, r * 1.7, h * 0.9, 32, 1, true),
     new THREE.MeshBasicMaterial({ color: aura, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   glow.position.y = h * 0.5;
   g.add(glow);
 
   g.userData = {
-    setColor(c) { wisps.material.color.set(c); glow.material.color.set(c); },
+    setColor(c) { wispPts.material.color.set(c); glow.material.color.set(c); },
     animate(t) {
       for (let i = 0; i < N; i++) {
         const s = seeds[i];
         const u = ((t * s.sp * 0.12 + s.off) % 1);
         const ang = s.a + t * s.sp * 0.6;
-        const rr = s.rr + Math.sin(t * 2 + i) * 0.12;
+        const rr = s.rr + Math.sin(t * 2 + i) * 0.12 * k;
         pos[i * 3] = Math.cos(ang) * rr;
-        pos[i * 3 + 1] = 0.6 + u * h * 1.02;
+        pos[i * 3 + 1] = 0.6 * k + u * h * 1.02;
         pos[i * 3 + 2] = Math.sin(ang) * rr;
       }
       geo.attributes.position.needsUpdate = true;

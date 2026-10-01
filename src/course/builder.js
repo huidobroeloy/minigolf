@@ -521,7 +521,8 @@ export function buildCourse(def, physics, scene) {
     for (const m of course.monsters) m.frame?.(t, dt);
     course.decoration?.frame?.(t, dt);
     if (course.flag) {
-      course.flag.rotation.y = Math.sin(t * 2) * 0.25;
+      const spin = course.flagSpin !== undefined ? Math.max(0, 1.2 - (t - course.flagSpin)) : 0;
+      course.flag.rotation.y = Math.sin(t * 2) * 0.25 + (spin > 0 ? (1.2 - spin) * 14 : 0);
       const pos = course.flag.geometry.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const x = course.flagBase[i * 3];

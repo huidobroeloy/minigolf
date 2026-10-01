@@ -31,7 +31,7 @@ export class Pickups {
   makeMesh(item) {
     if (item.mesh) this.course.group.remove(item.mesh);
     item.mesh = makePickup(CATEGORY_COLORS[item.cat]);
-    item.mesh.position.set(item.pos.x, item.pos.y + 0.5, item.pos.z);
+    item.mesh.position.set(item.pos.x, item.pos.y, item.pos.z);
     item.mesh.visible = !item.taken;
     this.course.group.add(item.mesh);
   }
@@ -47,11 +47,11 @@ export class Pickups {
     return out;
   }
 
-  take(i) {
+  take(i, t = 0) {
     const it = this.items[i];
     if (!it) return null;
     it.taken = true;
-    it.mesh.visible = false;
+    it.dissolve = t; // dissolves upward instead of popping out
     return it;
   }
 
@@ -60,6 +60,7 @@ export class Pickups {
     if (!it) return null;
     it.taken = false;
     it.claimed = false;
+    it.dissolve = undefined;
     it.cat = cat;
     it.born = t;
     this.makeMesh(it);
@@ -68,16 +69,22 @@ export class Pickups {
 
   frame(t) {
     for (const it of this.items) {
-      if (it.taken) continue;
       const u = it.mesh.userData;
+      if (it.taken) {
+        if (it.dissolve === undefined || !it.mesh.visible) continue;
+        const k = (t - it.dissolve) / 0.5;
+        if (k >= 1 || k < 0) { it.mesh.visible = false; continue; }
+        it.mesh.scale.set(1 - k, 1 + k * 2.5, 1 - k);
+        u.eye.position.y = 1.75 + k * 2.5;
+        continue;
+      }
+      it.mesh.visible = true;
       const grow = Math.min(1, Math.max(0.01, (t - it.born) / 0.6));
-      it.mesh.scale.setScalar(grow);
-      it.mesh.position.y = it.pos.y + 0.5 + Math.sin(t * 2 + it.phase) * 0.06;
-      u.orb.position.y = Math.sin(t * 2.6 + it.phase) * 0.05;
-      u.orb.rotation.y = t * 1.3 + it.phase;
-      u.cage.rotation.y = -t * 0.4;
-      u.halo.scale.setScalar(1 + Math.sin(t * 4 + it.phase) * 0.08);
-      u.column.material.opacity = 0.18 + Math.sin(t * 3 + it.phase) * 0.06;
+      it.mesh.scale.set(grow, grow, grow);
+      u.tower.userData.animate(t + it.phase);
+      u.eye.position.y = 1.75 + Math.sin(t * 2.2 + it.phase) * 0.08;
+      u.eye.material.rotation = Math.sin(t * 0.8 + it.phase) * 0.25;
+      u.ring.scale.setScalar(1 + Math.sin(t * 3 + it.phase) * 0.08);
     }
   }
 }

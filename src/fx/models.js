@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { makeTower } from './lyoko.js';
+import { TEX } from '../course/themes.js';
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...extra });
 
@@ -184,54 +186,26 @@ export function makeSpawnBumper(r) {
 }
 
 /**
- * Pickup: a glossy data orb floating inside a mini Lyoko tower cage.
- * The halo colour tells the category (self / sabotage / chaos); the exact item is a surprise.
+ * Pickup: a mini Lyoko tower (slender body, dark crown, black roots) wrapped in wisps of the
+ * category colour, with the XANA eye glowing above it. The exact item is a surprise.
  */
-const pickupMats = new Map();
+const eyeMats = new Map();
 export function makePickup(color = '#3da5ff') {
-  if (!pickupMats.has(color)) {
-    pickupMats.set(color, {
-      white: new THREE.MeshStandardMaterial({ color: '#f2f5ff', roughness: 0.25, metalness: 0.3 }),
-      halo: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 }),
-      glow: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }),
-      orb: new THREE.MeshPhysicalMaterial({
-        color: '#ffffff', roughness: 0.05, metalness: 0.0, clearcoat: 1, clearcoatRoughness: 0.03,
-        iridescence: 1, iridescenceIOR: 1.6, sheen: 1, sheenColor: new THREE.Color(color),
-        emissive: new THREE.Color(color), emissiveIntensity: 0.55, transparent: true, opacity: 0.92,
-      }),
-      core: new THREE.MeshBasicMaterial({ color }),
-    });
-  }
-  const M = pickupMats.get(color);
   const g = new THREE.Group();
-  const cage = new THREE.Group();
-  g.add(cage);
-  // two rings and six slim pillars = a tiny open tower
-  for (const y of [-0.32, 0.36]) {
-    const r = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 28), M.white);
-    r.rotation.x = Math.PI / 2; r.position.y = y; cage.add(r);
+  const tower = makeTower(color, 1.25, '#eef2fa', { r: 0.12, wisps: 26, wispSize: 0.16, shadows: false });
+  g.add(tower);
+  if (!eyeMats.has(color)) {
+    eyeMats.set(color, new THREE.SpriteMaterial({ map: TEX.xanaEyeGlow(), color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   }
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.68, 5), M.white);
-    pil.position.set(Math.cos(a) * 0.3, 0.02, Math.sin(a) * 0.3);
-    cage.add(pil);
-  }
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.16, 6), M.white);
-  cap.position.y = 0.45; cage.add(cap);
-  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.19, 24, 18), M.orb);
-  orb.castShadow = true;
-  g.add(orb);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), M.core);
-  orb.add(core);
-  // the tower halo: a glowing ring + soft column
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 36), M.halo);
-  halo.rotation.x = Math.PI / 2; halo.position.y = -0.38;
-  g.add(halo);
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.0, 24, 1, true), M.glow);
-  column.position.y = 0.1;
-  g.add(column);
-  g.userData = { orb, halo, cage, column };
+  const eye = new THREE.Sprite(eyeMats.get(color));
+  eye.scale.set(0.55, 0.55, 1);
+  eye.position.y = 1.75;
+  g.add(eye);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.48, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.02;
+  g.add(ring);
+  g.userData = { tower, eye, ring };
   return g;
 }
 

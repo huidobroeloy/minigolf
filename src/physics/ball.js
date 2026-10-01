@@ -292,7 +292,8 @@ export class Ball {
       const sp = Math.hypot(v.x, v.z);
       const fits = this.radius < CUP_R * 0.92;
       const near = Math.abs(p.y - this.radius - cup.y) < 0.25;
-      const capR = this.mods.magnet ? CUP_R + 0.45 : CUP_R - this.radius * 0.25;
+      // a slow ball whose centre hangs over the hole drops in, like a real lip-hanger
+      const capR = this.mods.magnet ? CUP_R + 0.45 : sp < 0.6 ? CUP_R : CUP_R - this.radius * 0.25;
       const spLim = (this.mods.magnet ? 9 : 4.3) * Math.sqrt(BALL_R / this.radius);
       if (fits && near && d < capR && sp < spLim) {
         this.startSink(cup);
@@ -347,8 +348,14 @@ export class Ball {
   startSink(cup) {
     this.state = 'sinking';
     this.sinkT = 0;
-    this.sinkFrom = new THREE.Vector3().copy(this.body.translation());
+    const p = this.body.translation(), v = this.body.linvel();
+    this.sinkFrom = new THREE.Vector3(p.x, p.y, p.z);
     this.sinkCup = cup;
+    // roll around the rim the way the ball was travelling, then drop
+    const rx = p.x - cup.x, rz = p.z - cup.z;
+    this.sinkA0 = Math.atan2(rz, rx);
+    this.sinkR0 = Math.max(CUP_R * 0.6, Math.hypot(rx, rz));
+    this.sinkSpin = (rx * v.z - rz * v.x) >= 0 ? 1 : -1;
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setEnabled(false);
     this.onEvent('sinkStart', {});
@@ -356,16 +363,23 @@ export class Ball {
 
   updateSink(dt, env) {
     this.sinkT += dt;
-    const t = Math.min(1, this.sinkT / 0.45);
     const c = this.sinkCup;
-    const x = THREE.MathUtils.lerp(this.sinkFrom.x, c.x, Math.min(1, t * 2));
-    const z = THREE.MathUtils.lerp(this.sinkFrom.z, c.z, Math.min(1, t * 2));
-    const y = c.y + this.radius - t * t * 0.6;
-    this.mesh.position.set(x, y, z);
-    if (t >= 1) {
-      this.state = 'holed';
-      this.mesh.visible = false;
-      env.onHole?.(this);
+    const ROLL = 0.55, DROP = 0.35;
+    if (this.sinkT < ROLL) {
+      const u = this.sinkT / ROLL;
+      const a = this.sinkA0 + this.sinkSpin * u * Math.PI * 1.5;
+      const r = THREE.MathUtils.lerp(this.sinkR0, CUP_R * 0.35, u * u);
+      this.mesh.position.set(c.x + Math.cos(a) * r, c.y + this.radius - u * u * this.radius * 0.6, c.z + Math.sin(a) * r);
+      this.mesh.rotateY(dt * 18 * this.sinkSpin);
+    } else {
+      const u = Math.min(1, (this.sinkT - ROLL) / DROP);
+      const bounce = Math.sin(Math.min(1, u * 1.6) * Math.PI) * 0.06 * (1 - u);
+      this.mesh.position.set(c.x, c.y + this.radius * 0.4 - u * u * 0.7 + bounce, c.z);
+      if (u >= 1) {
+        this.state = 'holed';
+        this.mesh.visible = false;
+        env.onHole?.(this);
+      }
     }
   }
 
