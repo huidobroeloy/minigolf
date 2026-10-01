@@ -111,7 +111,7 @@ export class HostRoom {
         this.sendTo(msg.to, { t: 'gift', pu: msg.pu, from: id });
         return;
       case 'emote':
-        this.broadcast({ t: 'emote', id, e: String(msg.e).slice(0, 4) });
+        this.broadcast({ t: 'emote', id, e: String(msg.e).slice(0, 8) });
         return;
     }
   }

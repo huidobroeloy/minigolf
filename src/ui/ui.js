@@ -319,6 +319,7 @@ export class UI {
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
           <tr><td>C</td><td>Overhead view</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
+          <tr><td>7 8 9 0</td><td>Emotes 😂 😡 👏 💀</td></tr>
           <tr><td>M · H · Esc</td><td>Mute · help · cancel</td></tr>
         </table>
         <h2>Rules</h2>

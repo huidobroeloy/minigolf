@@ -13,7 +13,6 @@ export default [
       { t: 'ramp', a: [0, 3], b: [0, 8], w: 4, ya: 1.5, yb: 0 },
       { t: 'floor', poly: [[-3, 8], [-2, 8], [2, 8], [3, 8], [3, 24], [-3, 24]], open: [1] },
       { t: 'zone', kind: 'slow', rect: [-3, 15, 3, 16.6], mul: 9 },
-      { t: 'zone', kind: 'slow', c: [0, 21], r: 1.7, mul: 5 },
       { t: 'zone', kind: 'slow', rect: [-3, 22.6, 3, 24], mul: 12 },
       { t: 'monster', type: 'krabe', path: patrol([-2.2, 11.5], [2.2, 11.5], 5) },
     ],

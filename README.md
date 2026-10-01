@@ -28,6 +28,7 @@ Connections are peer-to-peer (WebRTC via PeerJS), so there's no server to run.
 | 1 2 3 | Use a power-up (Shift + number discards it) |
 | C | Overhead view |
 | Tab / 👁️ | Spectate others after you hole out |
+| 7 8 9 0 | Emotes 😂 😡 👏 💀 |
 | H, M | Help, mute |
 | ⏭️ (host only) | End the current hole for everyone, e.g. if someone is AFK |
 | 🚪 | Leave the game |

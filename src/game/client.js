@@ -11,6 +11,9 @@ import { POWERUPS } from '../powerups/registry.js';
 import { scoreName } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { makeSpawnBumper, makeBlackHole } from '../fx/models.js';
+import { emojiTexture } from '../fx/particles.js';
+
+export const EMOTES = ['😂', '😡', '👏', '💀'];
 
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
@@ -42,6 +45,8 @@ export class GameClient {
     this.spectate = null;
     this.lastBeep = 99;
     this.disposers = [];
+    this.emotes = [];
+    this.lastEmote = 0;
     this.makeAimLine();
 
     link.onMessage = (m) => this.onMessage(m);
@@ -131,6 +136,9 @@ export class GameClient {
         if (m.id !== this.myId) this.ui.feed(`${p?.name} holed out in ${m.strokes}${m.hio ? ' — HOLE IN ONE!' : ''}`);
         break;
       }
+      case 'emote':
+        this.showEmote(m.id, m.e);
+        break;
       case 'left':
         this.ghosts.remove(m.id);
         if (this.players.get(m.id)) this.players.get(m.id).connected = false;
@@ -160,6 +168,8 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    for (const em of this.emotes) this.scene.remove(em.s);
+    this.emotes = [];
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
     this.placing = null;
     this.effects.clear();
@@ -562,6 +572,11 @@ export class GameClient {
     const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (digit !== undefined) return e.shiftKey ? this.discardSlot(digit) : this.useSlot(digit);
     if (e.code === 'KeyC') return this.toggleOverhead();
+    const emo = { Digit7: 0, Digit8: 1, Digit9: 2, Digit0: 3 }[e.code];
+    if (emo !== undefined && performance.now() - this.lastEmote > 1200) {
+      this.lastEmote = performance.now();
+      return this.link.send({ t: 'emote', e: EMOTES[emo] });
+    }
     if (e.code === 'Tab') return this.cycleSpectate();
     if (e.code === 'Space' && this.canShoot() && !this.aim) {
       this.spaceCharge = { t: 0, power: 0 };
@@ -571,6 +586,27 @@ export class GameClient {
       if (e.code === 'KeyK' && this.ball) { const c = this.course.cup; this.ball.place(new THREE.Vector3(c.x - Math.sin(this.cam.yaw) * 1.5, c.y + 0.25, c.z - Math.cos(this.cam.yaw) * 1.5)); }
       if (e.code === 'KeyL' && this.ball) { const p = this.ball.pos; console.log('ball', p.x.toFixed(2), p.y.toFixed(2), p.z.toFixed(2), 'yaw', this.cam.yaw.toFixed(3)); }
     }
+  }
+
+  showEmote(id, e) {
+    if (!EMOTES.includes(e) || !this.course) return;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(e, 128), transparent: true, depthTest: false }));
+    s.renderOrder = 11;
+    s.scale.set(0.7, 0.7, 1);
+    this.scene.add(s);
+    this.emotes.push({ id, s, t: 0 });
+    if (id !== this.myId) this.ui.feed(`${this.nameOf(id)}: ${e}`);
+  }
+
+  updateEmotes(dt) {
+    for (const em of this.emotes) {
+      em.t += dt;
+      const p = this.positionOf(em.id) || (em.id === this.myId ? this.ball?.mesh.position : null);
+      if (p) em.s.position.set(p.x, p.y + 0.7 + em.t * 0.4, p.z);
+      em.s.material.opacity = Math.min(1, (2.2 - em.t) * 2);
+      em.s.scale.setScalar(0.7 * (1 + Math.min(0.3, em.t)));
+    }
+    this.emotes = this.emotes.filter((em) => { if (em.t > 2.2) { this.scene.remove(em.s); return false; } return true; });
   }
 
   cycleSpectate() {
@@ -625,6 +661,7 @@ export class GameClient {
     this.ghosts.update(dt);
     this.updateCamera(dt);
     this.updateAimLine();
+    this.updateEmotes(dt);
     if (this.virt) {
       const v = this.virt;
       v.t += dt;
