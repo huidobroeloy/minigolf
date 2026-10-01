@@ -96,7 +96,8 @@ export class HostRoom {
         return;
       }
       case 'use': {
-        if (!p || this.phase !== 'hole') return;
+        if (!p) return;
+        if (this.phase !== 'hole') { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Too late — the hole is over' }); return; }
         const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, seed: randomSeed(), at: this.elapsed() };
         if (msg.pu === 'switch') {
           const tgt = this.players.get(msg.target);

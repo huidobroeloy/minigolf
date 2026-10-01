@@ -12,7 +12,10 @@ export default [
       { t: 'floor', y: 1.5, poly: rect(-2, -1.2, 2, 3), open: [2] },
       { t: 'ramp', a: [0, 3], b: [0, 8], w: 4, ya: 1.5, yb: 0 },
       { t: 'floor', poly: [[-3, 8], [-2, 8], [2, 8], [3, 8], [3, 24], [-3, 24]], open: [1] },
-      { t: 'zone', kind: 'slow', rect: [-3, 15, 3, 16.6], mul: 9 },
+      { t: 'zone', kind: 'slow', rect: [-1.2, 15, 1.2, 16.6], mul: 9 },
+      // snowbanks on both sides: only the central ice lane stays slippery
+      { t: 'zone', kind: 'slow', rect: [-3, 8, -1.2, 24], mul: 9 },
+      { t: 'zone', kind: 'slow', rect: [1.2, 8, 3, 24], mul: 9 },
       { t: 'zone', kind: 'slow', rect: [-3, 22.6, 3, 24], mul: 12 },
       { t: 'monster', type: 'krabe', path: patrol([-2.2, 11.5], [2.2, 11.5], 5) },
     ],

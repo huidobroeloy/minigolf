@@ -188,7 +188,7 @@ export class GameClient {
     this.def = def;
     this.holeMsg = m;
     this.phase = 'hole';
-    for (const p of m.players) this.upsertPlayer({ ...p, holed: false, strokes: 0 });
+    for (const p of m.players) this.upsertPlayer(p);
     this.physics = new Physics();
     this.course = buildCourse(def, this.physics, this.scene);
     this.renderer.applyTheme(def.sector, this.course);
