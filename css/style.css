@@ -204,8 +204,15 @@ td.na { color: rgba(255,255,255,0.2); }
 
 @media (max-width: 760px) {
   body { font-size: 15px; }
-  .hud-players { top: auto; bottom: 110px; right: 8px; min-width: 150px; }
-  .hud-feed { top: 96px; }
+  .hud-players { top: 96px; right: 8px; min-width: 0; max-width: 46%; }
+  .hp { font-size: 13px; padding: 2px 8px; }
+  .hud-feed { top: 96px; left: 60px; max-width: 46%; }
+  .fi { font-size: 12px; }
+  .hud-buttons { bottom: auto; top: 96px; left: 8px; flex-direction: column; }
+  .icon-btn { width: 40px; height: 40px; }
+  .hud-hint { bottom: 92px; }
+  .hud-status { bottom: 120px; }
+  .hud-power { right: 12px; bottom: 140px; height: 160px; }
   .hud-top { top: 6px; gap: 4px; width: calc(100% - 16px); }
   .hud-top > div { padding: 4px 8px; }
   .hud-hole { min-width: 0; flex: 1; }

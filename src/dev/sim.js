@@ -8,7 +8,7 @@ import { HOLES } from '../holes/index.js';
  * Dev tool: simulate one shot headlessly (no rendering, no wobble) and report what happened.
  * Used to prove every hole has a hole-in-one line.
  */
-export function simulateShot(def, { yaw, power, t0 = 0, chip = false, maxTime = 25, trace = false }) {
+export function simulateShot(def, { yaw, power, t0 = 0, chip = false, maxTime = 16, trace = false }) {
   const physics = new Physics();
   const scene = new THREE.Scene();
   const course = buildCourse(def, physics, scene);

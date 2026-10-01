@@ -51,8 +51,11 @@ export class UI {
         <div class="hud-hint"></div>
         <div class="hud-buttons">
           <button class="icon-btn" data-act="cam" title="Overhead view (C)">🗺️</button>
+          <button class="icon-btn" data-act="spec" title="Spectate next player (Tab)">👁️</button>
           <button class="icon-btn" data-act="help" title="Help (H)">❔</button>
           <button class="icon-btn" data-act="mute" title="Mute (M)">🔊</button>
+          <button class="icon-btn host-only hidden" data-act="skip" title="Host: end this hole now">⏭️</button>
+          <button class="icon-btn" data-act="leave" title="Leave game">🚪</button>
         </div>
       </div>
       <div id="toasts"></div>
@@ -63,6 +66,9 @@ export class UI {
     this.$('.hud-buttons').addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.act;
       if (a === 'cam') this.h.toggleCam?.();
+      if (a === 'spec') this.h.spectate?.();
+      if (a === 'skip' && confirm('End this hole for everyone now?')) this.h.skip?.();
+      if (a === 'leave' && confirm('Leave the game?')) this.h.leave?.();
       if (a === 'help') this.toggleHelp();
       if (a === 'mute') this.h.toggleMute?.();
     });
@@ -196,6 +202,10 @@ export class UI {
     this.$('.hole-par').textContent = `${info.sectorName} · PAR ${info.par}`;
     this.$('.hud-feed').innerHTML = '';
     this.setHint('');
+  }
+
+  setHostControls(isHost) {
+    this.$('[data-act="skip"]').classList.toggle('hidden', !isHost);
   }
 
   hideHud() { this.$('#hud').classList.add('hidden'); this.setAelita(false); this.closeOverlay(); }

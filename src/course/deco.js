@@ -157,6 +157,7 @@ export function decorate(sector, course, group, rng) {
     // holographic slot-machine sign
     const sign = add(new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshBasicMaterial({ map: fortuneSign(), transparent: true, side: THREE.DoubleSide, depthWrite: false })));
     sign.position.set(c.x, minY + 9, course.bounds.max.z + 6);
+    sign.rotation.y = Math.PI; // face the tee
     anim.push((t) => { sign.material.opacity = 0.75 + Math.sin(t * 13) * 0.1 + (Math.random() < 0.03 ? -0.5 : 0); });
     ambient = (dt) => {
       for (let i = 0; i < 3; i++) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY + 10, area.z + (rand() - 0.5) * area.d], vel: [0, -14, 0], color: rand() < 0.5 ? '#7a9cff' : '#ff7ae8', size: 0.08, life: 0.9 });

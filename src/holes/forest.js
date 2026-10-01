@@ -20,7 +20,7 @@ export default [
   },
   {
     id: 'forest-2', name: 'The Log Flume', sector: 'forest', par: 3, time: 120,
-    tee: [0, 0, 0], cup: [0, 2, 25],
+    tee: [0, 0, 0], cup: [0, 2, 23.3],
     hio: 'Hard up the log ramp, across the turntable when the fence swings away from the centre.',
     parts: [
       { t: 'floor', poly: rect(-2, -1.2, 2, 5), open: [2] },

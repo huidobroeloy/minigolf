@@ -52,6 +52,7 @@ export class GameClient {
       use: (i) => this.useSlot(i),
       discard: (i) => this.discardSlot(i),
       toggleCam: () => this.toggleOverhead(),
+      spectate: () => this.cycleSpectate(),
       start: () => this.link.send({ t: 'start' }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       skip: () => this.link.send({ t: 'skip' }),
@@ -204,6 +205,7 @@ export class GameClient {
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
     this.ui.showHud({ holeNo: m.holeNo, total: m.total, name: def.name, par: def.par, sectorName: SECTOR_NAMES[def.sector] });
     this.ui.renderInventory(this.inventory);
+    this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
     this.ui.setStatus([]);
     this.ui.banner(`HOLE ${m.holeNo + 1} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
@@ -281,12 +283,22 @@ export class GameClient {
     const name = scoreName(this.strokes, this.def.par);
     this.ui.bigToast(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
     if (this.strokes === 1) sfx.play('hio');
+    if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
     this.link.send({ t: 'holed', strokes: this.strokes });
     const me = this.players.get(this.myId);
     if (me) { me.holed = true; me.strokes = this.strokes; }
     this.playersDirty = true;
     this.sendState(true);
     this.ui.setHint('You\'re in! Keep using power-ups on the others · <kbd>Tab</kbd> to spectate');
+  }
+
+  confetti(n) {
+    const c = this.course.cup;
+    const cols = ['#ff4d4d', '#ffd24d', '#3ddc84', '#4da6ff', '#ff4dc4', '#ffffff'];
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 2 + Math.random() * 5;
+      this.effects.particles?.spawn({ pos: [c.x, c.y + 0.3, c.z], vel: [Math.cos(a) * s * 0.5, 4 + Math.random() * 6, Math.sin(a) * s * 0.5], color: cols[i % cols.length], size: 0.18, life: 2.2, gravity: 7, drag: 0.6 });
+    }
   }
 
   addStrokes(n) {
@@ -561,7 +573,7 @@ export class GameClient {
   }
 
   cycleSpectate() {
-    if (!this.ball || this.ball.state !== 'holed') return;
+    if (!this.ball || this.ball.state !== 'holed') return this.ui.toast('Hole out first, then you can spectate');
     const ids = [...this.ghosts.map.keys()].filter((id) => this.ghosts.position(id));
     if (!ids.length) { this.spectate = null; return; }
     const i = ids.indexOf(this.spectate);
