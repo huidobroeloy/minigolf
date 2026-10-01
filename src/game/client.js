@@ -10,7 +10,9 @@ import { EffectManager } from '../powerups/effects.js';
 import { POWERUPS } from '../powerups/registry.js';
 import { scoreName } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
-import { makeSpawnBumper, makeBlackHole } from '../fx/models.js';
+import { makeLabel } from '../fx/models.js';
+import { Targeting } from './targeting.js';
+import { Scanner } from './scanner.js';
 import { emojiTexture } from '../fx/particles.js';
 
 export const EMOTES = ['😂', '😡', '👏', '💀'];
@@ -41,7 +43,10 @@ export class GameClient {
     this.aim = null; // {sx, sy, power}
     this.spaceCharge = null;
     this.rotating = false;
-    this.placing = null;
+    this.targeting = null;
+    this.fallId = 0;
+    this.trip = null;
+    this.preShot = null;
     this.spectate = null;
     this.lastBeep = 99;
     this.disposers = [];
@@ -58,6 +63,7 @@ export class GameClient {
       discard: (i) => this.discardSlot(i),
       toggleCam: () => this.toggleOverhead(),
       spectate: () => this.cycleSpectate(),
+      cancelTarget: () => this.cancelTargeting(),
       start: () => this.link.send({ t: 'start' }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       skip: () => this.link.send({ t: 'skip' }),
@@ -76,7 +82,7 @@ export class GameClient {
   get isHost() { return !!this.players.get(this.myId)?.host; }
 
   canShoot() {
-    return this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.placing && !this.ui.overlayOpen && !this.falling;
+    return this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
   // ---------- network ----------
@@ -115,7 +121,13 @@ export class GameClient {
       }
       case 'picked': {
         const it = this.pickups?.take(m.pid);
-        if (m.by === this.myId && it) this.addPowerup(it.type, 'pickup');
+        if (it) this.effects.burst(it.pos, it.cat);
+        if (m.by === this.myId && m.pu) this.addPowerup(m.pu, 'pickup');
+        break;
+      }
+      case 'respawn': {
+        const it = this.pickups?.respawn(m.pid, m.cat, this.simTime);
+        if (it) this.effects.burst(it.pos, it.cat);
         break;
       }
       case 'fx':
@@ -171,7 +183,11 @@ export class GameClient {
     for (const em of this.emotes) this.scene.remove(em.s);
     this.emotes = [];
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
-    this.placing = null;
+    if (this.targeting) { this.targeting.dispose(); this.targeting = null; }
+    this.endTrip(true);
+    if (this.scanner) { this.scanner.dispose(); this.scanner = null; }
+    this.preShot = null;
+    this.clearMarkers();
     this.effects.clear();
     this.ghosts.clear();
     if (this.course) { this.course.dispose(); this.course = null; }
@@ -210,7 +226,7 @@ export class GameClient {
     this.cam.snapTo(this.ball.mesh.position);
     this.cam.setOverhead(this.course);
     this.effects.reset(this.course, this.physics, this.scene);
-    this.pickups = new Pickups(this.course, m.seed, m.pickupCount, m.taken);
+    this.pickups = new Pickups(this.course, m.seed, m.pickupCount, m.taken, m.cats);
     this.env = this.makeEnv();
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
     this.ui.showHud({ holeNo: m.holeNo, total: m.total, name: def.name, par: def.par, sectorName: SECTOR_NAMES[def.sector] });
@@ -293,8 +309,9 @@ export class GameClient {
     if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
     const name = scoreName(this.strokes, this.def.par);
     this.ui.bigToast(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
-    if (this.strokes === 1) sfx.play('hio');
+    if (this.strokes === 1) { sfx.play('hio'); this.stat('hio'); }
     if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
+    this.endTrip(true);
     this.link.send({ t: 'holed', strokes: this.strokes });
     const me = this.players.get(this.myId);
     if (me) { me.holed = true; me.strokes = this.strokes; }
@@ -317,9 +334,24 @@ export class GameClient {
     this.ui.setStrokes(this.strokes, this.def.par);
   }
 
+  stat(k, n = 1) { this.link.send({ t: 'stat', k, n }); }
+
+  /** While Triplicate clones are still rolling, losing the main ball isn't final yet. */
+  mainLostDuringTrip() {
+    if (!this.trip || !this.trip.clones.some((c) => !c.dead && !c.holed)) return false;
+    this.trip.mainDead = true;
+    this.ball.state = 'gone';
+    this.ball.body.setEnabled(false);
+    this.ball.mesh.visible = false;
+    return true;
+  }
+
   onFall() {
     if (this.falling) return;
+    if (this.mainLostDuringTrip()) return;
     this.falling = true;
+    const fid = ++this.fallId;
+    this.stat('falls');
     this.ball.state = 'gone';
     this.ball.body.setEnabled(false);
     this.addStrokes(1);
@@ -328,7 +360,7 @@ export class GameClient {
     this.sendState(true);
     const ball = this.ball;
     setTimeout(() => {
-      if (this.ball !== ball) return;
+      if (this.ball !== ball || fid !== this.fallId) return;
       this.falling = false;
       this.ball.respawnAtSafe();
       this.cam.snapTo(this.ball.mesh.position);
@@ -336,9 +368,13 @@ export class GameClient {
     }, 1000);
   }
 
-  onSwallowed() {
+  onSwallowed(b = this.ball) {
+    if (b !== this.ball) { b.dead = true; b.state = 'gone'; b.body.setEnabled(false); b.mesh.visible = false; return; }
     if (this.falling) return;
+    if (this.mainLostDuringTrip()) return;
     this.falling = true;
+    const fid = ++this.fallId;
+    this.stat('swallowed');
     this.ball.state = 'gone';
     this.ball.body.setEnabled(false);
     this.ball.mesh.visible = false;
@@ -347,7 +383,7 @@ export class GameClient {
     this.ui.bigToast('🕳️ SWALLOWED', 'Black hole · +1', 'bad');
     const ball = this.ball;
     setTimeout(() => {
-      if (this.ball !== ball) return;
+      if (this.ball !== ball || fid !== this.fallId) return;
       this.falling = false;
       this.ball.respawnAtSafe();
       this.cam.snapTo(this.ball.mesh.position);
@@ -358,7 +394,9 @@ export class GameClient {
   onPit(pit) {
     if (this.falling) return;
     if (!pit.fortune) return this.onFall();
+    if (this.mainLostDuringTrip()) return;
     this.falling = true;
+    const fid = ++this.fallId;
     this.ball.state = 'gone';
     this.ball.body.setEnabled(false);
     this.ball.mesh.visible = false;
@@ -368,8 +406,9 @@ export class GameClient {
     const v = r < 0.04 ? 0 : r < 0.32 ? 1 : r < 0.56 ? 2 : r < 0.76 ? 3 : r < 0.9 ? 4 : 5;
     const ball = this.ball;
     this.ui.roulette(v, () => {
-      if (this.ball !== ball) return;
+      if (this.ball !== ball || fid !== this.fallId) return;
       this.addStrokes(v);
+      this.stat('fortune', v);
       sfx.play(v === 0 ? 'hio' : 'jackpot');
       this.ui.bigToast(v === 0 ? 'JACKPOT!' : `+${v} STROKE${v > 1 ? 'S' : ''}`, 'Fortune Falls drops you… somewhere', v === 0 ? 'good' : 'bad');
       const drops = this.def.fortuneDrops;
@@ -391,12 +430,133 @@ export class GameClient {
     if (!this.canShoot()) return;
     this.addStrokes(1);
     const yaw = this.cam.yaw + this.currentWobble(power);
+    const p0 = this.ball.pos;
+    this.preShot = { pos: new THREE.Vector3(p0.x, p0.y + 0.02, p0.z), safe: this.ball.lastSafe.clone() };
     const opts = this.effects.onShoot();
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
+    if (opts.triplicate) this.spawnClones(yaw, power * opts.powerMul, opts.chip);
     this.shotInProgress = true;
     sfx.play('putt', power);
     this.sendState(true);
+  }
+
+  // ---------- Triplicate ----------
+  spawnClones(yaw, power, chip) {
+    const from = this.preShot.pos;
+    const clones = [];
+    for (const off of [-0.21, 0.21]) {
+      const c = new Ball(this.physics, this.scene, this.me.color);
+      c.material.transparent = true;
+      c.material.opacity = 0.65;
+      c.setRadius(this.ball.radius);
+      Object.assign(c.mods, { ...this.ball.mods, leash: null });
+      c.place(from, { safe: false });
+      c.onEvent = (type, data) => { if (type === 'wall') sfx.play('wall', data.strength); };
+      c.shoot(new THREE.Vector3(Math.sin(yaw + off), 0, Math.cos(yaw + off)), power, { chip });
+      clones.push(c);
+    }
+    const env = Object.create(this.env);
+    env.onHole = (b) => { b.holed = true; };
+    env.onFall = (b) => { b.dead = true; b.state = 'gone'; b.body.setEnabled(false); b.mesh.visible = false; };
+    env.onPit = (b) => env.onFall(b);
+    this.trip = { clones, env, mainDead: false };
+  }
+
+  stepClones(dt, phase) {
+    if (!this.trip) return;
+    for (const c of this.trip.clones) {
+      if (c.dead || c.holed) continue;
+      if (phase === 'pre') c.preStep(dt, this.trip.env);
+      else { c.postStep(dt, this.trip.env); c.syncMesh(dt); }
+    }
+    if (phase === 'post') this.checkTrip();
+  }
+
+  /** When every ball has settled: a clone in the cup wins, else the one closest to the cup is kept. */
+  checkTrip() {
+    const t = this.trip;
+    const main = this.ball;
+    if (main.state === 'sinking' || main.state === 'holed') return this.endTrip(true);
+    const mainSettled = t.mainDead || main.state === 'idle';
+    if (!mainSettled || t.clones.some((c) => !c.dead && !c.holed && c.state !== 'idle')) return;
+    const cup = this.course.cup;
+    const winner = t.clones.find((c) => c.holed);
+    if (winner) {
+      this.endTrip(true);
+      main.place(new THREE.Vector3(cup.x, cup.y + main.radius, cup.z), { safe: false });
+      main.startSink(cup);
+      return;
+    }
+    const cands = t.clones.filter((c) => !c.dead).map((c) => ({ b: c, p: c.pos }));
+    if (!t.mainDead) cands.push({ b: main, p: main.pos });
+    if (!cands.length) {
+      this.endTrip(true);
+      main.state = 'moving';
+      return this.onFall(); // every ball fell: normal penalty
+    }
+    cands.sort((a, b) => Math.hypot(a.p.x - cup.x, a.p.z - cup.z) - Math.hypot(b.p.x - cup.x, b.p.z - cup.z));
+    const best = cands[0];
+    if (best.b !== main) {
+      const p = best.p;
+      main.place(new THREE.Vector3(p.x, p.y, p.z));
+      this.cam.snapTo(main.mesh.position);
+      this.ui.toast('🔱 The best of three is kept');
+    }
+    this.endTrip(true);
+    this.onRest();
+  }
+
+  endTrip() {
+    if (!this.trip) return;
+    for (const c of this.trip.clones) c.dispose();
+    this.trip = null;
+  }
+
+  // ---------- Return to the Past / Devirtualize ----------
+  undoShot() {
+    const b = this.ball;
+    if (!b || b.state === 'holed' || b.state === 'sinking') return;
+    if (!this.preShot) return this.ui.toast('Nothing to undo yet');
+    this.endTrip();
+    this.fallId++;
+    this.falling = false;
+    this.ui.closeOverlay();
+    b.place(this.preShot.pos, { safe: false });
+    b.lastSafe.copy(this.preShot.safe);
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.cam.snapTo(b.mesh.position);
+    this.ui.flash();
+    this.ui.bigToast('⏪ RETURN TO THE PAST', 'your last shot never happened (the stroke did)', 'good');
+    sfx.play('teleport');
+    this.sendState(true);
+  }
+
+  devirtualize(fromName) {
+    const b = this.ball;
+    if (!b || b.state === 'holed' || b.state === 'sinking') return;
+    this.endTrip();
+    const fid = ++this.fallId;
+    this.falling = true;
+    const p = b.mesh.position.clone();
+    for (let i = 0; i < 60; i++) {
+      this.effects.particles?.spawn({ pos: [p.x + (Math.random() - 0.5) * 0.4, p.y + Math.random() * 0.4, p.z + (Math.random() - 0.5) * 0.4], vel: [(Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2], color: Math.random() < 0.5 ? this.me.color : '#9fe8ff', size: 0.12, life: 1.2, gravity: 1 });
+    }
+    b.state = 'gone';
+    b.body.setEnabled(false);
+    b.mesh.visible = false;
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.cancelAim();
+    sfx.play('debuff');
+    this.ui.bigToast('💥 DEVIRTUALIZED', `${fromName} sent you back to the tee`, 'bad');
+    this.sendState(true);
+    setTimeout(() => {
+      if (this.ball !== b || fid !== this.fallId) return;
+      this.falling = false;
+      b.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
+      this.cam.snapTo(b.mesh.position);
+      this.virtualize(b.mesh.position);
+    }, 900);
   }
 
   /** The sway the aim line is showing right now (the shot uses exactly this). */
@@ -439,6 +599,8 @@ export class GameClient {
     const myActive = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking';
     const consume = () => { this.inventory.splice(i, 1); this.ui.renderInventory(this.inventory); sfx.play('use'); };
     if ((def.kind === 'self' || def.kind === 'aura' || def.needSelf) && !myActive) return this.ui.toast('Your ball is already in the cup');
+    if (id === 'returnpast' && !this.preShot) return this.ui.toast('Nothing to undo yet — take a shot first');
+    if (id === 'firewall' && this.effects.shield) return this.ui.toast('Your Firewall is already up');
     if (def.kind === 'one') {
       const targets = [...this.players.values()].filter((p) => p.id !== this.myId && p.connected !== false && (def.allowHoled || !p.holed));
       if (!targets.length) return this.ui.toast('No valid targets');
@@ -450,105 +612,148 @@ export class GameClient {
       });
       return;
     }
-    if (def.kind === 'place') { this.cancelAim(); return this.startPlacing(id, i); }
-    const params = {};
-    if (def.dir) params.dir = [Math.sin(this.cam.yaw), Math.cos(this.cam.yaw)];
+    if (def.aim) { this.cancelAim(); this.startTargeting(id, i); return; }
     consume();
-    this.link.send({ t: 'use', pu: id, params });
+    this.link.send({ t: 'use', pu: id, params: {} });
   }
 
-  startPlacing(id, slot) {
-    const model = id === 'bumper' ? makeSpawnBumper(0.5) : makeBlackHole(3.2);
-    model.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.5; } });
-    this.scene.add(model);
-    this.placing = { id, slot, model, pos: null, prevMode: this.cam.mode };
-    this.cam.mode = 'overhead';
-    this.ui.setHint(`Click on the course to place ${POWERUPS[id].icon} ${POWERUPS[id].name} · <kbd>Esc</kbd> to cancel`);
+  // ---------- aerial targeting ----------
+  startTargeting(id, slot) {
+    if (this.targeting) this.targeting.dispose();
+    this.targeting = new Targeting(this, id, slot);
   }
 
-  stopPlacing() {
-    if (!this.placing) return;
-    this.scene.remove(this.placing.model);
-    this.cam.mode = this.placing.prevMode;
-    this.placing = null;
-    this.ui.setHint('');
-  }
-
-  placementRay(e) {
-    const rect = this.renderer.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, this.renderer.camera);
-    const hits = ray.intersectObjects(this.course.group.children, false);
-    for (const h of hits) {
-      if (!h.face) continue;
-      const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
-      if (n.y > 0.8) return h.point;
+  finishTargeting(params) {
+    const t = this.targeting;
+    if (!t) return;
+    if (this.inventory[t.slot] === t.id) {
+      this.inventory.splice(t.slot, 1);
+      this.ui.renderInventory(this.inventory);
+      sfx.play('use');
+      this.link.send({ t: 'use', pu: t.id, params });
     }
-    return null;
+    this.cancelTargeting();
   }
 
+  cancelTargeting() {
+    if (!this.targeting) return;
+    this.targeting.dispose();
+    this.targeting = null;
+  }
+
+  /** C: free aerial view to survey the course (and back). */
   toggleOverhead() {
-    if (this.placing) return;
-    this.cam.mode = this.cam.mode === 'overhead' ? 'chase' : 'overhead';
+    if (this.targeting) return;
+    if (this.cam.mode === 'tactical') this.cam.mode = 'chase';
+    else { this.cancelAim(); this.cam.resetTactical(); this.cam.mode = 'tactical'; }
+  }
+
+  /** Big rings + names over every ball while in the aerial view. */
+  updateMarkers(t) {
+    const show = this.cam.mode === 'tactical';
+    if (!this.markers) this.markers = new Map();
+    const want = new Map();
+    if (show) {
+      if (this.ball && this.ball.state !== 'holed') want.set(this.myId, { p: this.ball.mesh.position, color: this.me.color, name: 'YOU' });
+      for (const id of this.ghosts.map.keys()) {
+        const pos = this.ghosts.position(id);
+        if (pos) want.set(id, { p: pos, color: this.players.get(id)?.color || '#fff', name: null });
+      }
+    }
+    for (const [id, m] of this.markers) if (!want.has(id)) { this.scene.remove(m.ring); if (m.label) this.scene.remove(m.label); this.markers.delete(id); }
+    for (const [id, w] of want) {
+      let m = this.markers.get(id);
+      if (!m) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 40), new THREE.MeshBasicMaterial({ color: w.color, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
+        ring.rotation.x = -Math.PI / 2;
+        ring.renderOrder = 19;
+        this.scene.add(ring);
+        let label = null;
+        if (w.name) { label = makeLabel(w.name, w.color); this.scene.add(label); }
+        m = { ring, label };
+        this.markers.set(id, m);
+      }
+      const s = 1 + 0.25 * Math.sin(t * 5);
+      m.ring.scale.setScalar(s * Math.max(1, this.cam.tac.height / 18));
+      m.ring.position.set(w.p.x, w.p.y - 0.15, w.p.z);
+      if (m.label) m.label.position.set(w.p.x, w.p.y + 0.6, w.p.z);
+    }
+  }
+
+  clearMarkers() {
+    if (!this.markers) return;
+    for (const m of this.markers.values()) { this.scene.remove(m.ring); if (m.label) this.scene.remove(m.label); }
+    this.markers.clear();
   }
 
   // ---------- input ----------
   bindInput() {
     const inp = this.input;
+    const tactical = () => this.cam.mode === 'tactical';
     this.disposers.push(inp.on('pointerdown', (e) => {
       sfx.unlock();
       if (this.phase !== 'hole') return;
-      if (this.placing) {
-        if (e.button !== 0) return;
-        const p = this.placementRay(e);
-        if (p) {
-          const { id, slot } = this.placing;
-          if (this.inventory[slot] === id) {
-            this.inventory.splice(slot, 1);
-            this.ui.renderInventory(this.inventory);
-            this.link.send({ t: 'use', pu: id, params: { pos: [p.x, p.y, p.z] } });
-          }
-          this.stopPlacing();
-        }
+      if (inp.pointers.size >= 2) {
+        this.cancelAim();
+        this.rotating = true;
+        if (this.targeting) this.targeting.dragging = false;
+        this.pinch = this.pinchDist();
         return;
       }
-      if (inp.pointers.size >= 2) { this.cancelAim(); this.rotating = true; return; }
-      if (e.button === 0 && this.canShoot() && this.cam.mode === 'chase') {
+      if (this.targeting && e.button === 0) { this.targeting.down(e); return; }
+      if (e.button === 2) this.rightDown = { x: e.clientX, y: e.clientY };
+      if (e.button === 0 && this.canShoot()) {
         this.aim = { sx: e.clientX, sy: e.clientY, power: 0 };
       } else if (e.button === 0 || e.button === 2 || e.button === 1) {
         this.rotating = true;
       }
     }));
     this.disposers.push(inp.on('pointermove', (e, p) => {
-      if (this.placing && this.course) {
-        const hit = this.placementRay(e);
-        this.placing.model.visible = !!hit;
-        if (hit) this.placing.model.position.copy(hit);
-        return;
-      }
+      if (this.targeting && this.course && inp.pointers.size < 2 && !(p && p.button === 2)) this.targeting.move(e);
       if (!p) return;
       const ts = this.effects.timeScale();
+      if (inp.pointers.size >= 2 && tactical()) {
+        const d = this.pinchDist();
+        if (this.pinch && d) this.cam.tacZoom(this.pinch / d);
+        this.pinch = d;
+        this.cam.pan((p.dx || 0) * 0.5, (p.dy || 0) * 0.5);
+        return;
+      }
+      const inv = this.effects.has('possession') ? 1 : -1; // XANA flips your controls
       if (this.aim) {
         if (!this.canShoot()) { this.cancelAim(); return; }
         const range = window.innerHeight * 0.32;
-        this.aim.power = Math.max(0, Math.min(1, (e.clientY - this.aim.sy) / range));
-        this.cam.rotate(-(p.dx || 0) * 0.0022 * ts);
+        let pw = (e.clientY - this.aim.sy) / range;
+        if (inv > 0) pw = -pw;
+        this.aim.power = Math.max(0, Math.min(1, pw));
+        this.cam.rotate(inv * (p.dx || 0) * 0.0022 * ts);
         this.ui.setPower(this.aim.power);
       } else if (this.rotating) {
-        this.cam.rotate(-(p.dx || 0) * 0.006 * ts);
-        this.cam.tilt((p.dy || 0) * 0.004 * ts);
+        if (tactical()) this.cam.pan(p.dx || 0, p.dy || 0);
+        else {
+          this.cam.rotate(inv * (p.dx || 0) * 0.006 * ts);
+          this.cam.tilt((p.dy || 0) * 0.004 * ts);
+        }
       }
     }));
-    this.disposers.push(inp.on('pointerup', () => {
+    this.disposers.push(inp.on('pointerup', (e) => {
+      if (this.targeting && e.button === 0 && inp.pointers.size === 0) this.targeting.up(e);
+      if (e.button === 2 && this.rightDown && this.targeting) {
+        // a right click without dragging cancels targeting (the item is kept)
+        if (Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y) < 6) this.cancelTargeting();
+      }
+      this.rightDown = null;
       if (this.aim) {
         const pw = this.aim.power;
         this.cancelAim();
         if (pw > 0.03) this.shoot(pw);
       }
-      if (this.input.pointers.size === 0) this.rotating = false;
+      if (inp.pointers.size === 0) { this.rotating = false; this.pinch = null; }
     }));
-    this.disposers.push(inp.on('wheel', (e) => this.cam.zoom(e.deltaY > 0 ? 1.1 : 0.9)));
+    this.disposers.push(inp.on('wheel', (e) => {
+      if (tactical()) this.cam.tacZoom(e.deltaY > 0 ? 1.12 : 0.89);
+      else this.cam.zoom(e.deltaY > 0 ? 1.1 : 0.9);
+    }));
     this.disposers.push(inp.on('keydown', (e) => this.onKey(e)));
     this.disposers.push(inp.on('keyup', (e) => {
       if (e.code === 'Space' && this.spaceCharge) {
@@ -559,12 +764,18 @@ export class GameClient {
     }));
   }
 
+  pinchDist() {
+    const pts = [...this.input.pointers.values()];
+    return pts.length >= 2 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : null;
+  }
+
   onKey(e) {
     sfx.unlock();
     if (e.code === 'KeyH') return this.ui.toggleHelp();
     if (e.code === 'KeyM') return this.app.toggleMute();
     if (e.code === 'Escape') {
-      if (this.placing) return this.stopPlacing();
+      if (this.targeting) return this.cancelTargeting();
+      if (this.cam.mode === 'tactical') { this.cam.mode = 'chase'; return; }
       if (this.ui.overlayOpen && !this.effects.locked && !this.falling) return this.ui.closeOverlay();
       return this.cancelAim();
     }
@@ -624,10 +835,17 @@ export class GameClient {
     const ts = this.effects.timeScale();
     // keyboard camera
     const k = this.input;
-    const rot = (k.down('KeyA') || k.down('ArrowLeft') ? 1 : 0) - (k.down('KeyD') || k.down('ArrowRight') ? 1 : 0);
-    if (rot) this.cam.rotate(rot * dt * (k.down('ShiftLeft') ? 0.4 : 1.6) * ts);
-    const tilt = (k.down('KeyW') || k.down('ArrowUp') ? 1 : 0) - (k.down('KeyS') || k.down('ArrowDown') ? 1 : 0);
-    if (tilt) this.cam.tilt(tilt * dt * 0.8);
+    const lr = (k.down('KeyA') || k.down('ArrowLeft') ? 1 : 0) - (k.down('KeyD') || k.down('ArrowRight') ? 1 : 0);
+    const ud = (k.down('KeyW') || k.down('ArrowUp') ? 1 : 0) - (k.down('KeyS') || k.down('ArrowDown') ? 1 : 0);
+    if (this.cam.mode === 'tactical') {
+      if (lr || ud) this.cam.pan(-lr * dt * 700, -ud * dt * 700);
+      const qe = (k.down('KeyQ') ? 1 : 0) - (k.down('KeyE') ? 1 : 0);
+      if (qe) this.cam.tacRotate(qe * dt * 1.5);
+    } else {
+      const inv = this.effects.has('possession') ? -1 : 1;
+      if (lr) this.cam.rotate(inv * lr * dt * (k.down('ShiftLeft') ? 0.4 : 1.6) * ts);
+      if (ud) this.cam.tilt(ud * dt * 0.8);
+    }
     if (k.down('Equal') || k.down('NumpadAdd')) this.cam.zoom(1 - dt);
     if (k.down('Minus') || k.down('NumpadSubtract')) this.cam.zoom(1 + dt);
     if (this.spaceCharge) {
@@ -661,7 +879,9 @@ export class GameClient {
     this.ghosts.update(dt);
     this.updateCamera(dt);
     this.updateAimLine();
+    this.updateScanner();
     this.updateEmotes(dt);
+    this.updateMarkers(this.simTime);
     if (this.virt) {
       const v = this.virt;
       v.t += dt;
@@ -678,8 +898,11 @@ export class GameClient {
     if (secLeft <= 10 && secLeft > 0 && secLeft !== this.lastBeep && this.ball.state !== 'holed') { this.lastBeep = secLeft; sfx.play('beep'); }
 
     // hints
-    if (this.ball.state === 'idle' && !this.aim && !this.placing && this.strokes === 0) this.ui.setHint('Drag down to set power · sideways to aim · release to putt');
-    else if (this.strokes === 1 && !this.placing && this.ball.state !== 'holed') this.ui.setHint('');
+    if (!this.targeting) {
+      if (this.cam.mode === 'tactical') this.ui.setHint('Aerial view · drag/WASD pan · wheel zoom · Q/E rotate · <kbd>C</kbd> back');
+      else if (this.ball.state === 'idle' && !this.aim && this.strokes === 0) this.ui.setHint('Drag down to set power · sideways to aim · release to putt');
+      else if (this.ball.state !== 'holed' && this.strokes > 0) this.ui.setHint('');
+    }
 
     // network
     this.sendTimer += dt;
@@ -692,8 +915,10 @@ export class GameClient {
     this.course.update(this.simTime, dt);
     this.effects.update(this.simTime);
     ball.preStep(dt, this.env);
+    this.stepClones(dt, 'pre');
     this.physics.step();
     ball.postStep(dt, this.env);
+    this.stepClones(dt, 'post');
     if (ball.state === 'idle' || ball.state === 'moving') {
       for (const pid of this.pickups.touching(ball.pos, ball.radius)) this.link.send({ t: 'claim', pid });
       if (ball.teleportCooldown > 0) ball.teleportCooldown -= dt;
@@ -726,7 +951,8 @@ export class GameClient {
     const r3 = (v) => Math.round(v * 1000) / 1000;
     this.link.send({
       t: 'st', p: [r3(p.x), r3(p.y), r3(p.z)], r: r3(this.ball.radius),
-      s: this.falling ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0,
+      s: this.falling || this.trip?.mainDead ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0,
+      cl: this.trip ? this.trip.clones.filter((c) => !c.dead && !c.holed).map((c) => { const q = c.pos; return [r3(q.x), r3(q.y), r3(q.z)]; }) : undefined,
     });
     const me = this.players.get(this.myId);
     if (me && me.strokes !== this.strokes) { me.strokes = this.strokes; this.playersDirty = true; }
@@ -737,6 +963,17 @@ export class GameClient {
       .map((p) => ({ ...p, total: (p.scores || []).reduce((a, b) => a + (b ?? 0), 0) }))
       .sort((a, b) => a.total - b.total);
     this.ui.renderPlayers(list, this.myId);
+  }
+
+  updateScanner() {
+    const pw = this.aim?.power ?? this.spaceCharge?.power ?? 0;
+    const on = this.effects.has('scanner') && this.ball.state === 'idle' && this.cam.mode === 'chase' && !this.targeting && pw > 0.03;
+    if (!on) { this.scanner?.hide(); return; }
+    this.scanner ||= new Scanner(this.def, this.scene);
+    const m = this.ball.mods;
+    this.scanner.update(this.ball.pos, this.cam.yaw, pw, this.simTime,
+      { radius: this.ball.radius, speedMul: m.speedMul, decelMul: m.decelMul, sticky: m.sticky, magnet: m.magnet, ghost: m.ghost, chip: this.effects.has('chip'), powerMul: this.effects.has('leash') ? 0.5 : 1 },
+      { decelMul: this.env.decelMul, stickyWalls: this.env.stickyWalls, bumpers: this.env.bumpers });
   }
 
   // ---------- aim line ----------
@@ -754,7 +991,7 @@ export class GameClient {
   }
 
   updateAimLine() {
-    const show = this.ball && this.ball.state === 'idle' && this.cam.mode === 'chase' && !this.placing;
+    const show = this.ball && this.ball.state === 'idle' && this.cam.mode === 'chase' && !this.targeting;
     this.aimGroup.visible = !!show;
     if (!show) return;
     const power = this.aim?.power ?? this.spaceCharge?.power ?? 0;

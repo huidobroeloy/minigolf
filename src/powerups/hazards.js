@@ -6,11 +6,26 @@ import {
   makeChicken, animateChicken, makeTornado, animateTornado, makeVolcano, makeMagmaPool, makeWave,
 } from '../fx/models.js';
 
-/** A path through random floor points, sampled by time at constant speed. */
-function makePath(course, rng, n, speed, startPoint = null) {
+/**
+ * A path through floor points, sampled by time at constant speed (ping-pong).
+ * startPoint: where it begins; bias: [x,z] direction the path prefers to wander toward.
+ */
+function makePath(course, rng, n, speed, startPoint = null, bias = null) {
   const pts = [];
   if (startPoint) pts.push(startPoint.clone());
-  while (pts.length < n) pts.push(course.randomFloorPoint(rng));
+  while (pts.length < n) {
+    const prev = pts[pts.length - 1];
+    if (!prev || !bias) { pts.push(course.randomFloorPoint(rng)); continue; }
+    // pick the candidate that best follows the bias, with a bit of seeded wobble
+    let best = null, bestScore = -1e9;
+    for (let k = 0; k < 6; k++) {
+      const c = course.randomFloorPoint(rng);
+      const dx = c.x - prev.x, dz = c.z - prev.z, L = Math.hypot(dx, dz) || 1;
+      const score = (dx * bias[0] + dz * bias[1]) / L - Math.abs(L - 4) * 0.12 + rng.range(0, 0.5);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    pts.push(best);
+  }
   const seg = [];
   let total = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -75,7 +90,9 @@ class Wind extends Hazard {
 class Tornado extends Hazard {
   constructor(ctx, fx) {
     super(ctx, fx, 15);
-    this.path = makePath(ctx.course, this.rng, 7, 2.8);
+    const p = fx.params.pos;
+    const start = p ? new THREE.Vector3(p[0], p[1], p[2]) : null;
+    this.path = makePath(ctx.course, this.rng, 7, 2.8, start, fx.params.dir || null);
     this.model = makeTornado();
     this.group.add(this.model);
     this.pos = new THREE.Vector3();
@@ -116,7 +133,8 @@ class Volcano extends Hazard {
   constructor(ctx, fx) {
     super(ctx, fx, 22);
     const c = ctx.course;
-    this.pos = c.randomFloorPoint(this.rng);
+    const p = fx.params.pos;
+    this.pos = p ? new THREE.Vector3(p[0], p[1], p[2]) : c.randomFloorPoint(this.rng);
     this.model = makeVolcano();
     this.model.position.copy(this.pos);
     this.group.add(this.model);
@@ -268,7 +286,8 @@ class Tsunami extends Hazard {
 class Montapollos extends Hazard {
   constructor(ctx, fx) {
     super(ctx, fx, 18);
-    this.path = makePath(ctx.course, this.rng, 12, 5.2);
+    const p = fx.params.pos;
+    this.path = makePath(ctx.course, this.rng, 12, 5.2, p ? new THREE.Vector3(p[0], p[1], p[2]) : null);
     this.model = makeChicken();
     this.model.scale.setScalar(1.3);
     this.group.add(this.model);
@@ -292,7 +311,7 @@ class Montapollos extends Hazard {
       out.z += (dz / (d || 1)) * 140 + this.vel.z * 6;
       out.y += 26;
       out.wake = true;
-      if (!this._hitSound || t - this._hitSound > 0.5) { sfx.play('cluck'); this._hitSound = t; }
+      if (!this._hitSound || t - this._hitSound > 0.5) { sfx.play('cluck'); this._hitSound = t; if (ball === this.ctx.course.localBall) this.ctx.onStat?.('chicken'); }
     }
   }
   frame(t) {

@@ -49,6 +49,7 @@ export class UI {
         <div class="hud-inventory"></div>
         <div class="hud-power hidden"><div class="power-fill"></div><div class="power-lbl">POWER</div></div>
         <div class="hud-hint"></div>
+        <button class="btn target-cancel hidden" data-act="cancelTarget">✖ Cancel</button>
         <div class="hud-buttons">
           <button class="icon-btn" data-act="cam" title="Overhead view (C)">🗺️</button>
           <button class="icon-btn" data-act="spec" title="Spectate next player (Tab)">👁️</button>
@@ -61,8 +62,11 @@ export class UI {
       <div id="toasts"></div>
       <div id="overlay"></div>
       <div id="aelita" class="hidden"><span>🌸 A E L I T A · slow motion</span></div>
+      <div id="possessed" class="hidden"><span>👁️ POSSESSED BY XANA · controls inverted</span></div>
+      <div id="flash" class="hidden"></div>
     `;
     this.$ = (s) => root.querySelector(s);
+    this.$('.target-cancel').addEventListener('click', () => this.h.cancelTarget?.());
     this.$('.hud-buttons').addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.act;
       if (a === 'cam') this.h.toggleCam?.();
@@ -204,6 +208,11 @@ export class UI {
     this.setHint('');
   }
 
+  setTargeting(on) {
+    this.$('#hud').classList.toggle('targeting', on);
+    this.$('.target-cancel').classList.toggle('hidden', !on);
+  }
+
   setHostControls(isHost) {
     this.$('[data-act="skip"]').classList.toggle('hidden', !isHost);
   }
@@ -265,6 +274,17 @@ export class UI {
 
   setAelita(on) { this.$('#aelita').classList.toggle('hidden', !on); }
 
+  setPossession(on) { this.$('#possessed').classList.toggle('hidden', !on); }
+
+  /** White "Return to the Past" flash. */
+  flash() {
+    const f = this.$('#flash');
+    f.classList.remove('hidden', 'go');
+    void f.offsetWidth;
+    f.classList.add('go');
+    setTimeout(() => f.classList.add('hidden'), 900);
+  }
+
   feed(text) {
     const f = this.$('.hud-feed');
     const item = el(`<div class="fi">${esc(text)}</div>`);
@@ -317,7 +337,8 @@ export class UI {
           <tr><td>W S / ↑ ↓ · mouse wheel</td><td>Tilt · zoom</td></tr>
           <tr><td>Space (hold)</td><td>Charge power, release to putt</td></tr>
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
-          <tr><td>C</td><td>Overhead view</td></tr>
+          <tr><td>C</td><td>Aerial view (drag/WASD pan, wheel zoom, Q/E rotate)</td></tr>
+          <tr><td>Placing power-ups</td><td>Click a spot · drag an arrow or line · right-click / Esc cancels</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
           <tr><td>7 8 9 0</td><td>Emotes 😂 😡 👏 💀</td></tr>
           <tr><td>M · H · Esc</td><td>Mute · help · cancel</td></tr>

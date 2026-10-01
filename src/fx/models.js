@@ -183,28 +183,56 @@ export function makeSpawnBumper(r) {
   return g;
 }
 
-/** Floating "data cube" pickup with a ? face. */
-let _pickupTex;
-export function makePickup() {
-  if (!_pickupTex) {
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const g = c.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 128, 128);
-    grd.addColorStop(0, '#ffcf3d'); grd.addColorStop(1, '#ff7a1a');
-    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-    g.strokeStyle = '#fff'; g.lineWidth = 8; g.strokeRect(6, 6, 116, 116);
-    g.fillStyle = '#fff'; g.font = 'bold 84px Orbitron, sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('?', 64, 70);
-    _pickupTex = new THREE.CanvasTexture(c);
-    _pickupTex.colorSpace = THREE.SRGBColorSpace;
+/**
+ * Pickup: a glossy data orb floating inside a mini Lyoko tower cage.
+ * The halo colour tells the category (self / sabotage / chaos); the exact item is a surprise.
+ */
+const pickupMats = new Map();
+export function makePickup(color = '#3da5ff') {
+  if (!pickupMats.has(color)) {
+    pickupMats.set(color, {
+      white: new THREE.MeshStandardMaterial({ color: '#f2f5ff', roughness: 0.25, metalness: 0.3 }),
+      halo: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 }),
+      glow: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }),
+      orb: new THREE.MeshPhysicalMaterial({
+        color: '#ffffff', roughness: 0.05, metalness: 0.0, clearcoat: 1, clearcoatRoughness: 0.03,
+        iridescence: 1, iridescenceIOR: 1.6, sheen: 1, sheenColor: new THREE.Color(color),
+        emissive: new THREE.Color(color), emissiveIntensity: 0.55, transparent: true, opacity: 0.92,
+      }),
+      core: new THREE.MeshBasicMaterial({ color }),
+    });
   }
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), new THREE.MeshStandardMaterial({
-    map: _pickupTex, emissive: '#ff9a1a', emissiveIntensity: 0.35, roughness: 0.4,
-  }));
-  m.castShadow = true;
-  return m;
+  const M = pickupMats.get(color);
+  const g = new THREE.Group();
+  const cage = new THREE.Group();
+  g.add(cage);
+  // two rings and six slim pillars = a tiny open tower
+  for (const y of [-0.32, 0.36]) {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 28), M.white);
+    r.rotation.x = Math.PI / 2; r.position.y = y; cage.add(r);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.68, 5), M.white);
+    pil.position.set(Math.cos(a) * 0.3, 0.02, Math.sin(a) * 0.3);
+    cage.add(pil);
+  }
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.16, 6), M.white);
+  cap.position.y = 0.45; cage.add(cap);
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.19, 24, 18), M.orb);
+  orb.castShadow = true;
+  g.add(orb);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), M.core);
+  orb.add(core);
+  // the tower halo: a glowing ring + soft column
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 36), M.halo);
+  halo.rotation.x = Math.PI / 2; halo.position.y = -0.38;
+  g.add(halo);
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.0, 24, 1, true), M.glow);
+  column.position.y = 0.1;
+  g.add(column);
+  g.userData = { orb, halo, cage, column };
+  return g;
 }
 
 /** Name tag sprite for ghost balls. */

@@ -1,10 +1,13 @@
 import { HOLES } from '../holes/index.js';
-import { randomSeed } from '../core/rng.js';
+import { randomSeed, RNG } from '../core/rng.js';
+import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
 export const COLORS = ['#ff4d4d', '#4da6ff', '#ffd24d', '#3ddc84', '#c04dff', '#ff8f3d', '#4dfff3', '#ff4dc4'];
 export const MAX_PLAYERS = 8;
 const BETWEEN_HOLES_MS = 8000;
 const ALL_HOLED_GRACE_MS = 2500;
+const RESPAWN_EVERY_MS = 25000;
+const PROTECT_MS = 5000;
 
 export function timeoutScore(par, strokes) {
   return Math.max(par, strokes) + 10;
@@ -49,7 +52,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes,
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {},
     }));
   }
 
@@ -92,13 +95,26 @@ export class HostRoom {
         const pk = this.pickups[msg.pid];
         if (!pk || pk.taken) return;
         pk.taken = id;
-        this.broadcast({ t: 'picked', pid: msg.pid, by: id });
+        const pu = pickPowerup(pk.cat, this.rankFactor(id));
+        this.stat(id, 'pickups');
+        this.broadcast({ t: 'picked', pid: msg.pid, by: id, pu });
         return;
       }
       case 'use': {
         if (!p) return;
         if (this.phase !== 'hole') { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Too late — the hole is over' }); return; }
+        const def = POWERUPS[msg.pu];
+        if (!def) return;
         const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, seed: randomSeed(), at: this.elapsed() };
+        if (def.kind === 'one') {
+          const tgt = this.players.get(msg.target);
+          if (tgt && performance.now() < (tgt.protectedUntil || 0)) {
+            this.sendTo(id, { t: 'refund', pu: msg.pu, reason: `${tgt.name} was just hit — protected for a moment` });
+            return;
+          }
+          if (tgt) { tgt.protectedUntil = performance.now() + PROTECT_MS; this.stat(tgt.id, 'targeted'); }
+        }
+        this.stat(id, 'used');
         if (msg.pu === 'switch') {
           const tgt = this.players.get(msg.target);
           if (!tgt || tgt.holed || p.holed || !tgt.pos || !p.pos) { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Switch failed: target unavailable' }); return; }
@@ -107,6 +123,17 @@ export class HostRoom {
         this.broadcast(fx);
         return;
       }
+      case 'reflect': {
+        // a Firewall bounced an effect: send it back at the original sender, once
+        const f = msg.fx;
+        if (!p || !f || f.reflected || this.phase !== 'hole' || !POWERUPS[f.pu]) return;
+        if (f.pu === 'switch') return;
+        this.broadcast({ ...f, t: 'fx', from: id, target: f.from, reflected: true, seed: randomSeed(), at: this.elapsed() });
+        return;
+      }
+      case 'stat':
+        if (p && typeof msg.k === 'string') this.stat(id, msg.k, Number(msg.n) || 1);
+        return;
       case 'give':
         // response to a steal: forward the stolen item (or nothing) to the thief
         this.sendTo(msg.to, { t: 'gift', pu: msg.pu, from: id });
@@ -130,6 +157,25 @@ export class HostRoom {
     this.broadcastLobby();
     if (this.phase === 'hole') this.sendTo(id, this.holeMessage());
     if (this.phase === 'between') this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
+  }
+
+  stat(id, k, n = 1) {
+    const p = this.players.get(id);
+    if (!p) return;
+    p.stats ||= {};
+    p.stats[k] = (p.stats[k] || 0) + n;
+  }
+
+  /** 0 = leading … 1 = last (by total so far). Solo: middle of the road. */
+  rankFactor(id) {
+    const list = this.activePlayers();
+    if (list.length < 2) return 0.5;
+    const tot = (q) => q.scores.reduce((a, b) => a + (b ?? 0), 0);
+    const sorted = [...list].sort((a, b) => tot(a) - tot(b));
+    const me = this.players.get(id);
+    const better = sorted.filter((q) => tot(q) < tot(me)).length;
+    const same = sorted.filter((q) => tot(q) === tot(me)).length;
+    return (better + (same - 1) / 2) / (list.length - 1);
   }
 
   // ---------- match flow ----------
@@ -164,6 +210,7 @@ export class HostRoom {
       seed: this.holeSeed, duration: this.duration, elapsed: this.elapsed(),
       pickupCount: this.settings.powerups ? this.pickups.length : 0,
       taken: this.pickups.map((p) => p.taken || null),
+      cats: this.pickups.map((p) => p.cat),
       players: this.playerList(),
     };
   }
@@ -178,7 +225,9 @@ export class HostRoom {
     this.holeStart = performance.now();
     this.allHoledAt = null;
     const n = this.settings.powerups ? Math.min(16, Math.round(4 + this.activePlayers().length * 1.5)) : 0;
-    this.pickups = Array.from({ length: n }, () => ({ taken: null }));
+    const cats = pickupCategories(this.holeSeed, n, RNG);
+    this.pickups = cats.map((cat) => ({ taken: null, cat }));
+    this.lastRespawn = performance.now();
     for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; }
     this.broadcast(this.holeMessage());
   }
@@ -189,6 +238,7 @@ export class HostRoom {
     const results = [];
     for (const p of this.players.values()) {
       if (!p.holed) {
+        this.stat(p.id, 'timeouts');
         p.scores[this.holeNo] = timeoutScore(def.par, p.strokes);
         results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true });
       } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
@@ -197,6 +247,20 @@ export class HostRoom {
     this.betweenStart = performance.now();
     this.lastResults = results;
     this.broadcast({ t: 'holeEnd', results, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
+  }
+
+  respawnPickups() {
+    this.lastRespawn = performance.now();
+    const taken = this.pickups.map((p, i) => [p, i]).filter(([p]) => p.taken);
+    const n = Math.min(taken.length, Math.ceil(this.activePlayers().length / 2));
+    const cats = Object.keys(CATEGORY_WEIGHTS);
+    for (let k = 0; k < n; k++) {
+      const j = Math.floor(Math.random() * taken.length);
+      const [pk, i] = taken.splice(j, 1)[0];
+      pk.taken = null;
+      pk.cat = cats[Math.floor(Math.random() * cats.length)];
+      this.broadcast({ t: 'respawn', pid: i, cat: pk.cat });
+    }
   }
 
   finish() {
@@ -208,6 +272,7 @@ export class HostRoom {
 
   tick() {
     if (this.phase === 'hole') {
+      if (this.settings.powerups && performance.now() - this.lastRespawn > RESPAWN_EVERY_MS) this.respawnPickups();
       if (this.elapsed() >= this.duration) this.endHole();
       else if (this.allHoledAt && performance.now() - this.allHoledAt > ALL_HOLED_GRACE_MS) this.endHole();
       else if (this.activePlayers().length === 0) this.endHole();

@@ -9,7 +9,8 @@ export class ChaseCam {
     this.yaw = 0;          // aim direction: (sin yaw, 0, cos yaw)
     this.pitch = 0.32;
     this.dist = 3.4;
-    this.mode = 'chase';   // chase | overhead
+    this.mode = 'chase';   // chase | tactical (aerial, pan/zoom/rotate)
+    this.tac = { center: new THREE.Vector3(), height: 30, min: 6, max: 60, bounds: null };
     this.target = new THREE.Vector3();
     this.smoothTarget = new THREE.Vector3();
     this.overhead = { center: new THREE.Vector3(), height: 30 };
@@ -28,7 +29,35 @@ export class ChaseCam {
   setOverhead(course) {
     this.overhead.center.copy(course.center);
     this.overhead.height = Math.max(course.size.x, course.size.z) * 0.95 + 8;
+    this.tac.bounds = course.bounds.clone().expandByScalar(4);
+    this.resetTactical();
   }
+
+  /** Aerial view framing the whole course. */
+  resetTactical() {
+    this.tac.center.copy(this.overhead.center);
+    this.tac.height = this.overhead.height;
+    this.tac.max = this.overhead.height * 1.6;
+    this.tac.yaw = this.yaw;
+  }
+
+  /** Drag the map: screen pixels → ground movement (the course follows your finger). */
+  pan(dx, dy) {
+    const k = this.tac.height * 0.0016;
+    const y = this.tac.yaw;
+    const fx = Math.sin(y), fz = Math.cos(y);
+    const rx = -Math.cos(y), rz = Math.sin(y);
+    this.tac.center.x += -rx * dx * k + fx * dy * k;
+    this.tac.center.z += -rz * dx * k + fz * dy * k;
+    const b = this.tac.bounds;
+    if (b) {
+      this.tac.center.x = THREE.MathUtils.clamp(this.tac.center.x, b.min.x, b.max.x);
+      this.tac.center.z = THREE.MathUtils.clamp(this.tac.center.z, b.min.z, b.max.z);
+    }
+  }
+
+  tacZoom(f) { this.tac.height = THREE.MathUtils.clamp(this.tac.height * f, this.tac.min, this.tac.max); }
+  tacRotate(d) { this.tac.yaw += d; }
 
   rotate(d) { this.yaw += d; }
   tilt(d) { this.pitch = THREE.MathUtils.clamp(this.pitch + d, 0.05, 1.35); }
@@ -37,11 +66,12 @@ export class ChaseCam {
   update(dt) {
     const k = 1 - Math.exp(-dt * 10);
     this.smoothTarget.lerp(this.target, k);
-    if (this.mode === 'overhead') {
-      const c = this.overhead.center;
-      this._pos.set(c.x - Math.sin(this.yaw) * 6, c.y + this.overhead.height, c.z - Math.cos(this.yaw) * 6);
+    if (this.mode === 'tactical') {
+      const c = this.tac.center, h = this.tac.height, y = this.tac.yaw;
+      this._pos.set(c.x - Math.sin(y) * h * 0.42, c.y + h, c.z - Math.cos(y) * h * 0.42);
       this.camera.position.lerp(this._pos, k);
-      this.camera.lookAt(c);
+      this._look.lerp(c, k);
+      this.camera.lookAt(this._look);
       return;
     }
     const d = this.dir;

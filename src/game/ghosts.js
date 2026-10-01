@@ -32,6 +32,16 @@ export class Ghosts {
     g.state = msg.s;
     g.radius = msg.r ?? 0.18;
     g.ghostMode = !!msg.g;
+    const cl = Array.isArray(msg.cl) ? msg.cl : [];
+    g.clones ||= [];
+    while (g.clones.length < cl.length) {
+      const m = new THREE.Mesh(this.geo, g.mesh.material.clone());
+      m.material.opacity = 0.45;
+      m.scale.setScalar(0.18);
+      this.scene.add(m);
+      g.clones.push(m);
+    }
+    g.clones.forEach((m, i) => { m.visible = i < cl.length; if (cl[i]) m.position.set(cl[i][0], cl[i][1], cl[i][2]); });
   }
 
   /** Teleports (switch, respawn) jump instead of sliding across the map. */
@@ -61,6 +71,7 @@ export class Ghosts {
     if (!g) return;
     this.scene.remove(g.mesh);
     this.scene.remove(g.label);
+    for (const m of g.clones || []) this.scene.remove(m);
     g.mesh.material.dispose();
     g.label.material.map.dispose();
     g.label.material.dispose();

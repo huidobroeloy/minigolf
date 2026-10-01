@@ -69,12 +69,16 @@ class Monster {
   update(t) {
     if (!this.body) return;
     const s = this.at(t);
+    if (!s) return;
     this.body.setNextKinematicTranslation({ x: s.x, y: s.y + this.yOff, z: s.z });
     this.q.setFromAxisAngle(UP, s.ry || 0);
     this.body.setNextKinematicRotation(this.q);
   }
   frame(t) { this.place(this.model, this.at(t)); }
-  dispose() { this.ctx.group.remove(this.model); }
+  dispose() {
+    this.ctx.group.remove(this.model);
+    if (this.body) { this.ctx.physics.removeBody(this.body); this.body = null; }
+  }
 }
 
 // ---------- Kankrelat: the little roach ----------
