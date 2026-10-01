@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { R, GROUP, cg, SURFACES, GRAVITY } from './world.js';
+import { applyCharacter } from '../game/characters.js';
 
 export const BALL_R = 0.18;
 export const MAX_SHOT_SPEED = 17;
@@ -72,13 +73,15 @@ export class Ball {
       new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 })
     );
     this.mesh.add(stripe);
+    this.stripe = stripe;
+    if (applyCharacter(this.material, color)) stripe.visible = false;
     scene.add(this.mesh);
   }
 
   get pos() { return this.body.translation(); }
   get vel() { return this.body.linvel(); }
 
-  setColor(c) { this.material.color.set(c); }
+  setColor(c) { this.material.color.set(c); if (applyCharacter(this.material, c)) this.stripe.visible = false; }
 
   setRadius(r) {
     if (Math.abs(r - this.radius) < 1e-4) return;

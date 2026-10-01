@@ -542,11 +542,12 @@ class Kolossus extends Monster {
   /** 0..1 arm pose and the moment of impact within each cycle. */
   pose(t) {
     const u = (((t + (this.spec.phase ?? 0) * this.period) / this.period) % 1 + 1) % 1;
-    if (u < 0.1) return { k: 0.35 - (u / 0.1) * 0.35, u };          // wind up
+    const idle = 0.77;
+    if (u < 0.1) return { k: idle - (u / 0.1) * idle, u };           // wind up: raise the arm
     if (u < 0.13) return { k: (u - 0.1) / 0.03, u };                 // SLAM
     if (u < 0.25) return { k: 1, u };                                // hold
-    if (u < 0.4) return { k: 1 - ((u - 0.25) / 0.15) * 0.65, u };   // recover
-    return { k: 0.35, u };
+    if (u < 0.4) return { k: 1 - ((u - 0.25) / 0.15) * (1 - idle), u }; // recover
+    return { k: idle, u };
   }
   frame(t) {
     super.frame(t);

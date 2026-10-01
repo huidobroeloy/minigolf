@@ -2,7 +2,9 @@ import { HOLES } from '../holes/index.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
-export const COLORS = ['#ff4d4d', '#4da6ff', '#ffd24d', '#3ddc84', '#c04dff', '#ff8f3d', '#4dfff3', '#ff4dc4'];
+import { CHARACTER_COLORS } from '../game/characters.js';
+
+export const COLORS = CHARACTER_COLORS; // one per character: Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA
 export const MAX_PLAYERS = 8;
 const BETWEEN_HOLES_MS = 8000;
 const ALL_HOLED_GRACE_MS = 2500;

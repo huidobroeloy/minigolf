@@ -2,6 +2,7 @@ import { POWERUPS, POWERUP_IDS } from '../powerups/registry.js';
 import { COLORS } from '../net/room.js';
 import { HOLES, SECTORS } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
+import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -108,8 +109,9 @@ export class UI {
         ${error ? `<div class="error">${esc(error)}</div>` : ''}
         <label>Your name</label>
         <input id="name" maxlength="16" value="${esc(p.name)}" placeholder="Ulrich" />
-        <label>Ball colour</label>
-        <div class="swatches">${COLORS.map((c) => `<button class="swatch ${c === p.color ? 'sel' : ''}" data-c="${c}" style="--c:${c}"></button>`).join('')}</div>
+        <label>Your ball</label>
+        <div class="swatches chars">${CHARACTERS.map((ch) => `<button class="swatch char ${ch.ui === p.color ? 'sel' : ''}" data-c="${ch.ui}" title="${esc(ch.name)}" style="background:${characterCss(ch)}"></button>`).join('')}</div>
+        <div class="char-name">${esc(characterByColor(p.color)?.name || '')}</div>
         <div class="row">
           <button class="btn primary" id="create">Create room</button>
         </div>
@@ -134,6 +136,7 @@ export class UI {
       s.querySelectorAll('.swatch').forEach((x) => x.classList.remove('sel'));
       b.classList.add('sel');
       this.prefs.color = b.dataset.c;
+      s.querySelector('.char-name').textContent = characterByColor(b.dataset.c)?.name || '';
     }));
     const getMe = () => {
       this.prefs.name = s.querySelector('#name').value.trim() || 'Player';
@@ -175,7 +178,7 @@ export class UI {
           <button class="btn tiny" id="copy">Copy invite link</button>
         </div>
         <div class="players-list">
-          ${lobby.players.map((p) => `<div class="pl"><i style="background:${p.color}"></i>${esc(p.name)}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`).join('')}
+          ${lobby.players.map((p) => { const ch = characterByColor(p.color); return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
           <div class="small">${lobby.players.length}/8 players</div>
         </div>
         <div class="settings ${isHost ? '' : 'readonly'}">
@@ -507,7 +510,8 @@ function podium(sorted) {
 function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}');
-    return { name: p.name || '', color: p.color || COLORS[Math.floor(Math.random() * COLORS.length)], muted: !!p.muted, quality: p.quality || 'high' };
+    const color = COLORS.includes(p.color) ? p.color : COLORS[Math.floor(Math.random() * COLORS.length)];
+    return { name: p.name || '', color, muted: !!p.muted, quality: p.quality || 'high' };
   } catch { return { name: '', color: COLORS[0], muted: false }; }
 }
 

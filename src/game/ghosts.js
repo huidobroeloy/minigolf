@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeLabel } from '../fx/models.js';
+import { applyCharacter } from './characters.js';
 
 /** Other players' balls: interpolated from their ~15Hz state broadcasts. No collisions with yours. */
 export class Ghosts {
@@ -13,13 +14,14 @@ export class Ghosts {
     let g = this.map.get(p.id);
     if (g) return g;
     const mat = new THREE.MeshPhysicalMaterial({ color: p.color, roughness: 0.25, clearcoat: 1, emissive: p.color, emissiveIntensity: 0.12, transparent: true, opacity: 0.8 });
+    applyCharacter(mat, p.color);
     const mesh = new THREE.Mesh(this.geo, mat);
     mesh.castShadow = true;
     mesh.scale.setScalar(0.18);
     const label = makeLabel(p.name, p.color);
     this.scene.add(mesh);
     this.scene.add(label);
-    g = { id: p.id, mesh, label, target: null, state: 'idle', radius: 0.18, seen: false };
+    g = { id: p.id, mesh, label, target: null, state: 'idle', radius: 0.18, seen: false, trailColor: new THREE.Color(p.color) };
     this.map.set(p.id, g);
     return g;
   }
@@ -53,7 +55,7 @@ export class Ghosts {
         if (g.mesh.position.distanceTo(g.target) > 4) g.mesh.position.copy(g.target);
         else g.mesh.position.lerp(g.target, k);
         const sp = dt > 0 ? before.distanceTo(g.mesh.position) / dt : 0;
-        if (sp > 2.5 && sp < 60 && g.state !== 'holed') this.onTrail?.(g.mesh.position, g.mesh.material.color, g.radius);
+        if (sp > 2.5 && sp < 60 && g.state !== 'holed') this.onTrail?.(g.mesh.position, g.trailColor, g.radius);
       }
       const visible = g.seen && g.state !== 'holed' && g.state !== 'gone';
       g.mesh.visible = visible;

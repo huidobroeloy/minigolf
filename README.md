@@ -21,6 +21,19 @@ If a friend's connection drops or they reload the page, they're put straight bac
 If the host leaves, the room ends.
 For friends behind strict networks, the game uses PeerJS's free relay. For more reliable relaying, add your own free TURN credentials to `src/net/ice.js`.
 
+## Your ball
+Pick your character on the main menu: **Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper or XANA**. Each ball wears that character's colours and a signature detail:
+- Ulrich: headband and katana slash
+- Odd: blond hair with the purple spot, plus cat eyes
+- Yumi: sakura and a fan
+- Aelita: her pink emblem
+- William: black-and-white swirl
+- Jérémie: glasses
+- Franz Hopper: a glowing sphere
+- XANA: the eye
+
+Each character can only be picked by one player per room.
+
 ## Controls
 | Input | Action |
 |---|---|

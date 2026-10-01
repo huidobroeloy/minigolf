@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TEX } from './themes.js';
 import { Emitter } from '../fx/particles.js';
-import { makeTower } from '../fx/lyoko.js';
+import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
 
 // Scenery around the course (no collisions) + ambient particles, per sector.
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...extra });
@@ -166,15 +166,15 @@ export function decorate(sector, course, group, rng) {
   }
 
   // Lyoko towers on floating platforms around the course (one may be XANA-activated)
-  const towerColor = { fortune: '#ff2bd6', sector5: '#6f8dff' }[sector] || '#cfe8ff';
+  const towerColor = { fortune: '#ff7ae8' }[sector] || '#ffffff';
   const platMat = new THREE.MeshStandardMaterial({ color: '#c9ccd6', roughness: 0.8 });
   const towers = [];
   ringPoints(course, rng, 2, 8, 20).forEach((p, i) => {
     const y = minY + rng.range(-4, 1);
-    const plat = add(new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.2, 1.2, 24), platMat));
+    const plat = add(new THREE.Mesh(new THREE.CylinderGeometry(3.6, 2.4, 1.2, 24), platMat));
     plat.position.set(p.x, y - 0.6, p.z);
     const red = i === 0 && rng.chance(0.35);
-    const tw = makeTower(red ? '#ff2a2a' : towerColor, 7);
+    const tw = makeTower(red ? '#ff2a2a' : towerColor, 14, TOWER_BODY[sector]);
     tw.position.set(p.x, y, p.z);
     deco.add(tw);
     towers.push(tw);

@@ -912,7 +912,7 @@ export class GameClient {
     // visuals
     this.ball.syncMesh(dt * ts);
     const bv = this.ball.vel;
-    if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.ball.material.color, this.ball.radius);
+    if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.me.color, this.ball.radius);
     this.course.frame(this.simTime, dt);
     this.effects.frame(this.simTime, dt);
     this.pickups.frame(this.simTime);
