@@ -66,6 +66,11 @@ export class Ghosts {
     }
   }
 
+  /** Last known spot, even after holing out. */
+  lastPos(id) {
+    return this.map.get(id)?.mesh.position || null;
+  }
+
   position(id) {
     const g = this.map.get(id);
     return g && g.seen && g.state !== 'holed' ? g.mesh.position : null;

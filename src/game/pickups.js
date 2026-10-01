@@ -20,7 +20,7 @@ export class Pickups {
       else {
         pos = course.randomFloorPoint(rng);
         let guard = 0;
-        while (guard++ < 20 && (pos.distanceTo(course.tee) < 2 || Math.hypot(pos.x - course.cup.x, pos.z - course.cup.z) < 1.5)) pos = course.randomFloorPoint(rng);
+        while (guard++ < 20 && (pos.distanceTo(course.tee) < 2 || course.cups.some((c) => Math.hypot(pos.x - c.x, pos.z - c.z) < 1.5))) pos = course.randomFloorPoint(rng);
       }
       const item = { i, pos: pos.clone(), cat: categories[i], mesh: null, taken: !!taken[i], claimed: false, phase: rng.range(0, 6), born: -10 };
       this.makeMesh(item);

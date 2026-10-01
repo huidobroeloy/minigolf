@@ -112,8 +112,7 @@ export class Targeting {
 
   okPoint(p) {
     if (!p || p.offCourse) return false;
-    const c = this.course.cup;
-    return Math.hypot(p.x - c.x, p.z - c.z) >= CUP_KEEPOUT;
+    return this.course.cups.every((c) => Math.hypot(p.x - c.x, p.z - c.z) >= CUP_KEEPOUT);
   }
 
   /** Wall or bridge? A bridge if part of the segment has no floor under it. */
@@ -127,11 +126,14 @@ export class Targeting {
   }
 
   segCupDist(a, b) {
-    const c = this.course.cup;
     const dx = b.x - a.x, dz = b.z - a.z;
     const L2 = dx * dx + dz * dz || 1;
-    const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.z - a.z) * dz) / L2));
-    return Math.hypot(a.x + dx * t - c.x, a.z + dz * t - c.z);
+    let best = Infinity;
+    for (const c of this.course.cups) {
+      const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.z - a.z) * dz) / L2));
+      best = Math.min(best, Math.hypot(a.x + dx * t - c.x, a.z + dz * t - c.z));
+    }
+    return best;
   }
 
   clampLine(a, b) {

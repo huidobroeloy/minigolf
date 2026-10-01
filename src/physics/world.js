@@ -27,6 +27,7 @@ export const SURFACES = {
   wood: { decel: 2.3 },
   s5: { decel: 2.1 },
   neon: { decel: 2.0 },
+  glass: { decel: 0.8 }, // Fortune Falls board: you never stop on it
   carpet: { decel: 3.0 },
 };
 

@@ -1,6 +1,28 @@
-import { rect, patrol, spin, kicker } from './helpers.js';
+import { rect, patrol, spin, kicker, shuttle } from './helpers.js';
 
 const pit = (x, z, r = 0.5) => ({ c: [x, z], r, fortune: true });
+
+// Fortune Falls board: staggered neon pegs on the slope, a few bumpers, two shuttling paddles.
+const boardY = (z) => 2 - (z - 16) * (4 / 16);
+function board() {
+  const parts = [];
+  const bumpers = new Set(['2:0', '4:-2.4', '4:2.4', '6:0']);
+  for (let row = 0; row < 7; row++) {
+    const z = 18 + row * 1.8;
+    const xs = row % 2 ? [-4, -2.4, -0.8, 0.8, 2.4, 4] : [-4.8, -3.2, -1.6, 0, 1.6, 3.2, 4.8];
+    // a faint cross-breeze, alternating row by row, so no ball can balance on top of a peg
+    parts.push({ t: 'zone', kind: 'wind', rect: [-6, z - 0.9, 6, z + 0.9], dir: [row % 2 ? 1 : -1, 0], force: 0.7, hidden: true });
+    for (const x of xs) {
+      if (bumpers.has(`${row}:${x}`)) parts.push({ t: 'bumper', p: [x, boardY(z), z], r: 0.36, power: 1.05, color: '#ff2bd6' });
+      else parts.push({ t: 'cyl', p: [x, boardY(z) - 0.2, z], r: 0.19, h: 0.8, look: 'neon' });
+    }
+  }
+  for (const [z, period, phase] of [[22.5, 3.4, 0], [26.1, 4.1, 0.5]]) {
+    const y = boardY(z) + 0.22;
+    parts.push({ t: 'mover', kind: 'obst', s: [1.8, 0.5, 0.25], path: shuttle([-4, y, z], [4, y, z], period, phase, 0.1), look: 'neon' });
+  }
+  return parts;
+}
 
 // Sector 6 — CYBERPUNK FORTUNE FALLS: neon rooftops, fortune pits (+1…+5), conveyors, teleporters.
 export default [
@@ -45,31 +67,29 @@ export default [
     ],
   },
   {
-    id: 'fortune-3', name: 'Fortune Falls', sector: 'fortune', par: 5, time: 170,
-    tee: [0, 0, 0], cup: [0, -1, 36.5],
-    fortuneDrops: [[0, 0, 0.5], [0, 2, 16.2], [-4.4, -1, 38.6], [4.4, -1, 31.4], [0, -1, 33.6], [5.2, 2, 23.2], [-3.4, 0, 8.6]],
-    hio: 'Up the ramp off-centre, bank past the big pit between the sweepers, down the falls and through the pit ring.',
+    // A pachinko drop: climb to the deck, fall down a board of pegs, bumpers and paddles,
+    // and land in one of seven lanes. Three lanes hold a cup; others hide fortune pits.
+    id: 'fortune-3', name: 'Fortune Falls', sector: 'fortune', par: 4, time: 170,
+    tee: [0, 0, 0], cup: [0, -2, 37.6],
+    cups: [[-3.43, -2, 37.2], [3.43, -2, 37.2]],
+    fortuneDrops: [[0, 0, 1], [-4.2, 2, 14.6], [4.2, 2, 14.6], [-1.71, -2, 38.6], [1.71, -2, 38.6], [0, 0, 4.5]],
+    hio: 'Climb to the deck with pace, dodge the spinner and let the board decide — the centre lane is the jackpot.',
     parts: [
+      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [1.5, 6], [-1.5, 6], [-3, 6]], open: [3] },
+      { t: 'mover', kind: 'obst', s: [1.4, 0.5, 0.25], path: patrol([-1.9, 3.6], [1.9, 3.6], 3.2, 0.25), look: 'neon' },
+      { t: 'ramp', a: [0, 6], b: [0, 13], w: 3, ya: 0, yb: 2 },
+      // the deck at the top of the board, with a spinner that sends you left or right
+      { t: 'floor', y: 2, poly: [[-6, 13], [-1.5, 13], [1.5, 13], [6, 13], [6, 16], [-6, 16]], open: [1, 4] },
+      { t: 'mover', kind: 'obst', s: [2.6, 0.5, 0.25], path: spin(0, 2.25, 14.6, 2.4), look: 'neon' },
+      // the board
+      { t: 'ramp', a: [0, 16], b: [0, 32], w: 12, ya: 2, yb: -2, mat: 'glass' },
+      ...board(),
+      // the landing: seven lanes, then cups and fortune pits
       {
-        t: 'floor', poly: [[-4, -1.2], [4, -1.2], [4, 10], [1.5, 10], [-1.5, 10], [-4, 10]], open: [3],
-        holes: [pit(-2.5, 4), pit(2.5, 4), pit(0, 6.8, 0.55)],
+        t: 'floor', y: -2, poly: [[-6, 32], [6, 32], [6, 40.5], [-6, 40.5]], open: [0],
+        holes: [pit(-5.14, 37.2), pit(-1.71, 36.4, 0.42), pit(1.71, 37.4), pit(5.14, 37.2)],
       },
-      { t: 'teleport', p: [3, 0, 8.2], to: [[0, 2, 16.4], [0, 0, 0.5], [-3, -1, 32]] },
-      { t: 'ramp', a: [0, 10], b: [0, 15], w: 3, ya: 0, yb: 2 },
-      {
-        t: 'floor', y: 2, poly: [[-6, 15], [-1.5, 15], [1.5, 15], [6, 15], [6, 24], [1.5, 24], [-1.5, 24], [-6, 24]], open: [1, 5],
-        holes: [pit(0, 19.5, 0.75), pit(-4.8, 22.3), pit(4.8, 16.6), pit(-3, 16.6, 0.45), pit(3, 22.4, 0.45)],
-      },
-      { t: 'mover', kind: 'obst', s: [3.6, 0.4, 0.3], path: spin(-3.4, 2.2, 19.5, 4), look: 'neon' },
-      { t: 'mover', kind: 'obst', s: [3.6, 0.4, 0.3], path: spin(3.4, 2.2, 19.5, -4.6), look: 'neon' },
-      { t: 'ramp', a: [0, 24], b: [0, 30], w: 3, ya: 2, yb: -1 },
-      {
-        t: 'floor', y: -1, poly: [[-5, 30], [-1.5, 30], [1.5, 30], [5, 30], [5, 40], [-5, 40]], open: [1],
-        holes: [30, 100, 170, 250, 320].map((a) => pit(Math.cos(a * Math.PI / 180) * 1.9, 36.5 + Math.sin(a * Math.PI / 180) * 1.9, 0.42)),
-      },
-      { t: 'zone', kind: 'conveyor', rect: [-5, 32, 5, 33.3], dir: [1, 0], speed: 2.5 },
-      { t: 'monster', type: 'drone', path: patrol([-4.3, 38.8], [4.3, 38.8], 5, -0.55) },
-      { t: 'monster', type: 'drone', path: patrol([5.2, 21], [5.2, 17], 3.4, 2.45) },
+      ...[1, 2, 3, 4, 5, 6].map((k) => ({ t: 'wall', pts: [[-6 + k * 12 / 7, 32.2], [-6 + k * 12 / 7, 35]], y: -2, h: 0.45 })),
     ],
   },
 ];

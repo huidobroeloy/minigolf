@@ -285,8 +285,8 @@ export class Ball {
     }
 
     // cup
-    const cup = env.course?.cup;
-    if (cup) {
+    const cups = env.course?.cups || (env.course?.cup ? [env.course.cup] : []);
+    for (const cup of cups) {
       const dx = p.x - cup.x, dz = p.z - cup.z;
       const d = Math.hypot(dx, dz);
       const sp = Math.hypot(v.x, v.z);

@@ -339,7 +339,7 @@ export class EffectManager {
     for (const h of this.hazards) h.force(ball, t, out);
     // magnet toward cup
     if (ball.mods.magnet && ball.state === 'moving') {
-      const cup = this.course.cup, p = ball.pos;
+      const p = ball.pos, cup = this.course.nearestCup(p);
       const dx = cup.x - p.x, dz = cup.z - p.z, d = Math.hypot(dx, dz);
       if (d < 7 && d > 0.05) { const k = 11 * (1 - d / 7) + 2.5; out.x += (dx / d) * k; out.z += (dz / d) * k; }
     }

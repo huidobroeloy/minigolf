@@ -155,7 +155,7 @@ export class GameClient {
         this.playersDirty = true;
         if (m.id !== this.myId) {
           this.ui.feed(`${p?.name} holed out in ${m.strokes}${m.hio ? ' — HOLE IN ONE!' : ''}`);
-          if (this.course) this.cupCelebration(p?.color || '#ffffff', true);
+          if (this.course) this.cupCelebration(p?.color || '#ffffff', true, this.course.nearestCup(this.ghosts.lastPos(m.id)));
         }
         break;
       }
@@ -340,7 +340,7 @@ export class GameClient {
     else if (type === 'stick') sfx.play('stick');
     else if (type === 'vent') sfx.play('whoosh');
     else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
-    else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false); }
+    else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false, this.ball?.sinkCup); }
     else if (type === 'rest') this.onRest();
   }
 
@@ -408,7 +408,7 @@ export class GameClient {
 
   /** Hole-in-one: a tower-style pillar of light and fireworks over the cup. */
   aceFireworks() {
-    const c = this.course.cup;
+    const c = this.ball?.sinkCup || this.course.cup;
     const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 16, 32, 1, true), new THREE.MeshBasicMaterial({ color: this.me.color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     pillar.position.set(c.x, c.y + 7, c.z);
     this.scene.add(pillar);
@@ -428,7 +428,7 @@ export class GameClient {
   }
 
   confetti(n) {
-    const c = this.course.cup;
+    const c = this.ball?.sinkCup || this.course.cup;
     const cols = ['#ff4d4d', '#ffd24d', '#3ddc84', '#4da6ff', '#ff4dc4', '#ffffff'];
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = 2 + Math.random() * 5;
@@ -587,8 +587,8 @@ export class GameClient {
     if (main.state === 'sinking' || main.state === 'holed') return this.endTrip(true);
     const mainSettled = t.mainDead || main.state === 'idle';
     if (!mainSettled || t.clones.some((c) => !c.dead && !c.holed && c.state !== 'idle')) return;
-    const cup = this.course.cup;
     const winner = t.clones.find((c) => c.holed);
+    const cup = winner?.sinkCup || this.course.cup;
     if (winner) {
       this.endTrip(true);
       main.place(new THREE.Vector3(cup.x, cup.y + main.radius, cup.z), { safe: false });
@@ -1075,7 +1075,7 @@ export class GameClient {
     if (this.ball.state === 'holed') {
       const sp = this.spectate && this.ghosts.position(this.spectate);
       if (sp) target = sp;
-      else target = new THREE.Vector3(this.course.cup.x, this.course.cup.y + 0.2, this.course.cup.z);
+      else { const c = this.ball.sinkCup || this.course.cup; target = new THREE.Vector3(c.x, c.y + 0.2, c.z); }
     }
     this.cam.target.copy(target);
     this.cam.update(dt);

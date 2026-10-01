@@ -56,10 +56,10 @@ export function simulateShot(def, { yaw, power, t0 = 0, chip = false, maxTime = 
     if (trace && steps % 6 === 0) { const p = ball.pos; path.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)]); }
     if (ball.state === 'idle') { result = 'rest'; break; }
   }
-  const p = ball.state === 'holed' ? course.cup : ball.pos;
+  const p = ball.state === 'holed' ? ball.sinkCup : ball.pos;
   const res = { result: result || 'timeout', pos: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], time: +(t - t0).toFixed(2) };
   if (trace) res.path = path;
-  const cup = course.cup;
+  const cup = course.nearestCup(p);
   res.cupDist = +Math.hypot(p.x - cup.x, p.z - cup.z).toFixed(2);
   ball.dispose();
   course.dispose();

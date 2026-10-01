@@ -24,6 +24,7 @@ export function buildCourse(def, physics, scene) {
     def, mats, group, physics,
     tee: new THREE.Vector3(...def.tee),
     cup: { x: def.cup[0], y: def.cup[1], z: def.cup[2] },
+    cups: null, // every cup you can finish in (the main one first)
     bounds: new THREE.Box3(),
     floors: [], // {poly, y, holes}
     bumpers: [],
@@ -35,6 +36,14 @@ export function buildCourse(def, physics, scene) {
     teleports: [],
     animators: [],
     killY: -8,
+  };
+  course.cups = [course.cup, ...(def.cups || []).map((c) => ({ x: c[0], y: c[1], z: c[2], extra: true }))];
+  /** The cup closest to a point (for holes with several). */
+  course.nearestCup = (pt) => {
+    if (!pt || course.cups.length === 1) return course.cup;
+    let best = course.cup, bd = Infinity;
+    for (const c of course.cups) { const d = Math.hypot(pt.x - c.x, pt.z - c.z); if (d < bd) { bd = d; best = c; } }
+    return best;
   };
 
   const addMesh = (geo, mat, { cast = true, receive = true } = {}) => {
@@ -306,6 +315,7 @@ export function buildCourse(def, physics, scene) {
   };
 
   function makeZoneVisual(z) {
+    if (z.hidden) return null;
     const y = (z.y ?? 0) + 0.012;
     let geo;
     if (z.rect) {
@@ -395,7 +405,7 @@ export function buildCourse(def, physics, scene) {
 
   // ---------- derived data ----------
   course.bounds.expandByPoint(course.tee);
-  course.bounds.expandByPoint(new THREE.Vector3(course.cup.x, course.cup.y, course.cup.z));
+  for (const c of course.cups) course.bounds.expandByPoint(new THREE.Vector3(c.x, c.y, c.z));
   course.killY = Math.min(course.bounds.min.y - 6, def.killY ?? Infinity);
   course.center = course.bounds.getCenter(new THREE.Vector3());
   course.size = course.bounds.getSize(new THREE.Vector3());
@@ -435,7 +445,7 @@ export function buildCourse(def, physics, scene) {
   course.pitAt = (p, ball) => {
     if (ball?.mods.ghost) return null;
     for (const pit of course.pits) {
-      if (p.y < pit.y - 0.6 && Math.hypot(p.x - pit.x, p.z - pit.z) < pit.r + 0.25) return pit;
+      if (p.y < pit.y - 0.6 && Math.hypot(p.x - pit.x, p.z - pit.z) < pit.r + 0.5) return pit; // + rim drops
     }
     return null;
   };
@@ -642,7 +652,12 @@ function arrowTexture(color) {
 }
 
 function makeCup(course, group, mats) {
-  const { x, y, z } = course.cup;
+  for (const c of course.cups.slice(1)) makeCupAt(course, group, mats, c);
+  makeCupAt(course, group, mats, course.cup);
+}
+
+function makeCupAt(course, group, mats, cup) {
+  const { x, y, z } = cup;
   const hole = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshBasicMaterial({ color: '#050505' }));
   hole.rotation.x = -Math.PI / 2;
   hole.position.set(x, y + 0.006, z);
@@ -660,6 +675,16 @@ function makeCup(course, group, mats) {
   group.add(glow);
   course.animators.push((t) => { glow.material.opacity = 0.35 + 0.3 * Math.sin(t * 3); glow.scale.setScalar(1 + 0.08 * Math.sin(t * 3)); });
 
+  if (cup.extra) { // extra cups: a short neon marker instead of a full flag
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 8), new THREE.MeshBasicMaterial({ color: mats.theme.flag }));
+    post.position.set(x, y + 0.55, z);
+    group.add(post);
+    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.14), new THREE.MeshBasicMaterial({ color: mats.theme.flag }));
+    tip.position.set(x, y + 1.2, z);
+    group.add(tip);
+    course.animators.push((t) => { tip.rotation.y = t * 2; tip.position.y = y + 1.2 + Math.sin(t * 2 + x) * 0.06; });
+    return;
+  }
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.2, 8), new THREE.MeshStandardMaterial({ color: '#dddddd', metalness: 0.6, roughness: 0.3 }));
   pole.position.set(x, y + 1.1, z);
   pole.castShadow = true;

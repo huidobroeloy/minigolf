@@ -255,7 +255,7 @@ export function themeMaterials(themeKey) {
 export function surfaceMaterial(mat) {
   const key = 'surf:' + mat;
   if (matCache.has(key)) return matCache.get(key);
-  const byMat = { sand: 'desert', grass: 'forest', ice: 'ice', rock: 'mountain', s5: 'sector5', neon: 'fortune' };
+  const byMat = { sand: 'desert', grass: 'forest', ice: 'ice', rock: 'mountain', s5: 'sector5', neon: 'fortune', glass: 'fortune' };
   let m;
   if (byMat[mat]) m = themeMaterials(byMat[mat]).floor;
   else if (mat === 'wood') {
