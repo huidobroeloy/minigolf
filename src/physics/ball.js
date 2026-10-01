@@ -13,16 +13,18 @@ const _q = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Shot direction wobble. Returns an angle offset in RADIANS to add to the aim yaw.
- * power01: 0..1 shot strength. rand: a function returning 0..1 (use it instead of Math.random).
- * steady: true when the Steady Aim power-up is active.
+ * Aim wobble: the aim line sways while you line up a shot, and the putt goes wherever the
+ * line points at the moment you release. Returns an angle offset in RADIANS added to the aim yaw.
+ *   t       – time in seconds (keeps swaying while you hold)
+ *   power01 – current power 0..1 (harder shots are harder to control)
+ *   steady  – true when the Steady Aim power-up is active
  */
-export function shotWobble(power01, rand, steady) {
+export function aimWobble(t, power01, steady) {
   if (steady) return 0;
-  // Triangular distribution in [-1, 1] → more shots land near the aim line.
-  const tri = rand() - rand();
-  const maxDeg = 1.2 + 3.3 * power01 * power01;
-  return THREE.MathUtils.degToRad(tri * maxDeg);
+  // two incommensurate sines → a sway that never quite repeats, so it can't be memorised
+  const sway = Math.sin(t * 2.1) * 0.7 + Math.sin(t * 3.7 + 1.3) * 0.3;
+  const maxDeg = 1.0 + 3.5 * power01 * power01;
+  return THREE.MathUtils.degToRad(sway * maxDeg);
 }
 
 export class Ball {

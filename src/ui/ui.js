@@ -7,6 +7,22 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const fmtTime = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
+export const JOKES = [
+  'Jérémie reminds you: a Return to the Past does not undo strokes.',
+  'XANA has possessed the Megatank. Again.',
+  'Odd ate the last pickup. Probably.',
+  'Fun fact: falling into the Digital Sea is only +1 here. In the show it was… worse.',
+  'Ulrich insists the wall moved.',
+  'Montapollos: now 30% more chicken.',
+  'Yumi did not need the Steady Aim. Yumi is always steady.',
+  'Jim would rather not talk about that last hole.',
+  'The Scyphozoa just wants a hug. And your ball.',
+  'Aelita says: slow is smooth, smooth is fast.',
+  'Principal Delmas has noticed nothing.',
+  'Kankrelats: 0 brain cells, 100% commitment.',
+  'Fortune Falls takes all major currencies, mostly strokes.',
+];
+
 export function scoreName(strokes, par) {
   if (strokes === 1) return 'HOLE IN ONE!';
   const d = strokes - par;
@@ -362,6 +378,7 @@ export class UI {
     const s = this.setScreen(`
       <div class="panel scoreboard">
         <h1>${final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
+        <div class="joke">${esc(JOKES[Math.floor(Math.random() * JOKES.length)])}</div>
         ${final ? podium(sorted) : ''}
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Player</th>${plan.map((hi, i) => `<th title="${esc(HOLES[hi].name)}">${hi + 1}</th>`).join('')}<th>Total</th><th>±Par</th></tr>

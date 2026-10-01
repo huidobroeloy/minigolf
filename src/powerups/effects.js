@@ -306,8 +306,8 @@ export class EffectManager {
     if (this.lady) {
       const ball = this.client.ball;
       const anchor = this.leash?.anchor;
-      if (anchor) this.lady.position.set(anchor.x - 0.6, anchor.y - ball.radius, anchor.z - 0.6);
-      else { const p = ball.mesh.position; this.lady.position.set(p.x - 0.6, p.y - ball.radius, p.z - 0.6); }
+      if (anchor) this.lady.position.set(anchor.x - 0.45, anchor.y - ball.radius, anchor.z - 0.45);
+      else { const p = ball.mesh.position; this.lady.position.set(p.x - 0.45, p.y - ball.radius, p.z - 0.45); }
       const bp = ball.mesh.position;
       this.lady.lookAt(bp.x, this.lady.position.y, bp.z);
       const hand = new THREE.Vector3();
@@ -323,6 +323,7 @@ export class EffectManager {
 
   spawnLady() {
     this.lady = makeLeashLady();
+    this.lady.scale.setScalar(0.6);
     this.leashLine = makeLeashLine();
     this.group.add(this.lady);
     this.group.add(this.leashLine);

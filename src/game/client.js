@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { HOLES, SECTOR_NAMES } from '../holes/index.js';
 import { Physics, FIXED_DT } from '../physics/world.js';
-import { Ball, BALL_R, shotWobble } from '../physics/ball.js';
+import { Ball, BALL_R, aimWobble } from '../physics/ball.js';
 import { buildCourse } from '../course/builder.js';
 import { ChaseCam } from '../camera/chaseCam.js';
 import { Ghosts } from './ghosts.js';
@@ -159,6 +159,7 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
     this.placing = null;
     this.effects.clear();
     this.ghosts.clear();
@@ -208,6 +209,22 @@ export class GameClient {
     this.ui.banner(`HOLE ${m.holeNo + 1} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
     this.playersDirty = true;
     this.lastBeep = 99;
+    this.virtualize(this.ball.mesh.position);
+  }
+
+  /** Lyoko-style virtualization: rings sweep down around the ball as it materializes. */
+  virtualize(p) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: '#9fe8ff', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+    for (let i = 0; i < 3; i++) {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.025, 6, 32), mat);
+      r.rotation.x = Math.PI / 2;
+      g.add(r);
+    }
+    g.position.copy(p);
+    this.scene.add(g);
+    this.virt = { g, t: 0, mat };
+    sfx.play('teleport');
   }
 
   makeEnv() {
@@ -350,14 +367,18 @@ export class GameClient {
   shoot(power) {
     if (!this.canShoot()) return;
     this.addStrokes(1);
+    const yaw = this.cam.yaw + this.currentWobble(power);
     const opts = this.effects.onShoot();
-    const wob = shotWobble(power, Math.random, opts.steady);
-    const yaw = this.cam.yaw + wob;
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
     this.shotInProgress = true;
     sfx.play('putt', power);
     this.sendState(true);
+  }
+
+  /** The sway the aim line is showing right now (the shot uses exactly this). */
+  currentWobble(power) {
+    return aimWobble(performance.now() / 1000, power, this.effects.has('steady'));
   }
 
   cancelAim() {
@@ -591,6 +612,14 @@ export class GameClient {
     this.ghosts.update(dt);
     this.updateCamera(dt);
     this.updateAimLine();
+    if (this.virt) {
+      const v = this.virt;
+      v.t += dt;
+      v.g.children.forEach((r, i) => { r.position.y = 1.4 - Math.min(1, v.t * 1.1 + i * 0.12) * 1.5; r.scale.setScalar(1 + Math.sin(v.t * 8 + i) * 0.1); });
+      v.mat.opacity = Math.max(0, 0.9 - Math.max(0, v.t - 0.8) * 2);
+      this.ball.mesh.scale.setScalar(this.ball.radius * Math.min(1, v.t * 1.5));
+      if (v.t > 1.3) { this.scene.remove(v.g); this.ball.mesh.scale.setScalar(this.ball.radius); this.virt = null; }
+    }
 
     // timer
     const left = this.duration - (performance.now() - this.holeStartLocal);
@@ -681,7 +710,8 @@ export class GameClient {
     const power = this.aim?.power ?? this.spaceCharge?.power ?? 0;
     const len = 0.8 + power * 5;
     const p = this.ball.mesh.position;
-    const sx = Math.sin(this.cam.yaw), sz = Math.cos(this.cam.yaw);
+    const yaw = this.cam.yaw + this.currentWobble(power);
+    const sx = Math.sin(yaw), sz = Math.cos(yaw);
     const t = performance.now() / 1000;
     this.aimDots.forEach((d, i) => {
       const f = ((i + (t * 2) % 1) / this.aimDots.length);
