@@ -20,6 +20,7 @@ class Sfx {
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.onUnlock?.();
   }
 
   setMuted(m) {
@@ -43,7 +44,7 @@ class Sfx {
     o.stop(t + dur + 0.05);
   }
 
-  hiss({ dur = 0.2, vol = 0.2, freq = 1200, q = 1, type = 'bandpass', delay = 0, f1 = null }) {
+  hiss({ dur = 0.2, vol = 0.2, freq = 1200, q = 1, type = 'bandpass', delay = 0, f1 = null, out = null }) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
@@ -55,7 +56,7 @@ class Sfx {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(out || this.master);
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.05);
   }

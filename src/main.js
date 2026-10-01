@@ -4,6 +4,7 @@ import { Renderer } from './core/renderer.js';
 import { Input } from './core/input.js';
 import { UI, savePrefs } from './ui/ui.js';
 import { sfx } from './core/audio.js';
+import { music } from './core/music.js';
 import { HostRoom } from './net/room.js';
 import { LocalLink, hostPeer, joinPeer, makeCode } from './net/transport.js';
 import { GameClient } from './game/client.js';
@@ -28,12 +29,15 @@ class App {
     this.token = this.loadToken();
     this.debug = this.params.has('debug');
     sfx.setMuted(this.ui.prefs.muted);
+    music.volume = this.ui.prefs.music ?? 0.5;
+    sfx.onUnlock = () => { if (music.want) music.play(music.want); };
     this.ui.on({
       create: (me) => this.create(me),
       join: (code, me) => this.join(code, me),
       solo: (course, me) => this.solo(course, me),
       leave: () => this.leave(),
       toggleMute: () => this.toggleMute(),
+      musicVol: (v) => { music.setVolume(v); this.ui.prefs.music = v; savePrefs(this.ui.prefs); },
       quality: (q) => { this.renderer.setQuality(q); this.ui.prefs.quality = q; savePrefs(this.ui.prefs); },
     });
     window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
@@ -108,6 +112,7 @@ class App {
 
   showMenu(error = '') {
     this.showBackdrop();
+    music.play('menu');
     this.ui.showMenu(error);
   }
 

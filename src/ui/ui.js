@@ -129,6 +129,9 @@ export class UI {
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
+        <div class="row gfx"><label>Music</label>
+          <input id="musicVol" type="range" min="0" max="1" step="0.05" value="${p.music ?? 0.5}" />
+        </div>
         <div class="row gfx"><label>Graphics</label>
           <select id="quality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select>
         </div>
@@ -152,6 +155,7 @@ export class UI {
     s.querySelector('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') s.querySelector('#join').click(); });
     s.querySelector('#solo').onclick = () => this.h.solo?.(s.querySelector('#soloCourse').value, getMe());
     s.querySelector('#quality').onchange = (e) => this.h.quality?.(e.target.value);
+    s.querySelector('#musicVol').oninput = (e) => this.h.musicVol?.(Number(e.target.value));
   }
 
   showConnecting(text) {
@@ -586,7 +590,7 @@ function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}');
     const color = COLORS.includes(p.color) ? p.color : COLORS[Math.floor(Math.random() * COLORS.length)];
-    return { name: p.name || '', color, muted: !!p.muted, quality: p.quality || 'high' };
+    return { name: p.name || '', color, muted: !!p.muted, quality: p.quality || 'high', music: typeof p.music === 'number' ? p.music : 0.5 };
   } catch { return { name: '', color: COLORS[0], muted: false }; }
 }
 

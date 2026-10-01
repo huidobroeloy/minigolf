@@ -3,6 +3,7 @@ import { POWERUPS } from './registry.js';
 import { HAZARDS } from './hazards.js';
 import { RNG } from '../core/rng.js';
 import { sfx } from '../core/audio.js';
+import { music } from '../core/music.js';
 import { BALL_R } from '../physics/ball.js';
 import { Emitter, emojiTexture } from '../fx/particles.js';
 import { makeLeashLady, makeLeashLine, makeBlackHole, makeSpawnBumper } from '../fx/models.js';
@@ -177,6 +178,8 @@ export class EffectManager {
         c.cancelAim();
         c.ui.showAd(secs, rng, fromName);
         sfx.play('ad');
+        music.duck(true);
+        setTimeout(() => music.duck(false), secs * 1000);
         break;
       }
     }

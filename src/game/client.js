@@ -10,6 +10,7 @@ import { EffectManager } from '../powerups/effects.js';
 import { POWERUPS } from '../powerups/registry.js';
 import { scoreName } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
+import { music } from '../core/music.js';
 import { makeLabel } from '../fx/models.js';
 import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
@@ -200,7 +201,9 @@ export class GameClient {
           this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost });
         };
         this.app.hideBackdrop();
-        this.finale = new Finale(this.app, winners, show);
+        music.play('forest');
+        music.duck(true);
+        this.finale = new Finale(this.app, winners, () => { music.duck(false); music.play('menu'); show(); });
         break;
       }
     }
@@ -246,6 +249,7 @@ export class GameClient {
     this.physics = new Physics();
     this.course = buildCourse(def, this.physics, this.scene);
     this.renderer.applyTheme(def.sector, this.course);
+    music.play(def.sector);
     this.ball = new Ball(this.physics, this.scene, this.me.color);
     this.ball.onEvent = (type, data) => this.onBallEvent(type, data);
     this.course.localBall = this.ball;
@@ -323,6 +327,7 @@ export class GameClient {
     const mine = m.results.find((r) => r.id === this.myId);
     if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); }
     this.phase = 'between';
+    music.play('menu');
     this.teardownHole();
     this.app.showBackdrop();
     this.ui.showScoreboard({ players: m.players, plan: m.plan, holeNo: m.holeNo, results: m.results, myId: this.myId, final: false, isHost: this.isHost });
