@@ -5,17 +5,23 @@ const tree = (x, z, r = 0.5, h = 2.4, y = 0) => ({ t: 'cyl', p: [x, y, z], r, h,
 // Sector 2 — FOREST: giant trees, log ramps, Hornets and a Blok on a turntable.
 export default [
   {
-    id: 'forest-1', name: 'Hornet Grove', sector: 'forest', par: 3, time: 110,
-    tee: [0, 0, 0], cup: [0.4, 0, 19.2],
-    hio: 'Thread the gap between the trees right of centre, bank off the right wall.',
+    id: 'forest-1', name: 'Hornet Grove', sector: 'forest', par: 4, time: 160,
+    tee: [0, 0, 0], cup: [1.2, 0, 37.2],
+    hio: 'Bank around the trees into the root slingshot, across the log bridge and into the far clearing.',
     parts: [
-      { t: 'floor', poly: rect(-4.2, -1.2, 4.2, 22) },
+      { t: 'floor', poly: [[-4.2, -1.2], [4.2, -1.2], [4.2, 22], [0.9, 22], [-0.9, 22], [-4.2, 22]], open: [3] },
       tree(0, 7.2, 0.55), tree(-2.4, 10.4), tree(2.3, 10.1, 0.45),
       tree(-0.4, 13.6, 0.6), tree(2.9, 15.6, 0.5), tree(-2.8, 16.2, 0.55),
-      tree(1.5, 17.2, 0.4), tree(-1.0, 19.4, 0.45),
+      tree(1.5, 17.2, 0.4), tree(-2.0, 19.6, 0.45),
       { t: 'zone', kind: 'slow', c: [-3.0, 4.5], r: 1.0, mul: 3 },
+      // root slingshot into the log bridge
+      { t: 'zone', kind: 'boost', rect: [-0.9, 20.2, 0.9, 22], dir: [0, 1], speed: 10 },
+      { t: 'floor', poly: rect(-0.9, 22, 0.9, 29.2), walls: false, mat: 'wood' },
+      { t: 'floor', poly: circlePoly(0, 34, 5, 24), open: [17, 18] },
+      tree(-2.6, 33.2, 0.5), tree(3.0, 32.4, 0.45), tree(-0.8, 36.6, 0.4),
       { t: 'monster', type: 'hornet', path: orbit([0, 10], 3.2, 9, 2.4), aim: 'ball' },
       { t: 'monster', type: 'hornet', path: patrol([-3, 17.5], [3, 17.5], 7, 2.6), aim: 'ball' },
+      { t: 'monster', type: 'hornet', path: patrol([-2.5, 25.5], [2.5, 25.5], 5, 2.2, 0.5), aim: 'ball' },
     ],
   },
   {

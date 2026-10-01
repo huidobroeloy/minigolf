@@ -26,23 +26,24 @@ function avalanche(x, z0, z1, y0, y1, zEnd, period, phase, r = 0.6) {
 // Sector 4 — MOUNTAIN: crumbling plateaus, avalanches and updraft vents. Tarantulas guard the ledges.
 export default [
   {
-    id: 'mountain-1', name: 'Crumbling Ledge', sector: 'mountain', par: 3, time: 110,
-    tee: [0, 0, 0], cup: [0, 0, 19.5],
-    hio: 'Fast and straight over the crumbling tiles — they fall a moment after you touch them.',
+    id: 'mountain-1', name: 'Crumbling Ledge', sector: 'mountain', par: 4, time: 150,
+    tee: [0, 0, 0], cup: [0, 0, 25.5],
+    hio: 'Fast and dead straight over all eight crumbling tiles — they fall a moment after you touch them.',
     parts: [
       { t: 'floor', poly: [[-2, -1.2], [2, -1.2], [2, 2], [2, 3.2], [2, 4], [1, 4], [-1, 4], [-2, 4]], open: [2, 5] },
-      { t: 'crumble', p: [0, 0, 5], s: [2, 2] },
-      { t: 'crumble', p: [0, 0, 7], s: [2, 2] },
-      { t: 'crumble', p: [0, 0, 9], s: [2, 2] },
-      { t: 'crumble', p: [0, 0, 11], s: [2, 2] },
-      { t: 'crumble', p: [0, 0, 13], s: [2, 2] },
-      // the long, windy safe(ish) ledge
+      ...[5, 7, 9, 11, 13, 15, 17, 19].map((z) => ({ t: 'crumble', p: [0, 0, z], s: [2, 2] })),
+      // the long, windy switchback ledge
       { t: 'floor', poly: rect(2, 2, 6.2, 3.2), walls: false },
-      { t: 'floor', poly: rect(5, 3.2, 6.2, 14), walls: false },
-      { t: 'zone', kind: 'wind', rect: [5, 3.2, 6.2, 14], dir: [1, 0], force: 1.1 },
-      { t: 'floor', poly: [[-3, 14], [-1, 14], [1, 14], [5, 14], [6.2, 14], [6.2, 22], [-3, 22]], open: [1, 3] },
-      rock(-2.2, 17.5, 0.55), rock(3.4, 20.2, 0.5, 1.3), rock(4.2, 16.0, 0.45, 1.1),
-      { t: 'monster', type: 'tarantula', path: patrol([-2.2, 16.6], [3.6, 16.6], 6) },
+      { t: 'floor', poly: rect(5, 3.2, 6.2, 12), walls: false },
+      { t: 'floor', poly: rect(6.2, 10.8, 9, 12), walls: false },
+      { t: 'floor', poly: rect(7.8, 12, 9, 20), walls: false },
+      { t: 'floor', poly: rect(5, 18.8, 7.8, 20), walls: false },
+      { t: 'zone', kind: 'wind', rect: [5, 3.2, 6.2, 10.8], dir: [1, 0], force: 1.1 },
+      { t: 'zone', kind: 'wind', rect: [7.8, 12, 9, 18.8], dir: [-1, 0], force: 1.1 },
+      { t: 'floor', poly: [[-3, 20], [-1, 20], [1, 20], [5, 20], [6.2, 20], [6.2, 28], [-3, 28]], open: [1, 3] },
+      rock(-2.2, 23.5, 0.55), rock(3.4, 26.2, 0.5, 1.3), rock(4.2, 22.0, 0.45, 1.1),
+      { t: 'monster', type: 'tarantula', path: patrol([-2.2, 22.6], [3.6, 22.6], 6) },
+      { t: 'monster', type: 'tarantula', path: patrol([8.4, 13], [8.4, 18], 5, 0, 0.5) },
     ],
   },
   {

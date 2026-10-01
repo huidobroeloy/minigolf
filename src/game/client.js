@@ -82,7 +82,7 @@ export class GameClient {
   get isHost() { return !!this.players.get(this.myId)?.host; }
 
   canShoot() {
-    return this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
+    return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
   // ---------- network ----------
@@ -238,6 +238,8 @@ export class GameClient {
     this.playersDirty = true;
     this.lastBeep = 99;
     this.virtualize(this.ball.mesh.position);
+    // a short flyover from the cup back to the tee so everyone can read the layout
+    this.flyover = m.elapsed < 4000 ? { t: 0, dur: 3.2 } : null;
   }
 
   /** Lyoko-style virtualization: rings sweep down around the ball as it materializes. */
@@ -693,6 +695,7 @@ export class GameClient {
     this.disposers.push(inp.on('pointerdown', (e) => {
       sfx.unlock();
       if (this.phase !== 'hole') return;
+      if (this.flyover) { this.flyover.t = this.flyover.dur; return; }
       if (inp.pointers.size >= 2) {
         this.cancelAim();
         this.rotating = true;
@@ -771,6 +774,7 @@ export class GameClient {
 
   onKey(e) {
     sfx.unlock();
+    if (this.flyover && this.phase === 'hole') { this.flyover.t = this.flyover.dur; return; }
     if (e.code === 'KeyH') return this.ui.toggleHelp();
     if (e.code === 'KeyM') return this.app.toggleMute();
     if (e.code === 'Escape') {
@@ -935,6 +939,24 @@ export class GameClient {
   }
 
   updateCamera(dt) {
+    if (this.flyover) {
+      const f = this.flyover;
+      f.t += dt;
+      const u = Math.min(1, f.t / f.dur);
+      const k = u * u * (3 - 2 * u);
+      const cup = new THREE.Vector3(this.course.cup.x, this.course.cup.y, this.course.cup.z);
+      const ball = this.ball.mesh.position;
+      const d = this.cam.dir;
+      const from = cup.clone().addScaledVector(d, 4).add(new THREE.Vector3(0, 6, 0));
+      const to = ball.clone().addScaledVector(d, -Math.cos(this.cam.pitch) * this.cam.dist).add(new THREE.Vector3(0, Math.sin(this.cam.pitch) * this.cam.dist + 0.25, 0));
+      const mid = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, Math.max(this.course.size.x, this.course.size.z) * 0.45, 0));
+      const pos = from.clone().multiplyScalar((1 - k) * (1 - k)).addScaledVector(mid, 2 * k * (1 - k)).addScaledVector(to, k * k);
+      const look = cup.clone().lerp(ball.clone().addScaledVector(d, 1.6), k);
+      this.renderer.camera.position.copy(pos);
+      this.renderer.camera.lookAt(look);
+      if (u >= 1) { this.flyover = null; this.cam.snapTo(ball); }
+      return;
+    }
     let target = this.ball.mesh.position;
     if (this.ball.state === 'holed') {
       const sp = this.spectate && this.ghosts.position(this.spectate);

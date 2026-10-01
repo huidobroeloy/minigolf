@@ -1,4 +1,4 @@
-import { rect, patrol, spin } from './helpers.js';
+import { rect, patrol, spin, kicker } from './helpers.js';
 
 const pit = (x, z, r = 0.5) => ({ c: [x, z], r, fortune: true });
 
@@ -22,21 +22,25 @@ export default [
     ],
   },
   {
-    id: 'fortune-2', name: 'Slot Alley', sector: 'fortune', par: 4, time: 140,
-    tee: [0, 0, 0], cup: [0, 0, 28],
-    fortuneDrops: [[0, 0, 0.5], [0, 0, 26.6], [1.5, 0, 15], [-1.5, 0, 22], [1.8, 0, 3]],
-    hio: 'Over the boost pad dead centre, between the holo-signs, threading every pit.',
+    id: 'fortune-2', name: 'Slot Alley', sector: 'fortune', par: 5, time: 170,
+    tee: [0, 0, 0], cup: [11.5, 0, 29],
+    fortuneDrops: [[0, 0, 0.5], [11, 0, 28.6], [1.5, 0, 15], [6, 0, 27.4], [1.8, 0, 3], [13, 0, 27]],
+    hio: 'Over the boost pad, threading every pit, into the corner kicker — it fires you down the neon arm.',
     parts: [
       {
-        t: 'floor', poly: rect(-2.5, -1.2, 2.5, 30.5),
-        holes: [pit(-1.2, 6), pit(1.3, 8.5), pit(-0.2, 12.6), pit(-1.4, 17), pit(1.5, 19.5), pit(0.6, 24.4, 0.45)],
+        t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 25.5], [14, 25.5], [14, 30.5], [-2.5, 30.5]],
+        holes: [pit(-1.2, 6), pit(1.3, 8.5), pit(-0.2, 12.6), pit(-1.4, 17), pit(1.5, 19.5), pit(0.6, 23.4, 0.45),
+          pit(5.5, 27.2, 0.45), pit(8.2, 29.2, 0.45), pit(9.6, 26.6, 0.4)],
       },
+      kicker([-2.5, 27.6], [0.4, 30.5]),
       { t: 'zone', kind: 'boost', rect: [-0.6, 1.8, 0.6, 3.2], dir: [0, 1], speed: 9 },
-      { t: 'teleport', p: [-1.5, 0, 14.2], to: [[0, 0, 26.6], [0, 0, 0.5], [1.6, 0, 11]] },
-      { t: 'teleport', p: [1.6, 0, 22.6], to: [[-1.6, 0, 27.4], [0, 0, 9.6], [1.8, 0, 2]] },
+      { t: 'zone', kind: 'conveyor', rect: [6.6, 25.5, 7.6, 30.5], dir: [0, -1], speed: 2.2 },
+      { t: 'teleport', p: [-1.5, 0, 14.2], to: [[11, 0, 28.6], [0, 0, 0.5], [1.6, 0, 11]] },
+      { t: 'teleport', p: [1.6, 0, 22.6], to: [[6.2, 0, 29.4], [0, 0, 9.6], [1.8, 0, 2]] },
       { t: 'mover', kind: 'obst', s: [1.8, 0.7, 0.2], path: patrol([-1.5, 10.2], [1.5, 10.2], 3, 0.35), look: 'holo' },
       { t: 'mover', kind: 'obst', s: [1.8, 0.7, 0.2], path: patrol([1.5, 21.2], [-1.5, 21.2], 2.6, 0.35, 0.3), look: 'holo' },
-      { t: 'monster', type: 'drone', path: patrol([-2, 26], [2, 26], 4, 0.45, 0.2) },
+      { t: 'mover', kind: 'obst', s: [0.2, 0.7, 1.8], path: patrol([4.2, 26.5], [4.2, 29.5], 2.8, 0.35, 0.5), look: 'holo' },
+      { t: 'monster', type: 'drone', path: patrol([9.5, 26.2], [9.5, 29.8], 3.4, 0.45, 0.2) },
     ],
   },
   {

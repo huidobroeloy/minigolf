@@ -3,18 +3,21 @@ import { rect, circlePoly, patrol, orbit, spin, elevator, shuttle } from './help
 // Sector 5 — CARTHAGE: sliding bridges, closing walls, Creepers, Mantas and the Scyphozoa.
 export default [
   {
-    id: 'sector5-1', name: 'Arena Entry', sector: 'sector5', par: 3, time: 120,
-    tee: [0, 0, 0], cup: [0, 0, 22.5],
-    hio: 'Wait for both sliding bridges to line up, then one long straight putt.',
+    id: 'sector5-1', name: 'Arena Entry', sector: 'sector5', par: 4, time: 150,
+    tee: [0, 0, 0], cup: [0, 0, 30],
+    hio: 'Wait until all three sliding bridges line up, then one long straight putt.',
     parts: [
       { t: 'floor', poly: rect(-2, -1.2, 2, 4), open: [2] },
       { t: 'mover', s: [2.2, 0.4, 6.4], path: shuttle([-3.6, -0.2, 7], [3.6, -0.2, 7], 6.4, 0, 0.3), extent: [[-4.7, 7], [4.7, 7]] },
       { t: 'floor', poly: rect(-3, 10, 3, 14), open: [0, 2] },
       { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([3.6, -0.2, 16], [-3.6, -0.2, 16], 5.2, 0.15, 0.3), extent: [[-4.7, 16], [4.7, 16]] },
-      { t: 'floor', poly: rect(-3, 18, 3, 25.5), open: [0] },
+      { t: 'floor', poly: rect(-3, 18, 3, 22), open: [0, 2] },
+      { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([-3.6, -0.2, 24], [3.6, -0.2, 24], 5.8, 0.6, 0.3), extent: [[-4.7, 24], [4.7, 24]] },
+      { t: 'floor', poly: rect(-3, 26, 3, 33.5), open: [0] },
       { t: 'monster', type: 'manta', path: patrol([-4.5, 12], [4.5, 12], 7, 1.1) },
-      { t: 'monster', type: 'creeper', p: [1.6, 0, 20.5], period: 4.5, phase: 0 },
-      { t: 'monster', type: 'creeper', p: [-1.7, 0, 23.6], period: 4.5, phase: 0.5 },
+      { t: 'monster', type: 'manta', path: patrol([4.5, 20], [-4.5, 20], 6, 1.1, 0.4) },
+      { t: 'monster', type: 'creeper', p: [1.6, 0, 28.2], period: 4.5, phase: 0 },
+      { t: 'monster', type: 'creeper', p: [-1.7, 0, 31.4], period: 4.5, phase: 0.5 },
     ],
   },
   {
