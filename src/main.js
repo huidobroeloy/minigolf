@@ -25,6 +25,7 @@ class App {
     this.input = new Input(this.renderer.renderer.domElement);
     this.ui = new UI(document.getElementById('ui'));
     this.params = new URLSearchParams(location.search);
+    this.token = this.loadToken();
     this.debug = this.params.has('debug');
     sfx.setMuted(this.ui.prefs.muted);
     this.ui.on({
@@ -39,7 +40,11 @@ class App {
     document.getElementById('boot').remove();
 
     const holeParam = this.params.get('hole');
-    if (holeParam) {
+    const session = this.loadSession();
+    if (!holeParam && session && session.code === (this.params.get('room') || '').toUpperCase()) {
+      // the page was reloaded while in a room: hop straight back in
+      this.join(session.code, { name: this.ui.prefs.name || 'Player', color: this.ui.prefs.color });
+    } else if (holeParam) {
       const i = Math.max(0, Math.min(HOLES.length - 1, Number(holeParam) - 1));
       this.solo('hole:' + i, { name: this.ui.prefs.name || 'Tester', color: this.ui.prefs.color });
     } else {
@@ -134,11 +139,50 @@ class App {
     this.ui.showConnecting(`Joining room ${code}…`);
     try {
       this.link = await joinPeer(code);
+      this.joined = { code, me };
+      this.saveSession({ code });
+      history.replaceState(null, '', `${location.pathname}?room=${code}${this.debug ? '&debug=1' : ''}`);
       this.startClient(this.link, me, {});
     } catch (e) {
+      this.clearSession();
       this.showMenu(e.message);
     }
   }
+
+  /** A friend's connection dropped: try to get back into the same room a few times. */
+  async onDisconnect() {
+    if (this.room || !this.joined) return this.leave('Connection to the host was lost');
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    const { code, me } = this.joined;
+    this.client?.dispose();
+    this.client = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      this.ui.showConnecting(`Connection lost — reconnecting to ${code} (${attempt}/3)…`);
+      try {
+        this.link = await joinPeer(code);
+        this.reconnecting = false;
+        this.startClient(this.link, me, {});
+        return;
+      } catch (e) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
+    this.reconnecting = false;
+    this.leave('Could not reconnect to the host');
+  }
+
+  loadToken() {
+    try {
+      let t = sessionStorage.getItem('lyokogolf.token');
+      if (!t) { t = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('lyokogolf.token', t); }
+      return t;
+    } catch { return Math.random().toString(36).slice(2); }
+  }
+
+  loadSession() { try { return JSON.parse(sessionStorage.getItem('lyokogolf.session') || 'null'); } catch { return null; } }
+  saveSession(s) { try { sessionStorage.setItem('lyokogolf.session', JSON.stringify(s)); } catch { /* ignore */ } }
+  clearSession() { try { sessionStorage.removeItem('lyokogolf.session'); } catch { /* ignore */ } }
 
   solo(course, me) {
     const room = new HostRoom('SOLO', { solo: true });
@@ -149,6 +193,8 @@ class App {
   }
 
   leave(reason = '') {
+    this.joined = null;
+    this.clearSession();
     this.client?.dispose();
     this.client = null;
     try { this.link?.close(); } catch { /* ignore */ }

@@ -57,8 +57,8 @@ export class GameClient {
     this.makeAimLine();
 
     link.onMessage = (m) => this.onMessage(m);
-    link.onClose = () => this.app.leave('Connection to the host was lost');
-    link.send({ t: 'join', name: me.name, color: me.color });
+    link.onClose = () => this.app.onDisconnect();
+    link.send({ t: 'join', name: me.name, color: me.color, token: app.token });
     this.bindInput();
     this.ui.on({
       use: (i) => this.useSlot(i),
@@ -152,6 +152,23 @@ export class GameClient {
       }
       case 'emote':
         this.showEmote(m.id, m.e);
+        break;
+      case 'rejoined':
+        this.ui.feed(`${m.name} reconnected`);
+        break;
+      case 'resume':
+        // we reconnected mid-hole: keep the strokes we already had
+        if (this.ball && this.phase === 'hole') {
+          this.strokes = m.strokes || 0;
+          this.ui.setStrokes(this.strokes, this.def.par);
+          if (m.holed) {
+            this.ball.state = 'holed';
+            this.ball.mesh.visible = false;
+            this.ball.body.setEnabled(false);
+            this.ui.setHint('You already holed out · <kbd>Tab</kbd> to spectate');
+          }
+          this.ui.toast('Reconnected — welcome back!');
+        }
         break;
       case 'left':
         this.ghosts.remove(m.id);

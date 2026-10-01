@@ -1,5 +1,8 @@
 // Transports: an in-page link (solo / the host's own client) and PeerJS links for friends.
+import { ICE_SERVERS } from './ice.js';
+
 const PREFIX = 'lyokogolf-v1-';
+const PEER_OPTS = { debug: 1, config: { iceServers: ICE_SERVERS } };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function makeCode() {
@@ -25,7 +28,7 @@ export class LocalLink {
 export function hostPeer(room, code) {
   return new Promise((resolve, reject) => {
     if (!window.Peer) return reject(new Error('PeerJS failed to load (check your connection).'));
-    const peer = new window.Peer(PREFIX + code, { debug: 1 });
+    const peer = new window.Peer(PREFIX + code, PEER_OPTS);
     let opened = false;
     peer.on('open', () => { opened = true; resolve(peer); });
     peer.on('error', (err) => {
@@ -48,7 +51,7 @@ export function hostPeer(room, code) {
 export function joinPeer(code) {
   return new Promise((resolve, reject) => {
     if (!window.Peer) return reject(new Error('PeerJS failed to load (check your connection).'));
-    const peer = new window.Peer({ debug: 1 });
+    const peer = new window.Peer(PEER_OPTS);
     let done = false;
     const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('Timed out connecting to room ' + code)); peer.destroy(); } }, 15000);
     peer.on('error', (err) => {

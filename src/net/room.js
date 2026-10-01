@@ -146,17 +146,42 @@ export class HostRoom {
 
   onJoin(id, msg) {
     if (this.players.has(id)) return;
+    const token = typeof msg.token === 'string' ? msg.token.slice(0, 48) : null;
+    const old = token && [...this.players.values()].find((p) => p.token === token && p.id !== id);
+    if (old) return this.rejoin(old, id);
     if (this.players.size >= MAX_PLAYERS) { this.sendTo(id, { t: 'reject', reason: 'Room is full (8 players)' }); return; }
     const used = new Set([...this.players.values()].map((p) => p.color));
     let color = msg.color && !used.has(msg.color) ? msg.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
     const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi].par, 0) : null));
-    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null });
+    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
     this.broadcastLobby();
     if (this.phase === 'hole') this.sendTo(id, this.holeMessage());
     if (this.phase === 'between') this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
+  }
+
+  /** A player came back (reload, flaky Wi-Fi): same record, same scores, new connection id. */
+  rejoin(old, id) {
+    const oldId = old.id;
+    this.players.delete(oldId);
+    this.links.delete(oldId);
+    old.id = id;
+    old.connected = true;
+    this.players.set(id, old);
+    for (const pk of this.pickups || []) if (pk.taken === oldId) pk.taken = id;
+    this.sendTo(id, { t: 'welcome', you: id, code: this.code, color: old.color });
+    this.broadcastLobby();
+    this.broadcast({ t: 'rejoined', name: old.name }, id);
+    if (this.phase === 'hole') {
+      this.sendTo(id, this.holeMessage());
+      this.sendTo(id, { t: 'resume', strokes: old.strokes, holed: old.holed });
+    } else if (this.phase === 'between') {
+      this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
+    } else if (this.phase === 'final' && this.finalMsg) {
+      this.sendTo(id, this.finalMsg);
+    }
   }
 
   stat(id, k, n = 1) {
@@ -266,7 +291,8 @@ export class HostRoom {
   finish() {
     this.phase = 'final';
     const standings = this.playerList().sort((a, b) => a.total - b.total);
-    this.broadcast({ t: 'final', standings, plan: this.plan });
+    this.finalMsg = { t: 'final', standings, plan: this.plan };
+    this.broadcast(this.finalMsg);
     this.broadcastLobby();
   }
 
