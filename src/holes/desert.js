@@ -33,7 +33,7 @@ export default [
   },
   {
     id: 'desert-3', name: 'Kankrelat Canyon', sector: 'desert', par: 4, time: 160,
-    tee: [0, 0, 0], cup: [-2, 0, 40.5],
+    tee: [0, 0, 0], cup: [-1.1, 0, 40.5],
     hio: 'Clear the chasm, hit the sand geyser fast and fly the canyon straight onto the far mesa.',
     parts: [
       {
@@ -46,11 +46,11 @@ export default [
       // the canyon rim: an unwalled S-bend
       { t: 'floor', poly: rect(2.6, 24, 4.5, 30), walls: false },
       { t: 'floor', poly: rect(-3.5, 30, 4.5, 31.8), walls: false },
-      { t: 'floor', poly: rect(-3.5, 31.8, -1.7, 35), walls: false },
+      { t: 'floor', poly: rect(-3.5, 31.8, -1.7, 34), walls: false },
       { t: 'zone', kind: 'wind', rect: [-3.5, 30, 2.6, 31.8], dir: [0, 1], force: 0.8 },
       // the risky shortcut: a sand geyser at the canyon edge
-      { t: 'zone', kind: 'vent', c: [-2, 22.9], r: 0.8, y: 0, launch: 12, push: [0, 1], minSpeed: 3 },
-      { t: 'floor', poly: [[-6, 35], [-3.5, 35], [-1.7, 35], [2, 35], [2, 44], [-6, 44]], open: [1] },
+      { t: 'zone', kind: 'vent', c: [-0.6, 22.9], r: 0.8, y: 0, launch: 13.5, push: [0, 1], minSpeed: 3 },
+      { t: 'floor', poly: [[-6, 34], [-3.5, 34], [-1.7, 34], [2, 34], [2, 44], [-6, 44]], open: [1] },
       { t: 'cyl', p: [-4.5, 0, 38.5], r: 0.55, h: 1.4, look: 'sandstone' },
       { t: 'cyl', p: [0.6, 0, 42], r: 0.5, h: 1.1, look: 'sandstone' },
       { t: 'cyl', p: [-1.6, 0, 19.5], r: 0.55, h: 1.5, look: 'sandstone' },

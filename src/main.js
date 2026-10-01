@@ -62,7 +62,9 @@ class App {
   }
 
   frame(dt) {
-    if (this.client && this.client.course) {
+    if (this.client?.finale) {
+      this.client.finale.frame(dt);
+    } else if (this.client && this.client.course) {
       this.client.frame(dt);
     } else if (this.backdrop) {
       this.backdropFrame(dt);

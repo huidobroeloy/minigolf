@@ -64,6 +64,8 @@ export class UI {
       <div id="aelita" class="hidden"><span>🌸 A E L I T A · slow motion</span></div>
       <div id="possessed" class="hidden"><span>👁️ POSSESSED BY XANA · controls inverted</span></div>
       <div id="flash" class="hidden"></div>
+      <div id="finale" class="hidden"><div class="ft"></div><div class="fs"></div></div>
+      <div id="codepanel" class="hidden"><div class="cp-head">TOWER INTERFACE</div><div class="cp-body"></div></div>
     `;
     this.$ = (s) => root.querySelector(s);
     this.$('.target-cancel').addEventListener('click', () => this.h.cancelTarget?.());
@@ -280,6 +282,36 @@ export class UI {
 
   setPossession(on) { this.$('#possessed').classList.toggle('hidden', !on); }
 
+  finaleText(title, sub = '') {
+    const f = this.$('#finale');
+    if (!title) { f.classList.add('hidden'); this.$('#codepanel').classList.add('hidden'); return; }
+    f.classList.remove('hidden');
+    f.querySelector('.ft').textContent = title;
+    f.querySelector('.fs').textContent = sub;
+    f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
+  }
+
+  /** The tower interface: types AELITA, then CODE: LYOKO. */
+  finaleCode() {
+    const panel = this.$('#codepanel');
+    const body = panel.querySelector('.cp-body');
+    panel.classList.remove('hidden');
+    this.finaleText('', '');
+    this.$('#finale').classList.add('hidden');
+    const lines = ['> AELITA', '> CODE: LYOKO'];
+    body.textContent = '';
+    let li = 0, ci = 0;
+    const tick = () => {
+      if (panel.classList.contains('hidden')) return;
+      if (li >= lines.length) return;
+      if (ci === 0 && li > 0) body.textContent += '\n';
+      body.textContent += lines[li][ci++];
+      if (ci >= lines[li].length) { li++; ci = 0; setTimeout(tick, 450); } else setTimeout(tick, 70);
+    };
+    setTimeout(tick, 300);
+    setTimeout(() => panel.classList.add('hidden'), 3400);
+  }
+
   /** White "Return to the Past" flash. */
   flash() {
     const f = this.$('#flash');
@@ -415,7 +447,7 @@ export class UI {
       <div class="panel scoreboard">
         <h1>${final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
         <div class="joke">${esc(JOKES[Math.floor(Math.random() * JOKES.length)])}</div>
-        ${final ? podium(sorted) : ''}
+        ${final ? podium(sorted) + awards(players) : ''}
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Player</th>${plan.map((hi, i) => `<th title="${esc(HOLES[hi].name)}">${hi + 1}</th>`).join('')}<th>Total</th><th>±Par</th></tr>
             <tr class="pars"><td></td><td>Par</td>${pars.map((p) => `<td>${p}</td>`).join('')}<td>${pars.reduce((a, b) => a + b, 0)}</td><td></td></tr></thead>
@@ -442,6 +474,28 @@ export class UI {
     o.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => cb(b.dataset.id));
     o.querySelector('#cancelPick').onclick = () => this.closeOverlay();
   }
+}
+
+const AWARDS = [
+  ['falls', '🌊', 'Digital Sea Diver', 'fell into the Digital Sea'],
+  ['targeted', '🎯', 'XANA\'s Favourite Victim', 'got hit by power-ups'],
+  ['used', '🔫', 'Trigger Happy', 'power-ups used'],
+  ['fortune', '🎰', 'Fortune\'s Fool', 'strokes donated to Fortune Falls'],
+  ['hio', '⛳', 'Ace', 'holes in one'],
+  ['chicken', '🐔', 'Montapollos Magnet', 'chicken hits'],
+  ['timeouts', '⏰', 'Clockwatcher', 'holes timed out'],
+  ['swallowed', '🕳️', 'Event Horizon', 'swallowed by black holes'],
+  ['pickups', '🧺', 'Hoarder', 'pickups grabbed'],
+];
+
+function awards(players) {
+  const cards = [];
+  for (const [k, icon, title, what] of AWARDS) {
+    let best = null;
+    for (const p of players) { const v = p.stats?.[k] || 0; if (v > 0 && (!best || v > best.v)) best = { p, v }; }
+    if (best) cards.push(`<div class="award"><div class="ai">${icon}</div><div class="at">${esc(title)}</div><div class="an"><i style="background:${best.p.color}"></i>${esc(best.p.name)}</div><div class="aw">${best.v} ${esc(what)}</div></div>`);
+  }
+  return cards.length ? `<div class="awards">${cards.slice(0, 6).join('')}</div>` : '';
 }
 
 function podium(sorted) {

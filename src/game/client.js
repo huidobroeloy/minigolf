@@ -13,6 +13,7 @@ import { sfx } from '../core/audio.js';
 import { makeLabel } from '../fx/models.js';
 import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
+import { Finale } from './finale.js';
 import { emojiTexture } from '../fx/particles.js';
 
 export const EMOTES = ['😂', '😡', '👏', '💀'];
@@ -161,13 +162,22 @@ export class GameClient {
       case 'holeEnd':
         this.endHole(m);
         break;
-      case 'final':
+      case 'final': {
         this.phase = 'final';
         this.teardownHole();
-        this.app.showBackdrop();
-        this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost });
-        if (m.standings[0]?.id === this.myId && m.standings.length > 1) sfx.play('hio');
+        this.ui.hideHud();
+        this.ui.setScreen('');
+        const best = Math.min(...m.standings.map((p) => p.total));
+        const winners = m.standings.filter((p) => p.total === best);
+        const show = () => {
+          this.finale = null;
+          this.app.showBackdrop();
+          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost });
+        };
+        this.app.hideBackdrop();
+        this.finale = new Finale(this.app, winners, show);
         break;
+      }
     }
   }
 
@@ -1042,6 +1052,7 @@ export class GameClient {
   }
 
   dispose() {
+    if (this.finale) { const f = this.finale; this.finale = null; f.onDone = () => {}; f.finish(); }
     this.teardownHole();
     for (const d of this.disposers) d();
     this.scene.remove(this.aimGroup);
