@@ -3,6 +3,7 @@ import { COLORS } from '../net/room.js';
 import { HOLES, SECTORS } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
+import { portrait, mountLive, stopLive } from './portraits.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -66,6 +67,7 @@ export class UI {
       <div id="aelita" class="hidden"><span>🌸 A E L I T A · slow motion</span></div>
       <div id="possessed" class="hidden"><span>👁️ POSSESSED BY XANA · controls inverted</span></div>
       <div id="flash" class="hidden"></div>
+      <div id="vs" class="hidden"></div>
       <div id="finale" class="hidden"><div class="ft"></div><div class="fs"></div></div>
       <div id="codepanel" class="hidden"><div class="cp-head">TOWER INTERFACE</div><div class="cp-body"></div></div>
     `;
@@ -110,9 +112,8 @@ export class UI {
         ${error ? `<div class="error">${esc(error)}</div>` : ''}
         <label>Your name</label>
         <input id="name" maxlength="16" value="${esc(p.name)}" placeholder="Ulrich" />
-        <label>Your ball</label>
-        <div class="swatches chars">${CHARACTERS.map((ch) => `<button class="swatch char ${ch.ui === p.color ? 'sel' : ''}" data-c="${ch.ui}" title="${esc(ch.name)}" style="background:${characterCss(ch)}"></button>`).join('')}</div>
-        <div class="char-name">${esc(characterByColor(p.color)?.name || '')}</div>
+        <label>Choose your fighter</label>
+        <div class="cs-host"></div>
         <div class="row">
           <button class="btn primary" id="create">Create room</button>
         </div>
@@ -133,12 +134,10 @@ export class UI {
         </div>
         <div class="small">Drag down from anywhere to set power, sideways to aim, release to putt. Press H in game for all controls.</div>
       </div>`);
-    s.querySelectorAll('.swatch').forEach((b) => b.addEventListener('click', () => {
-      s.querySelectorAll('.swatch').forEach((x) => x.classList.remove('sel'));
-      b.classList.add('sel');
-      this.prefs.color = b.dataset.c;
-      s.querySelector('.char-name').textContent = characterByColor(b.dataset.c)?.name || '';
-    }));
+    this.charSelect(s.querySelector('.cs-host'), {
+      selected: p.color,
+      onPick: (c) => { this.prefs.color = c; savePrefs(this.prefs); },
+    });
     const getMe = () => {
       this.prefs.name = s.querySelector('#name').value.trim() || 'Player';
       savePrefs(this.prefs);
@@ -178,6 +177,7 @@ export class UI {
           <div class="code">${esc(lobby.code)}</div>
           <button class="btn tiny" id="copy">Copy invite link</button>
         </div>
+        <div class="cs-host"></div>
         <div class="players-list">
           ${lobby.players.map((p) => { const ch = characterByColor(p.color); return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
           <div class="small">${lobby.players.length}/8 players</div>
@@ -195,6 +195,11 @@ export class UI {
           <button class="btn" id="leave">Leave</button>
         </div>
       </div>`);
+    const taken = new Map(lobby.players.filter((p) => p.id !== myId).map((p) => [p.color, p.name]));
+    this.charSelect(s.querySelector('.cs-host'), {
+      selected: me?.color, taken, compact: true,
+      onPick: (c) => { this.prefs.color = c; savePrefs(this.prefs); this.h.pick?.(c); },
+    });
     s.querySelector('#copy').onclick = () => { navigator.clipboard?.writeText(url); this.toast('Invite link copied'); };
     s.querySelector('#leave').onclick = () => this.h.leave?.();
     if (isHost) {
@@ -208,8 +213,60 @@ export class UI {
     }
   }
 
+  // ---------- character select (arcade style) ----------
+  charSelect(host, { selected, taken = new Map(), onPick, compact = false }) {
+    const render = (sel) => {
+      const ch = characterByColor(sel) || CHARACTERS[0];
+      host.innerHTML = `
+        <div class="cs ${compact ? 'compact' : ''}">
+          <div class="cs-detail">
+            <div class="cs-live"></div>
+            <div class="cs-info">
+              <div class="cs-full">${esc(ch.full)}</div>
+              <div class="cs-tag">${esc(ch.tag)}</div>
+              <div class="cs-ballrow"><i class="cs-ball" style="background:${characterCss(ch)}"></i><span>ball</span></div>
+            </div>
+          </div>
+          <div class="cs-grid">${CHARACTERS.map((c) => {
+            const who = taken.get(c.ui);
+            return `<button class="cs-tile ${c.ui === ch.ui ? 'sel' : ''} ${who ? 'taken' : ''}" data-c="${c.ui}" style="--c:${c.ui}" ${who ? 'disabled' : ''}>
+              <img alt="" src="${portrait(c.id)}" /><span>${esc(c.name)}</span>${who ? `<em>${esc(who)}</em>` : ''}</button>`;
+          }).join('')}</div>
+        </div>`;
+      mountLive(host.querySelector('.cs-live'), ch.id);
+      host.querySelectorAll('.cs-tile:not(.taken)').forEach((b) => b.addEventListener('click', () => {
+        render(b.dataset.c);
+        onPick?.(b.dataset.c);
+      }));
+    };
+    render(selected);
+  }
+
+  /** Fighting-game VS intro before the first hole. */
+  showVS(players) {
+    stopLive();
+    const cards = players.map((p, i) => {
+      const ch = characterByColor(p.color);
+      return `<div class="vs-card" style="--c:${p.color}; animation-delay:${i * 0.12}s">
+        <img alt="" src="${ch ? portrait(ch.id) : ''}" />
+        <div class="vs-full">${esc(ch?.full || '')}</div><div class="vs-player">${esc(p.name)}</div></div>`;
+    });
+    const mid = Math.ceil(cards.length / 2);
+    const html = cards.length === 1
+      ? `${cards[0]}<div class="vs-bolt">VS</div><div class="vs-card xana-card" style="--c:#ff3b3b"><img alt="" src="${portrait('xana')}" /><div class="vs-full">XANA</div><div class="vs-player">the course</div></div>`
+      : `<div class="vs-side">${cards.slice(0, mid).join('')}</div><div class="vs-bolt">VS</div><div class="vs-side">${cards.slice(mid).join('')}</div>`;
+    const vs = this.$('#vs');
+    vs.innerHTML = `<div class="vs-wrap">${html}</div>`;
+    vs.classList.remove('hidden');
+    const hide = () => { vs.classList.add('hidden'); vs.innerHTML = ''; };
+    vs.onclick = hide;
+    clearTimeout(this.vsTimer);
+    this.vsTimer = setTimeout(hide, 3500);
+  }
+
   // ---------- HUD ----------
   showHud(info) {
+    stopLive();
     this.setScreen('');
     this.$('#hud').classList.remove('hidden');
     this.$('.hole-no').textContent = `HOLE ${info.holeNo + 1}/${info.total}`;

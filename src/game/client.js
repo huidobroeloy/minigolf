@@ -68,6 +68,7 @@ export class GameClient {
       cancelTarget: () => this.cancelTargeting(),
       start: () => this.link.send({ t: 'start' }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
+      pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
       tick: () => sfx.play('roulette'),
     });
@@ -95,21 +96,25 @@ export class GameClient {
         this.code = m.code;
         this.me.color = m.color;
         break;
-      case 'lobby':
+      case 'lobby': {
         this.lobby = m;
         for (const p of m.players) this.upsertPlayer(p);
+        const mine = m.players.find((p) => p.id === this.myId);
+        if (mine) this.me.color = mine.color;
         if (this.phase === 'connecting' || this.phase === 'lobby' || (this.phase === 'final' && m.phase === 'lobby')) {
           this.phase = 'lobby';
           if (!m.solo) this.ui.showLobby(m, this.myId);
-          else this.link.send({ t: 'start' });
+          else if (m.phase === 'lobby') this.link.send({ t: 'start' });
         }
         break;
+      }
       case 'reject':
         this.app.leave(m.reason);
         break;
       case 'matchStart':
         this.inventory = [];
         this.plan = m.plan;
+        this.ui.showVS(m.players || [...this.players.values()]);
         break;
       case 'hole':
         this.loadHole(m);

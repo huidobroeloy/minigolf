@@ -84,6 +84,15 @@ export class HostRoom {
       case 'settings':
         if (p?.host && this.phase === 'lobby') { Object.assign(this.settings, msg.settings); this.broadcastLobby(); }
         return;
+      case 'pick': {
+        // change character in the lobby (one player per character)
+        if (!p || (this.phase !== 'lobby' && this.phase !== 'final')) return;
+        if (!COLORS.includes(msg.color)) return;
+        const used = [...this.players.values()].some((q) => q.id !== id && q.color === msg.color);
+        if (!used) p.color = msg.color;
+        this.broadcastLobby();
+        return;
+      }
       case 'start':
         if (p?.host && (this.phase === 'lobby' || this.phase === 'final')) this.startMatch();
         return;
@@ -236,8 +245,11 @@ export class HostRoom {
     for (const p of this.players.values()) { p.scores = this.plan.map(() => null); }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
-    this.broadcast({ t: 'matchStart', plan: this.plan });
-    this.nextHole();
+    this.broadcast({ t: 'matchStart', plan: this.plan, players: this.playerList() });
+    // leave time for the VS intro before hole 1
+    this.phase = 'intro';
+    clearTimeout(this.introTimer);
+    this.introTimer = setTimeout(() => { if (this.phase === 'intro') this.nextHole(); }, 3600);
   }
 
   activePlayers() { return [...this.players.values()].filter((p) => p.connected); }
@@ -325,6 +337,7 @@ export class HostRoom {
 
   dispose() {
     clearInterval(this.timer);
+    clearTimeout(this.introTimer);
     this.links.clear();
   }
 }

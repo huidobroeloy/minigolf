@@ -304,3 +304,39 @@ td.na { color: rgba(255,255,255,0.2); }
 #ui.shake { animation: uishake 0.35s; }
 @keyframes uishake { 20% { transform: translate(6px, -4px); } 40% { transform: translate(-5px, 3px); } 60% { transform: translate(3px, 2px); } 80% { transform: translate(-2px, -1px); } }
 @media (max-width: 760px) { .stamp .t { font-size: 36px; } }
+
+/* ---------- arcade character select ---------- */
+.menu, .lobby { width: min(560px, 100%); }
+.cs { display: flex; flex-direction: column; gap: 10px; }
+.cs-detail { display: flex; gap: 12px; align-items: center; background: radial-gradient(circle at 25% 50%, rgba(111,231,255,0.18), rgba(0,0,0,0.25) 70%); border: 1px solid var(--holo-dim); border-radius: 12px; padding: 8px; }
+.cs-live { width: 150px; height: 150px; flex: none; }
+.cs-live canvas { width: 150px !important; height: 150px !important; display: block; }
+.cs.compact .cs-live, .cs.compact .cs-live canvas { width: 110px !important; height: 110px !important; }
+.cs-info { text-align: left; }
+.cs-full { font-family: var(--font-head); font-weight: 900; font-size: 22px; letter-spacing: 1px; color: #fff; text-shadow: 0 0 12px rgba(111,231,255,0.7); }
+.cs-tag { color: var(--muted); font-size: 15px; margin: 4px 0 8px; }
+.cs-ballrow { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.cs-ball { width: 26px; height: 26px; border-radius: 50%; display: inline-block; box-shadow: inset -3px -4px 8px rgba(0,0,0,0.4); }
+.cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cs-tile { position: relative; background: linear-gradient(180deg, rgba(10,32,64,0.9), rgba(3,12,30,0.9)); border: 2px solid rgba(111,231,255,0.25); border-radius: 10px; padding: 2px 2px 4px; cursor: pointer; color: #fff; font: 700 13px var(--font-body); transition: transform .08s, border-color .15s; }
+.cs-tile img { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; background: radial-gradient(circle, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%); }
+.cs-tile:hover { transform: translateY(-2px); border-color: var(--c); }
+.cs-tile.sel { border-color: var(--c); box-shadow: 0 0 16px var(--c); }
+.cs-tile.taken { opacity: 0.35; cursor: not-allowed; filter: grayscale(0.8); }
+.cs-tile em { position: absolute; top: 4px; left: 4px; right: 4px; font-style: normal; font-size: 11px; background: rgba(0,0,0,0.7); border-radius: 6px; }
+@media (max-width: 760px) { .cs-live, .cs-live canvas { width: 96px !important; height: 96px !important; } .cs-full { font-size: 17px; } .cs-tag { font-size: 13px; } }
+
+/* ---------- VS intro ---------- */
+#vs { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: radial-gradient(circle, rgba(40,10,60,0.92), rgba(2,4,14,0.97)); pointer-events: auto; cursor: pointer; overflow: hidden; }
+.vs-wrap { display: flex; align-items: center; gap: 18px; padding: 16px; max-width: 100%; }
+.vs-side { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 42vw; }
+.vs-card { width: 150px; text-align: center; border: 2px solid var(--c); border-radius: 12px; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 30%, transparent), rgba(0,0,0,0.6)); box-shadow: 0 0 24px color-mix(in srgb, var(--c) 60%, transparent); animation: vsin .5s cubic-bezier(.2,1.4,.4,1) both; padding-bottom: 6px; }
+.vs-side:first-child .vs-card { --from: -120vw; }
+.vs-side:last-child .vs-card, .xana-card { --from: 120vw; }
+.vs-card img { width: 100%; display: block; }
+.vs-full { font-family: var(--font-head); font-weight: 900; font-size: 13px; letter-spacing: 1px; }
+.vs-player { color: var(--c); font-weight: 700; }
+.vs-bolt { font-family: var(--font-head); font-weight: 900; font-size: 84px; color: #ffe600; text-shadow: 0 0 20px #ff8a00, 0 0 50px #ff2bd6; animation: vsbolt .6s .3s both; }
+@keyframes vsin { from { transform: translateX(var(--from, -120vw)) skewX(-12deg); } to { transform: none; } }
+@keyframes vsbolt { 0% { transform: scale(4) rotate(-20deg); opacity: 0; } 70% { transform: scale(0.9) rotate(4deg); opacity: 1; } 100% { transform: scale(1); } }
+@media (max-width: 760px) { .vs-card { width: 92px; } .vs-bolt { font-size: 48px; } .vs-full { font-size: 10px; } }
