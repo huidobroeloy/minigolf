@@ -142,6 +142,7 @@ export class GameClient {
       case 'final':
         this.phase = 'final';
         this.teardownHole();
+        this.app.showBackdrop();
         this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost });
         if (m.standings[0]?.id === this.myId && m.standings.length > 1) sfx.play('hio');
         break;
@@ -170,6 +171,7 @@ export class GameClient {
 
   loadHole(m) {
     this.teardownHole();
+    this.app.hideBackdrop();
     const def = HOLES[m.index];
     this.def = def;
     this.holeMsg = m;
@@ -180,6 +182,7 @@ export class GameClient {
     this.renderer.applyTheme(def.sector, this.course);
     this.ball = new Ball(this.physics, this.scene, this.me.color);
     this.ball.onEvent = (type, data) => this.onBallEvent(type, data);
+    this.course.localBall = this.ball;
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
@@ -235,6 +238,7 @@ export class GameClient {
     if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); }
     this.phase = 'between';
     this.teardownHole();
+    this.app.showBackdrop();
     this.ui.showScoreboard({ players: m.players, plan: m.plan, holeNo: m.holeNo, results: m.results, myId: this.myId, final: false, isHost: this.isHost });
   }
 
@@ -243,6 +247,7 @@ export class GameClient {
     if (type === 'wall') sfx.play('wall', data.strength);
     else if (type === 'bumper') { sfx.play('bumper'); data.bumper.hitT = this.simTime + 0.25; }
     else if (type === 'stick') sfx.play('stick');
+    else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
     else if (type === 'sinkStart') sfx.play('cup');
     else if (type === 'rest') this.onRest();
   }

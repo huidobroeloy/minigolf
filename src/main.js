@@ -54,7 +54,7 @@ class App {
     requestAnimationFrame(loop);
     window.__app = this;
     if (this.debug) {
-      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__holes = HOLES; });
+      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__holes = HOLES; });
     }
   }
 
@@ -69,7 +69,7 @@ class App {
 
   // ---------- menu backdrop: a slowly orbiting random hole ----------
   showBackdrop() {
-    this.hideBackdrop();
+    if (this.backdrop) return;
     const def = HOLES[Math.floor(Math.random() * HOLES.length)];
     const physics = new Physics();
     const course = buildCourse(def, physics, this.renderer.scene);
@@ -103,7 +103,6 @@ class App {
 
   // ---------- sessions ----------
   startClient(link, me, opts) {
-    this.hideBackdrop();
     this.client = new GameClient(this, link, me, { debug: this.debug, ...opts });
   }
 

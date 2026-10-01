@@ -270,7 +270,7 @@ class Montapollos extends Hazard {
     super(ctx, fx, 18);
     this.path = makePath(ctx.course, this.rng, 12, 5.2);
     this.model = makeChicken();
-    this.model.scale.setScalar(0.75);
+    this.model.scale.setScalar(1.3);
     this.group.add(this.model);
     this.pos = new THREE.Vector3();
     this.prev = new THREE.Vector3();
@@ -286,11 +286,11 @@ class Montapollos extends Hazard {
     const p = ball.pos;
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     const d = Math.hypot(dx, dz);
-    const R = 1.1 + ball.radius;
+    const R = 1.7 + ball.radius;
     if (d < R && p.y < this.pos.y + 2) {
       out.x += (dx / (d || 1)) * 140 + this.vel.x * 6;
       out.z += (dz / (d || 1)) * 140 + this.vel.z * 6;
-      out.y += 20;
+      out.y += 26;
       out.wake = true;
       if (!this._hitSound || t - this._hitSound > 0.5) { sfx.play('cluck'); this._hitSound = t; }
     }
@@ -305,7 +305,7 @@ class Montapollos extends Hazard {
     if (Math.hypot(dx, dz) > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
     animateChicken(this.model, t, 5);
     const s = Math.min(1, lt * 3, (this.dur - lt) * 3);
-    this.model.scale.setScalar(0.75 * Math.max(0.01, s));
+    this.model.scale.setScalar(1.3 * Math.max(0.01, s));
     if (t > this.nextCluck) { sfx.play('cluck'); this.nextCluck = t + 1.5 + Math.random() * 2; }
     if (Math.random() < 0.3) {
       this.ctx.particles.spawn({ pos: [this.pos.x, this.pos.y + 1.2, this.pos.z], vel: [(Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3], color: '#ffffff', size: 0.18, life: 1.2, gravity: 2 });

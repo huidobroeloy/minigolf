@@ -5,8 +5,10 @@ export default [
   {
     id: 'ice-1', name: 'Slippery Slope', sector: 'ice', par: 2, time: 90,
     tee: [0, 1.5, 0], cup: [0, 0, 21],
-    hio: 'A feather-light tap: gravity does the rest, the snow band bleeds the speed.',
+    hio: 'A feather-light tap a hair left of the pillar: gravity does the rest, the snow bleeds the speed.',
     parts: [
+      { t: 'cyl', p: [0.42, 0, 18.4], r: 0.42, h: 1.6, look: 'ice' },
+      { t: 'cyl', p: [-1.9, 0, 13.2], r: 0.4, h: 1.2, look: 'ice' },
       { t: 'floor', y: 1.5, poly: rect(-2, -1.2, 2, 3), open: [2] },
       { t: 'ramp', a: [0, 3], b: [0, 8], w: 4, ya: 1.5, yb: 0 },
       { t: 'floor', poly: [[-3, 8], [-2, 8], [2, 8], [3, 8], [3, 24], [-3, 24]], open: [1] },

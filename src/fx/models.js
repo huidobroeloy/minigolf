@@ -221,8 +221,8 @@ export function makeLabel(text, color) {
   g.fillText(text, 128, 33);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  s.scale.set(1.4, 0.35, 1);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: false }));
+  s.scale.set(0.16, 0.04, 1);
   s.renderOrder = 10;
   return s;
 }
