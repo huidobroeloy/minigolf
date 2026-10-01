@@ -18,6 +18,7 @@ export default [
       { t: 'zone', kind: 'slow', rect: [1.2, 8, 3, 24], mul: 9 },
       { t: 'zone', kind: 'slow', rect: [-3, 22.6, 3, 24], mul: 12 },
       { t: 'monster', type: 'krabe', path: patrol([-2.2, 11.5], [2.2, 11.5], 5) },
+      { t: 'monster', type: 'kolossus', p: [42, -30, 12], ry: -Math.PI / 2, phase: 0.3 },
     ],
   },
   {
@@ -42,6 +43,7 @@ export default [
       { t: 'zone', kind: 'slow', rect: [-3, 32.4, 3, 33.5], mul: 12 },
       { t: 'monster', type: 'krabe', path: patrol([-2.4, 28], [2.4, 28], 6, 0, 0.3) },
       { t: 'monster', type: 'krabe', path: patrol([-0.4, 7], [0.4, 7], 3, 0, 0.5) },
+      { t: 'monster', type: 'kolossus', p: [-42, -30, 18], ry: Math.PI / 2, phase: 0.6 },
     ],
   },
   {
@@ -63,6 +65,7 @@ export default [
       { t: 'zone', kind: 'slow', rect: [0.1, -1.2, 4, 2], mul: 10 },
       { t: 'monster', type: 'krabe', path: patrol([-3.3, 11.5], [-0.8, 11.5], 4.2) },
       { t: 'monster', type: 'krabe', path: patrol([0.8, 6.5], [3.3, 6.5], 5.2, 0, 0.5) },
+      { t: 'monster', type: 'kolossus', p: [36, -30, 11], ry: -Math.PI / 2, scale: 2.5, phase: 0.1 },
     ],
   },
 ];

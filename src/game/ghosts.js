@@ -12,7 +12,7 @@ export class Ghosts {
   ensure(p) {
     let g = this.map.get(p.id);
     if (g) return g;
-    const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.35, transparent: true, opacity: 0.8 });
+    const mat = new THREE.MeshPhysicalMaterial({ color: p.color, roughness: 0.25, clearcoat: 1, emissive: p.color, emissiveIntensity: 0.12, transparent: true, opacity: 0.8 });
     const mesh = new THREE.Mesh(this.geo, mat);
     mesh.castShadow = true;
     mesh.scale.setScalar(0.18);
@@ -49,8 +49,11 @@ export class Ghosts {
     const k = 1 - Math.exp(-dt * 14);
     for (const g of this.map.values()) {
       if (g.target) {
+        const before = g.mesh.position.clone();
         if (g.mesh.position.distanceTo(g.target) > 4) g.mesh.position.copy(g.target);
         else g.mesh.position.lerp(g.target, k);
+        const sp = dt > 0 ? before.distanceTo(g.mesh.position) / dt : 0;
+        if (sp > 2.5 && sp < 60 && g.state !== 'holed') this.onTrail?.(g.mesh.position, g.mesh.material.color, g.radius);
       }
       const visible = g.seen && g.state !== 'holed' && g.state !== 'gone';
       g.mesh.visible = visible;

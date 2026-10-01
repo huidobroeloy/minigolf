@@ -49,6 +49,9 @@ select option { background: var(--panel-solid); }
 .row .btn.primary { flex: 1; }
 .row.join input { flex: 1; text-transform: uppercase; letter-spacing: 6px; font-family: var(--font-head); text-align: center; }
 .row.solo select { flex: 1; }
+.row.gfx { justify-content: space-between; }
+.row.gfx label { margin: 0; }
+.row.gfx select { width: auto; flex: 1; max-width: 240px; }
 .small { color: var(--muted); font-size: 13px; margin-top: 6px; }
 .error { background: rgba(255,77,77,0.15); border: 1px solid rgba(255,77,77,0.5); color: #ffb3b3; border-radius: 10px; padding: 8px; }
 .swatches { display: flex; gap: 8px; justify-content: center; }
@@ -233,3 +236,33 @@ td.na { color: rgba(255,255,255,0.2); }
   .logo, .boot-logo { font-size: 40px; }
   .hud-hint { white-space: normal; width: 90%; }
 }
+
+/* ---------- Jérémie's supercomputer skin ---------- */
+:root { --holo: #6fe7ff; --holo-dim: rgba(111, 231, 255, 0.45); }
+.hud-top > div, .hp, .slot, .icon-btn, .hud-power, .toast, .fi {
+  background: linear-gradient(180deg, rgba(10, 32, 64, 0.86), rgba(3, 12, 30, 0.86));
+  border: 1px solid var(--holo-dim);
+  box-shadow: 0 0 14px rgba(111, 231, 255, 0.16), inset 0 0 18px rgba(111, 231, 255, 0.06);
+}
+.hud-top > div { position: relative; }
+.hud-top > div::before, .hud-top > div::after {
+  content: ''; position: absolute; width: 8px; height: 8px; border: 2px solid var(--holo); opacity: 0.9;
+}
+.hud-top > div::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.hud-top > div::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+.hole-no, .hud-strokes .lbl { color: var(--holo); }
+.timer { text-shadow: 0 0 10px rgba(111, 231, 255, 0.7); }
+.slot:hover { border-color: var(--holo); box-shadow: 0 0 18px rgba(111, 231, 255, 0.45); }
+#hud::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px);
+}
+.banner {
+  padding: 14px 34px 12px; background: linear-gradient(180deg, rgba(10, 32, 64, 0.78), rgba(3, 12, 30, 0.78));
+  border: 1px solid var(--holo-dim); box-shadow: 0 0 30px rgba(111, 231, 255, 0.25);
+}
+.banner::before {
+  content: 'SCANNING SECTOR…'; display: block; font-family: var(--font-head); font-size: 11px; letter-spacing: 4px;
+  color: var(--holo); margin-bottom: 4px; animation: pulse 0.6s infinite alternate;
+}
+.panel { border-color: var(--holo-dim); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 24px rgba(111, 231, 255, 0.12); }

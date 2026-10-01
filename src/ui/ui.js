@@ -123,6 +123,9 @@ export class UI {
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
+        <div class="row gfx"><label>Graphics</label>
+          <select id="quality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select>
+        </div>
         <div class="small">Drag down from anywhere to set power, sideways to aim, release to putt. Press H in game for all controls.</div>
       </div>`);
     s.querySelectorAll('.swatch').forEach((b) => b.addEventListener('click', () => {
@@ -143,6 +146,7 @@ export class UI {
     };
     s.querySelector('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') s.querySelector('#join').click(); });
     s.querySelector('#solo').onclick = () => this.h.solo?.(s.querySelector('#soloCourse').value, getMe());
+    s.querySelector('#quality').onchange = (e) => this.h.quality?.(e.target.value);
   }
 
   showConnecting(text) {
@@ -449,7 +453,7 @@ function podium(sorted) {
 function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}');
-    return { name: p.name || '', color: p.color || COLORS[Math.floor(Math.random() * COLORS.length)], muted: !!p.muted };
+    return { name: p.name || '', color: p.color || COLORS[Math.floor(Math.random() * COLORS.length)], muted: !!p.muted, quality: p.quality || 'high' };
   } catch { return { name: '', color: COLORS[0], muted: false }; }
 }
 

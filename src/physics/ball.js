@@ -62,7 +62,7 @@ export class Ball {
     this.collider = physics.world.createCollider(cd, this.body);
 
     const geo = new THREE.SphereGeometry(1, 28, 20);
-    this.material = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.05 });
+    this.material = new THREE.MeshPhysicalMaterial({ color, roughness: 0.25, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.08, emissive: color, emissiveIntensity: 0.12 });
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.castShadow = true;
     this.mesh.scale.setScalar(this.radius);

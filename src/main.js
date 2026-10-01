@@ -19,7 +19,9 @@ class App {
       bootMsg.textContent = 'Failed to load physics: ' + e.message;
       throw e;
     }
-    this.renderer = new Renderer(document.getElementById('game'));
+    let quality = 'high';
+    try { quality = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}').quality || 'high'; } catch { /* storage blocked */ }
+    this.renderer = new Renderer(document.getElementById('game'), quality);
     this.input = new Input(this.renderer.renderer.domElement);
     this.ui = new UI(document.getElementById('ui'));
     this.params = new URLSearchParams(location.search);
@@ -31,6 +33,7 @@ class App {
       solo: (course, me) => this.solo(course, me),
       leave: () => this.leave(),
       toggleMute: () => this.toggleMute(),
+      quality: (q) => { this.renderer.setQuality(q); this.ui.prefs.quality = q; savePrefs(this.ui.prefs); },
     });
     window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
     document.getElementById('boot').remove();

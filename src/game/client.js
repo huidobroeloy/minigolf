@@ -37,6 +37,7 @@ export class GameClient {
     this.inventory = [];
     this.cam = new ChaseCam(this.renderer.camera);
     this.ghosts = new Ghosts(this.scene);
+    this.ghosts.onTrail = (p, color, r) => this.trail(p, color, r);
     this.effects = new EffectManager(this);
     this.sendTimer = 0;
     this.simTime = 0;
@@ -211,6 +212,7 @@ export class GameClient {
     this.ball = new Ball(this.physics, this.scene, this.me.color);
     this.ball.onEvent = (type, data) => this.onBallEvent(type, data);
     this.course.localBall = this.ball;
+    this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
@@ -320,6 +322,11 @@ export class GameClient {
     this.playersDirty = true;
     this.sendState(true);
     this.ui.setHint('You\'re in! Keep using power-ups on the others · <kbd>Tab</kbd> to spectate');
+  }
+
+  /** Glowing dotted trail behind fast balls (yours and the ghosts'). */
+  trail(p, color, r) {
+    this.effects.particles?.spawn({ pos: [p.x, p.y, p.z], color, size: 0.22 * (r / 0.18), life: 0.35 });
   }
 
   confetti(n) {
@@ -877,6 +884,8 @@ export class GameClient {
 
     // visuals
     this.ball.syncMesh(dt * ts);
+    const bv = this.ball.vel;
+    if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.ball.material.color, this.ball.radius);
     this.course.frame(this.simTime, dt);
     this.effects.frame(this.simTime, dt);
     this.pickups.frame(this.simTime);
@@ -886,6 +895,7 @@ export class GameClient {
     this.updateScanner();
     this.updateEmotes(dt);
     this.updateMarkers(this.simTime);
+    this.course.tactical = this.cam.mode === 'tactical';
     if (this.virt) {
       const v = this.virt;
       v.t += dt;

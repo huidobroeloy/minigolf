@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { R } from '../physics/world.js';
 import { TEX } from '../course/themes.js';
 import { sfx } from '../core/audio.js';
+import { makeKolossus } from '../fx/lyoko.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
@@ -523,9 +524,82 @@ class Drone extends Monster {
   }
 }
 
+// ---------- Kolossus: a giant in the Digital Sea that slams it every ~20s ----------
+class Kolossus extends Monster {
+  constructor(spec, ctx) {
+    const g = makeKolossus();
+    g.scale.setScalar(spec.scale ?? 2.2);
+    g.traverse((o) => { o.castShadow = false; });
+    super(spec, ctx, g);
+    this.period = spec.period ?? 20;
+    this.lastSlam = -1;
+    this.waveMat = new THREE.MeshBasicMaterial({ color: '#ffb36a', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+    this.wave = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), this.waveMat);
+    this.wave.rotation.x = -Math.PI / 2;
+    this.wave.visible = false;
+    ctx.group.add(this.wave);
+  }
+  /** 0..1 arm pose and the moment of impact within each cycle. */
+  pose(t) {
+    const u = (((t + (this.spec.phase ?? 0) * this.period) / this.period) % 1 + 1) % 1;
+    if (u < 0.1) return { k: 0.35 - (u / 0.1) * 0.35, u };          // wind up
+    if (u < 0.13) return { k: (u - 0.1) / 0.03, u };                 // SLAM
+    if (u < 0.25) return { k: 1, u };                                // hold
+    if (u < 0.4) return { k: 1 - ((u - 0.25) / 0.15) * 0.65, u };   // recover
+    return { k: 0.35, u };
+  }
+  frame(t) {
+    super.frame(t);
+    this.model.visible = !this.ctx.course.tactical; // don't block the aerial view
+    const { k, u } = this.pose(t);
+    this.model.userData.slam(k);
+    this.model.userData.breathe(t);
+    this.model.position.y += Math.sin(t * 0.8) * 0.3;
+    const sinceHit = (u - 0.13) * this.period;
+    this.wave.visible = sinceHit >= 0 && sinceHit < 2.5;
+    if (this.wave.visible) {
+      const fist = this.model.getObjectByName('fist');
+      const p = new THREE.Vector3();
+      fist.getWorldPosition(p);
+      this.wave.position.set(p.x, this.spec.p[1] + 0.3, p.z);
+      this.wave.scale.setScalar(2 + sinceHit * 30);
+      this.waveMat.opacity = 0.8 * (1 - sinceHit / 2.5);
+    }
+  }
+  update(t) {
+    const cycle = Math.floor((t + (this.spec.phase ?? 0) * this.period) / this.period);
+    const { u } = this.pose(t);
+    if (u >= 0.13 && cycle !== this.lastSlam) {
+      this.lastSlam = cycle;
+      this.impactAt = t;
+      if (t > 1) {
+        sfx.play('rumble');
+        this.ctx.course.onShake?.(1.2);
+        // the quake cracks thin ice
+        for (const tile of this.ctx.course.crumbles) if (tile.kind === 'thinice' && tile.state === 'solid') {
+          tile.hits++;
+          if (tile.hits >= tile.need) { tile.state = 'shaking'; tile.t = 0; }
+        }
+      }
+    }
+  }
+  force(ball, t, out) {
+    if (this.impactAt === undefined || t - this.impactAt > 0.7 || t < 1) return;
+    // the whole sector trembles: a short jolt pushing away from the giant
+    const s = this.at(t);
+    const p = ball.pos;
+    const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz) || 1;
+    const k = 4 * (1 - (t - this.impactAt) / 0.7);
+    out.x += (dx / d) * k + Math.sin(t * 60) * k * 0.5;
+    out.z += (dz / d) * k + Math.cos(t * 55) * k * 0.5;
+    out.wake = true;
+  }
+  dispose() { super.dispose(); this.ctx.group.remove(this.wave); }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
-  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone,
+  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus,
 };
 
 export function createMonster(spec, ctx) {
