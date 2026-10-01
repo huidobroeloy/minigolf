@@ -61,7 +61,7 @@ export default [
       // the divider between the two lanes
       { t: 'wall', pts: [[0, -1.2], [0, 15.5]], h: 0.6 },
       { t: 'zone', kind: 'slow', rect: [-4, 5, -2.6, 7], mul: 8 },
-      { t: 'zone', kind: 'slow', c: [1.9, 19.2], r: 1.4, mul: 6 },
+      { t: 'zone', kind: 'slow', c: [1.9, 19.2], r: 0.8, mul: 4 },
       { t: 'zone', kind: 'slow', rect: [0.1, -1.2, 4, 2], mul: 10 },
       { t: 'monster', type: 'krabe', path: patrol([-3.3, 11.5], [-0.8, 11.5], 4.2) },
       { t: 'monster', type: 'krabe', path: patrol([0.8, 6.5], [3.3, 6.5], 5.2, 0, 0.5) },

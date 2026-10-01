@@ -456,6 +456,11 @@ export function buildCourse(def, physics, scene) {
         const along = v.x * z.dir[0] + v.z * z.dir[1];
         const sp = z.speed ?? 12;
         if (along < sp) { out.x += z.dir[0] * 60; out.z += z.dir[1] * 60; out.wake = true; }
+        if (z.align) { // rails: bleed off sideways speed
+          const px = -z.dir[1], pz = z.dir[0];
+          const perp = v.x * px + v.z * pz;
+          out.x -= px * perp * z.align; out.z -= pz * perp * z.align;
+        }
       } else if (z.kind === 'vent') {
         // a geyser: fires the ball upward, keeping its own horizontal speed (with a minimum push)
         if ((ball.ventCool ?? 0) > 0 || p.y - zy > ball.radius + 0.35) continue;

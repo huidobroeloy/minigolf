@@ -21,8 +21,8 @@ If a friend's connection drops or they reload the page, they're put straight bac
 If the host leaves, the room ends.
 For friends behind strict networks, the game uses PeerJS's free relay. For more reliable relaying, add your own free TURN credentials to `src/net/ice.js`.
 
-## Your ball
-Pick your character on the main menu: **Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper or XANA**. Each ball wears that character's colours and a signature detail:
+## Choose your fighter
+Pick your character on the main menu, or change it in the lobby. The roster is **Ulrich Stern, Odd Della Robbia, Yumi Ishiyama, Aelita Schaeffer, William Dunbar, Jérémie Belpois, Franz Hopper and XANA**, each shown as a 3D figurine. A fighting-game VS screen opens the match. Each ball wears that character's colours and a signature detail:
 - Ulrich: headband and katana slash
 - Odd: blond hair with the purple spot, plus cat eyes
 - Yumi: sakura and a fan
@@ -62,7 +62,8 @@ On a phone or tablet, drag down from anywhere to putt, and use two fingers to ro
 - Every hole has a hole-in-one line. It's hard to find.
 
 ## Power-ups
-You can carry up to 3. Pick up the glowing orbs in mini Lyoko towers; if your slots are full, the new one is discarded.
+You can carry up to 3. Pick them up from mini Lyoko towers; if your slots are full, the new one is discarded.
+The host sets the amount (**Off / Few / Normal / Chaos**). It also scales with the number of players and the size of the hole.
 
 The tower halo tells you the **category**:
 - **Blue:** helps you.
@@ -80,6 +81,7 @@ After you hole out you can still use power-ups that target other players or affe
 - You can't place things right on the cup.
 
 **Fair play:** after a single-target power-up hits you, you're immune to single-target power-ups for 5 s.
+Active effects show as chips with a countdown at the top of the screen.
 
 | | Power-up | Effect |
 |---|---|---|
@@ -126,7 +128,9 @@ After you hole out you can still use power-ups that target other players or affe
 ## The end
 The winner's ball escorts Aelita to a tower XANA has activated. She deactivates it, and a Return to the Past sends everyone to the podium. Then the awards: Digital Sea Diver, XANA's Favourite Victim, Trigger Happy, Fortune's Fool, and more.
 
-On the main menu, set **Graphics** to Low if a laptop struggles. Low turns off glow and shadows.
+On the main menu:
+- Set **Graphics** to Low if a laptop struggles. Low turns off glow and shadows.
+- **Music** sets the volume of the procedural sector soundtrack.
 
 ## Development
 No build step is needed: it's plain ES modules, with Three.js, Rapier and PeerJS loaded from jsDelivr. Run the bundled no-cache dev server, which makes edited modules always reload:

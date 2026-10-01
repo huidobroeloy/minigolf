@@ -8,11 +8,11 @@ export default [
     hio: 'Wait until all three sliding bridges line up, then one long straight putt.',
     parts: [
       { t: 'floor', poly: rect(-2, -1.2, 2, 4), open: [2] },
-      { t: 'mover', s: [2.2, 0.4, 6.4], path: shuttle([-3.6, -0.2, 7], [3.6, -0.2, 7], 6.4, 0, 0.3), extent: [[-4.7, 7], [4.7, 7]] },
+      { t: 'mover', s: [2.2, 0.4, 6.4], path: shuttle([-3.6, -0.2, 7], [3.6, -0.2, 7], 6, 0, 0.3), extent: [[-4.7, 7], [4.7, 7]] },
       { t: 'floor', poly: rect(-3, 10, 3, 14), open: [0, 2] },
-      { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([3.6, -0.2, 16], [-3.6, -0.2, 16], 5.2, 0.15, 0.3), extent: [[-4.7, 16], [4.7, 16]] },
+      { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([3.6, -0.2, 16], [-3.6, -0.2, 16], 6, 0.85, 0.3), extent: [[-4.7, 16], [4.7, 16]] },
       { t: 'floor', poly: rect(-3, 18, 3, 22), open: [0, 2] },
-      { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([-3.6, -0.2, 24], [3.6, -0.2, 24], 5.8, 0.6, 0.3), extent: [[-4.7, 24], [4.7, 24]] },
+      { t: 'mover', s: [2.2, 0.4, 4.4], path: shuttle([-3.6, -0.2, 24], [3.6, -0.2, 24], 6, 0.7, 0.3), extent: [[-4.7, 24], [4.7, 24]] },
       { t: 'floor', poly: rect(-3, 26, 3, 33.5), open: [0] },
       { t: 'monster', type: 'manta', path: patrol([-4.5, 12], [4.5, 12], 7, 1.1) },
       { t: 'monster', type: 'manta', path: patrol([4.5, 20], [-4.5, 20], 6, 1.1, 0.4) },
@@ -38,16 +38,18 @@ export default [
   },
   {
     id: 'sector5-3', name: 'Celestial Dome', sector: 'sector5', par: 4, time: 150,
-    tee: [0, 0, 0], cup: [1.3, 3, 15.2],
+    tee: [0, 0, 0], cup: [2, 3, 15],
     hio: 'Hit the boost pad on the right: up the steep ramp, into the dome while the fence gap faces you.',
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [2.7, 6], [1.3, 6], [1.2, 6], [-1.2, 6], [-3, 6]], open: [3, 5] },
-      { t: 'zone', kind: 'boost', rect: [1.3, 1.5, 2.7, 4.5], dir: [0, 1], speed: 12.5 },
-      { t: 'ramp', a: [2, 6], b: [2, 10.5], w: 1.4, ya: 0, yb: 3 },
+      { t: 'zone', kind: 'boost', rect: [1.3, 0.8, 2.7, 3.8], dir: [0, 1], speed: 12.5, align: 3 },
+      { t: 'ramp', a: [2, 4], b: [2, 9.45], w: 1.4, ya: 0, yb: 3 }, // tops out exactly at the dome's edge
+      // a second booster near the crest so balls arrive on the dome at a holeable pace
+      { t: 'zone', kind: 'boost', rect: [1.3, 6.8, 2.7, 8.6], y: 2, dir: [0, 1], speed: 6.6 },
       { t: 'mover', s: [2.4, 0.4, 2.9], path: elevator(0, 7.55, -0.2, 2.8, 8), sideLook: 's5' },
       { t: 'floor', y: 3, poly: circlePoly(0, 14, 5, 24), open: [17, 18, 19] },
-      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([1.3, 15.2], 1.9, 6, 3.25, 0), look: 's5' },
-      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([1.3, 15.2], 1.9, 6, 3.25, 0.5), look: 's5' },
+      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([2, 15], 1.9, 6, 3.25, 0), look: 's5' },
+      { t: 'mover', kind: 'obst', s: [0.3, 0.5, 2.4], path: orbit([2, 15], 1.9, 6, 3.25, 0.5), look: 's5' },
       { t: 'monster', type: 'scyphozoa', path: orbit([0, 14.5], 2.6, 14, 5.2), grab: [0, 3.3, 10.2] },
       { t: 'monster', type: 'manta', path: patrol([-3.5, 3], [3.5, 3], 6, 1.0, 0.25) },
     ],
