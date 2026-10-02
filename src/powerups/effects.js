@@ -14,9 +14,11 @@ import { loop } from '../holes/helpers.js';
 const BH_CORE = 0.45, BH_MAX_BOUNCES = 3, BH_LIFE = 20;
 
 const NEXT_SHOT = ['steady', 'magnet', 'ghost', 'chip', 'aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'triplicate', 'scanner', 'possession',
-  'stun', 'gas', 'sprint', 'wings', 'overwing'];
+  'stun', 'gas', 'sprint', 'wings', 'overwing', 'venom', 'xanafied'];
+// statuses that monsters give (not power-ups)
+const STATUS_ICONS = { venom: '🟢', xanafied: '🔴' };
 // effects Hopper's Light washes off
-const NEGATIVE = ['aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'possession', 'stun', 'gas'];
+const NEGATIVE = ['aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'possession', 'stun', 'gas', 'venom', 'xanafied'];
 
 /**
  * Applies power-up effects on this client. Every client receives every `fx` message and decides
@@ -368,7 +370,7 @@ export class EffectManager {
     this.active = { ...this.pending };
     this.pending = {};
     const a = this.active;
-    const res = { chip: !!a.chip, powerMul: a.leash ? 0.5 : 1, steady: !!a.steady, triplicate: !!a.triplicate, glide: !!a.wings, fly: !!a.overwing, stun: !!a.stun };
+    const res = { chip: !!a.chip, powerMul: (a.leash ? 0.5 : 1) * (a.venom ? 0.75 : 1), steady: !!a.steady, triplicate: !!a.triplicate, glide: !!a.wings, fly: !!a.overwing, stun: !!a.stun };
     if (a.leash) {
       const p = this.client.ball.pos;
       this.leash = { anchor: new THREE.Vector3(p.x, p.y, p.z), len: 3.2 };
@@ -398,7 +400,7 @@ export class EffectManager {
     if (ball.state !== 'holed' && ball.state !== 'sinking') ball.setRadius(BALL_R * size);
     this.client.ui.setAelita(!!e.aelita);
     this.client.ui.setPossession(!!e.possession);
-    this.client.ui.setStatus(Object.keys(e).filter((k) => e[k] && NEXT_SHOT.includes(k)).map((k) => POWERUPS[k].icon));
+    this.client.ui.setStatus(Object.keys(e).filter((k) => e[k] && NEXT_SHOT.includes(k)).map((k) => STATUS_ICONS[k] || POWERUPS[k].icon));
     if (e.leash && !this.lady) this.spawnLady();
     if (!e.leash && this.lady) this.removeLady();
   }

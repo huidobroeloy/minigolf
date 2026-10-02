@@ -4,6 +4,7 @@ import { TEX } from '../course/themes.js';
 import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
+import { Gun, MineLayer, canTarget, landHit, seededRng } from './attacks.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
@@ -59,7 +60,10 @@ class Monster {
     }
     this.q = new THREE.Quaternion();
     this.place(model, s);
+    this.guns = [];
   }
+  /** World position of something at (x, y, z) in the monster's local frame (for gun muzzles). */
+  local(x, y, z) { return this.model.localToWorld(new THREE.Vector3(x, y, z)); }
   at(t) {
     if (this.spec.path) return this.spec.path(t);
     const p = this.spec.p;
@@ -101,6 +105,7 @@ class Kankrelat extends Monster {
     super(spec, ctx, g, { yOff: 0.3, colliders: [[R.ColliderDesc.cuboid(0.4, 0.25, 0.46)]] });
     this.legs = legs;
     this.bodyMesh = body;
+    this.guns.push(new Gun(this, { kind: 'laser', every: [8, 12], charge: 0.8, range: 6, knock: 120, muzzle: () => this.local(0, 0.4, 0.5) }));
   }
   frame(t) {
     super.frame(t);
@@ -135,7 +140,9 @@ class Tumbleweed extends Monster {
   }
 }
 
-// ---------- Megatank: rolling armoured sphere that opens up and fires a shockwave ----------
+// ---------- Megatank: rolls along, opens its shell, charges and fires a flat beam ----------
+// Its beam vaporizes a ball it touches. The aim locks when it starts charging (1.3 s of red
+// warning line), so you can roll out of the line or hide behind a wall.
 class Megatank extends Monster {
   constructor(spec, ctx) {
     const g = new THREE.Group();
@@ -153,51 +160,88 @@ class Megatank extends Monster {
     super(spec, ctx, g, { yOff: r, colliders: [[R.ColliderDesc.ball(r), 0.7]] });
     Object.assign(this, { roller, top, bottom, core, r, eyePlane });
     this.prev = this.at(0);
-    this.ringMat = new THREE.MeshBasicMaterial({ color: '#ff5a2a', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
-    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 40), this.ringMat);
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.visible = false;
-    ctx.group.add(this.ring);
+    this.rng = seededRng(ctx, spec, 'megatank');
+    this.nextT = 4 + this.rng.range(0, 6);
+    this.mode = null; // null | charge | beam
+    this.t0 = 0;
+    this.aim = 0;
+    this.BEAM_LEN = 11;
+    // warning line and beam (both lie along +z of a pivot that we turn to the aim)
+    this.pivot = new THREE.Group();
+    ctx.group.add(this.pivot);
+    const warnMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false });
+    this.warn = new THREE.Mesh(new THREE.PlaneGeometry(0.12, this.BEAM_LEN), warnMat);
+    this.warn.rotation.x = -Math.PI / 2;
+    this.warn.position.z = this.BEAM_LEN / 2 + 0.6;
+    const beamMat = new THREE.MeshBasicMaterial({ color: '#ffd0c0', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.beam = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, this.BEAM_LEN), beamMat);
+    this.beam.position.z = this.BEAM_LEN / 2 + 0.6;
+    const glowMat = new THREE.MeshBasicMaterial({ color: '#ff3b1f', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.glow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, this.BEAM_LEN), glowMat);
+    this.glow.position.z = this.BEAM_LEN / 2 + 0.6;
+    this.pivot.add(this.warn, this.beam, this.glow);
+    this.pivot.visible = false;
   }
-  phase(t) { return ((t % 5.5) + 5.5) % 5.5; }
+  update(t) {
+    super.update(t);
+    const course = this.ctx.course;
+    if (this.mode === 'charge' && t - this.t0 >= 1.3) { this.mode = 'beam'; this.t0 = t; this.hitDone = false; sfx.play('laser'); course.onShake?.(0.4); }
+    else if (this.mode === 'beam' && t - this.t0 >= 0.6) this.mode = null;
+    if (this.mode || t < this.nextT) return;
+    const enraged = t < (course.enrageUntil ?? -1);
+    this.nextT = t + this.rng.range(9, 14) * (enraged ? 0.5 : 1);
+    const ball = course.localBall;
+    if (!canTarget(course, ball, t, { allowResting: true })) return;
+    const s = this.at(t), bp = ball.pos;
+    if (Math.hypot(bp.x - s.x, bp.z - s.z) > this.BEAM_LEN - 1) return;
+    this.aim = Math.atan2(bp.x - s.x, bp.z - s.z);
+    this.origin = { x: s.x, y: s.y, z: s.z }; // the beam's line is fixed the moment it starts charging
+    this.mode = 'charge';
+    this.t0 = t;
+  }
   frame(t) {
     const s = this.at(t);
     this.model.position.set(s.x, s.y, s.z);
     const dx = s.x - this.prev.x, dz = s.z - this.prev.z;
     const d = Math.hypot(dx, dz);
-    if (d > 1e-4) {
-      this.model.rotation.y = Math.atan2(dx, dz);
-      this.roller.rotation.x += d / this.r;
-    }
+    if (this.mode) this.model.rotation.y = this.aim; // faces its target while firing
+    else if (d > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
+    if (d > 1e-4 && !this.mode) this.roller.rotation.x += d / this.r;
     this.prev = s;
-    // shell opens at the end of each lap and fires
-    const ph = this.phase(t);
-    const open = ph > 4.6 ? Math.sin(((ph - 4.6) / 0.9) * Math.PI) : 0;
+    // shell opens while charging/firing
+    const open = this.mode === 'charge' ? Math.min(1, (t - this.t0) / 0.4) : this.mode === 'beam' ? 1 : 0;
     this.top.position.y = open * 0.35;
     this.bottom.position.y = -open * 0.12;
     this.core.visible = open > 0.1;
-    const wave = ph > 5.0 ? (ph - 5.0) / 0.5 : -1;
-    this.ring.visible = wave >= 0;
-    if (wave >= 0) {
-      const R0 = 0.5 + wave * 4;
-      this.ring.scale.setScalar(R0);
-      this.ring.position.set(s.x, s.y + 0.05, s.z);
-      this.ringMat.opacity = 0.8 * (1 - wave);
-      if (!this.fired) { this.fired = true; sfx.play('laser'); }
-    } else this.fired = false;
-  }
-  force(ball, t, out) {
-    const ph = this.phase(t);
-    if (ph < 5.0) return;
-    const s = this.at(t);
-    const R0 = 0.5 + ((ph - 5.0) / 0.5) * 4;
-    const p = ball.pos;
-    const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
-    if (Math.abs(d - R0) < 0.35 && Math.abs(p.y - s.y) < 1) {
-      out.x += (dx / (d || 1)) * 70; out.z += (dz / (d || 1)) * 70;
-      out.wake = true;
+    if (this.mode === 'charge') this.core.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin((t - this.t0) * 12)));
+    this.pivot.visible = !!this.mode;
+    const o = this.mode && this.origin ? this.origin : s;
+    this.pivot.position.set(o.x, o.y + this.r * 0.75, o.z);
+    this.pivot.rotation.y = this.aim;
+    this.warn.visible = this.mode === 'charge';
+    this.warn.material.opacity = 0.25 + 0.4 * Math.abs(Math.sin((t - this.t0) * 9));
+    this.beam.visible = this.glow.visible = this.mode === 'beam';
+    if (this.mode === 'beam') {
+      const k = (t - this.t0) / 0.6;
+      this.beam.scale.set(1, 1, 1);
+      this.glow.material.opacity = 0.45 * (1 - k);
+      this.beam.material.opacity = 0.9 * (1 - k * 0.6);
     }
   }
+  force(ball, t, out) {
+    if (this.mode !== 'beam' || this.hitDone) return;
+    if (ball.state !== 'idle' && ball.state !== 'moving') return;
+    const s = this.origin || this.at(t);
+    const p = ball.pos;
+    const fx = Math.sin(this.aim), fz = Math.cos(this.aim);
+    const rx = p.x - s.x, rz = p.z - s.z;
+    const along = rx * fx + rz * fz, perp = Math.abs(rx * fz - rz * fx);
+    if (along > 0.4 && along < this.BEAM_LEN + 0.6 && perp < 0.6 + ball.radius && Math.abs(p.y - (s.y + this.r * 0.75)) < 1.2) {
+      this.hitDone = true;
+      landHit(this.ctx.course, 'vaporize', t);
+    }
+  }
+  dispose() { super.dispose(); this.ctx.group.remove(this.pivot); }
 }
 
 // ---------- Hornet: flies around, fires laser pulses at your ball ----------
@@ -266,7 +310,7 @@ class Hornet extends Monster {
     const enraged = t < (this.ctx.course.enrageUntil ?? -1); // XANA activated a tower
     this.nextT = t + (6 + this.rng.range(0, 4)) * (enraged ? 0.5 : 1);
     // hornets harass rolling balls; they never shoot a ball you're lining up
-    if (!ball || ball.state !== 'moving' || this.ctx.course.noAttacks) return;
+    if (!canTarget(this.ctx.course, ball, t) || ball.state !== 'moving') return;
     const s = this.at(t);
     const bp = ball.pos;
     const to = new THREE.Vector3(bp.x + ball.vel.x * HORNET_CHARGE * 0.6, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * HORNET_CHARGE * 0.6);
@@ -303,7 +347,7 @@ class Hornet extends Monster {
         out.x += (dx / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
         out.z += (dz / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
         out.y += 60;
-        this.ctx.course.onMonsterHit?.('hornet');
+        landHit(this.ctx.course, 'venom', t);
       }
     }
   }
@@ -326,6 +370,8 @@ class Blok extends Monster {
     super(spec, ctx, g, { yOff: 0.55, colliders: [[R.ColliderDesc.cuboid(0.42, 0.55, 0.42)]] });
     this.cube = cube;
     this.legs = legs;
+    this.guns.push(new Gun(this, { kind: 'firering', every: [9, 13], charge: 0.9, range: 7, speed: 6, knock: 200, muzzle: () => this.local(0, 0.7, 0.45) }));
+    this.guns.push(new Gun(this, { kind: 'ice', every: [11, 15], charge: 1.1, range: 7, knock: 0, status: 'freeze', allowResting: true, muzzle: () => this.local(0, 0.7, 0.45) }));
   }
   frame(t) {
     super.frame(t);
@@ -357,6 +403,7 @@ class Krabe extends Monster {
     cols.push([R.ColliderDesc.cylinder(0.2, 0.85).setTranslation(0, bodyY - 0.5, 0), 0.5]);
     super(spec, ctx, g, { yOff: 0.5, colliders: cols });
     this.legs = legs;
+    this.guns.push(new Gun(this, { kind: 'laser', every: [8, 12], charge: 1.0, range: 8, knock: 260, muzzle: () => this.local(0, 1.25, 0.6) }));
   }
   frame(t) {
     super.frame(t);
@@ -381,6 +428,7 @@ class Tarantula extends Monster {
     }
     super(spec, ctx, g, { yOff: 0.55, colliders: [[R.ColliderDesc.cuboid(0.45, 0.4, 0.7)]] });
     this.legs = legs;
+    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 1.0, range: 8, knock: 120, burst: 3, muzzle: () => this.local(0.18, 0.75, 0.95) }));
   }
   frame(t) {
     super.frame(t);
@@ -423,6 +471,7 @@ class Creeper extends Monster {
     super(spec, ctx, g, { colliders: [[R.ColliderDesc.cylinder(0.8, 0.32).setTranslation(0, 0.8, 0), 0.8]] });
     this.neck = neck;
     this.period = spec.period ?? 4;
+    this.guns.push(new Gun(this, { kind: 'laser', every: [5, 8], charge: 0.7, range: 7, knock: 180, ready: (t) => this.rise(t) > 0.95 && this.rise(t + 0.8) > 0.95, muzzle: () => this.neck.localToWorld(new THREE.Vector3(0, 1.65, 0.5)) }));
   }
   rise(t) {
     const u = ((((t / this.period) + (this.spec.phase ?? 0)) % 1) + 1) % 1;
@@ -461,6 +510,7 @@ class Manta extends Monster {
     super(spec, ctx, g);
     this.body3d = body;
     this.prev = this.at(0);
+    this.guns.push(new MineLayer(this));
   }
   frame(t) {
     const s = this.at(t);
@@ -519,6 +569,7 @@ class Scyphozoa extends Monster {
     const p = ball.pos;
     if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 && p.y < s.y) {
       out.teleport = this.spec.grab;
+      if (t - (this.ctx.course.monsterHitAt ?? -99) > 4) landHit(this.ctx.course, 'xanafy', t);
     }
   }
 }
@@ -630,5 +681,13 @@ const TYPES = {
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];
   if (!T) { console.warn('Unknown monster', spec.type); return null; }
-  return new T(spec, ctx);
+  const m = new T(spec, ctx);
+  if (m.guns?.length) {
+    const up = m.update.bind(m), fr = m.frame.bind(m), fo = m.force?.bind(m), di = m.dispose.bind(m);
+    m.update = (t) => { up(t); if (!m.slashed) for (const g of m.guns) g.update(t); };
+    m.frame = (t) => { fr(t); for (const g of m.guns) g.frame(t); };
+    m.force = (ball, t, out) => { fo?.(ball, t, out); for (const g of m.guns) g.force(ball, t, out); };
+    m.dispose = () => { di(); for (const g of m.guns) g.dispose(); };
+  }
+  return m;
 }

@@ -666,6 +666,7 @@ const AWARDS = [
   ['chicken', '🐔', 'Montapollos Magnet', 'chicken hits'],
   ['timeouts', '⏰', 'Clockwatcher', 'holes timed out'],
   ['swallowed', '🕳️', 'Event Horizon', 'flung by black holes'],
+  ['vaporized', '☢️', 'Megatank Snack', 'vaporized by Megatanks'],
   ['pickups', '🧺', 'Hoarder', 'pickups grabbed'],
 ];
 

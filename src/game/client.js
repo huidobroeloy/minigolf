@@ -269,6 +269,7 @@ export class GameClient {
     this.course.localBall = this.ball;
     this.course.camera = this.cam.camera;
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
+    this.course.onMonsterHit = (kind) => this.onMonsterHit(kind);
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
@@ -374,6 +375,7 @@ export class GameClient {
   }
 
   onRest() {
+    if (this.course) this.course.restAt = this.simTime;
     this.sendPlayoff(false);
     if (this.shotInProgress) {
       this.shotInProgress = false;
@@ -665,6 +667,62 @@ export class GameClient {
     this.trip = null;
   }
 
+  // ---------- XANA's monsters ----------
+  onMonsterHit(kind) {
+    const e = this.effects;
+    switch (kind) {
+      case 'venom':
+        e.pending.venom = true; e.applyBallMods();
+        this.ui.toast('🟢 Hornet venom: your next shot is weaker and shakier');
+        sfx.play('debuff');
+        break;
+      case 'freeze':
+        this.freezeBall(3, 'ice', 'a Blok');
+        break;
+      case 'xanafy':
+        e.pending.xanafied = true; e.applyBallMods();
+        this.ui.bigToast('🔴 XANA-FIED', 'the Scyphozoa scrambled your controls for one shot', 'bad');
+        sfx.play('debuff');
+        break;
+      case 'vaporize':
+        this.vaporize();
+        break;
+      default:
+        sfx.play('wall', 3);
+    }
+  }
+
+  /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
+  vaporize() {
+    const b = this.ball;
+    if (!b || b.state === 'holed' || b.state === 'sinking' || this.falling) return;
+    this.endTrip();
+    const fid = ++this.fallId;
+    this.falling = true;
+    const p = b.mesh.position.clone();
+    for (let i = 0; i < 70; i++) {
+      this.effects.particles?.spawn({ pos: [p.x + (Math.random() - 0.5) * 0.3, p.y + Math.random() * 0.3, p.z + (Math.random() - 0.5) * 0.3], vel: [(Math.random() - 0.5) * 3, 1 + Math.random() * 3, (Math.random() - 0.5) * 3], color: i % 3 ? '#ff3b1f' : '#ffd0c0', size: 0.13, life: 1.1, gravity: 1 });
+    }
+    b.state = 'gone';
+    b.body.setEnabled(false);
+    b.mesh.visible = false;
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.cancelAim();
+    this.addStrokes(1);
+    this.stat('vaporized');
+    sfx.play('splash');
+    this.ui.bigToast('☢️ VAPORIZED', 'the Megatank got you · +1 stroke', 'bad');
+    this.sendState(true);
+    setTimeout(() => {
+      if (this.ball !== b || fid !== this.fallId) return;
+      this.falling = false;
+      b.respawnAtSafe();
+      this.cam.snapTo(b.mesh.position);
+      this.virtualize(b.mesh.position);
+      this.onRest();
+    }, 1000);
+  }
+
   // ---------- Freeze / Lyoko Guardian ----------
   freezeBall(secs, kind, fromName) {
     const b = this.ball;
@@ -832,7 +890,8 @@ export class GameClient {
   /** The sway the aim line is showing right now (the shot uses exactly this). */
   currentWobble(power) {
     const t = performance.now() / 1000;
-    const w = aimWobble(t, power, this.effects.has('steady'));
+    let w = aimWobble(t, power, this.effects.has('steady'));
+    if (this.effects.has('venom')) w *= 2;
     if (!this.effects.has('stun')) return w;
     // stunned: a big lurching sway on top
     return w * 4 + Math.sin(t * 5.3) * 0.25 + Math.sin(t * 11.7 + 2) * 0.12;
@@ -1017,7 +1076,7 @@ export class GameClient {
         this.cam.aerialPan((p.dx || 0) * 0.5, (p.dy || 0) * 0.5);
         return;
       }
-      const inv = this.effects.has('possession') ? 1 : -1; // XANA flips your controls
+      const inv = this.effects.has('xanafied') ? 1 : -1; // XANA flips your controls
       if (this.aim) {
         if (!this.canShoot()) { this.cancelAim(); return; }
         // full power always arrives before the screen edge, wherever you pressed (phones!)
@@ -1171,7 +1230,7 @@ export class GameClient {
       const qe = (k.down('KeyQ') ? 1 : 0) - (k.down('KeyE') ? 1 : 0);
       if (qe) this.cam.tacRotate(qe * dt * 1.5);
     } else {
-      const inv = this.effects.has('possession') ? -1 : 1;
+      const inv = this.effects.has('xanafied') ? -1 : 1;
       if (lr) this.cam.rotate(inv * lr * dt * (k.down('ShiftLeft') ? 0.4 : 1.6) * ts);
       if (ud) this.cam.tilt(ud * dt * 0.8);
     }
@@ -1201,6 +1260,7 @@ export class GameClient {
     if (steps >= 10) this.acc = 0;
 
     this.watchStuck(dt);
+    this.course.aiming = !!(this.aim || this.spaceCharge);
     this.updateFrozen(this.simTime);
     this.updatePossession();
 
