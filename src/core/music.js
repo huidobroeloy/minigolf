@@ -37,7 +37,7 @@ class Music {
     if (!this.out) {
       this.out = ctx.createGain();
       this.out.gain.value = this.volume * 0.35;
-      this.out.connect(sfx.master);
+      this.out.connect(sfx.musicBus || sfx.master);
     }
     return true;
   }

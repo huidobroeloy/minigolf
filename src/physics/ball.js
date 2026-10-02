@@ -42,6 +42,9 @@ export class Ball {
     this.launchTimer = 0;
     this.ventCool = 0;
     this.lastSafe = new THREE.Vector3();
+    this.pinned = false; // held still by forces (conveyor into a wall, slope against a post…)
+    this.pinRef = new THREE.Vector3();
+    this.pinT = 0;
     this.prevVel = new THREE.Vector3();
     this.mods = {
       decelMul: 1, speedMul: 1, sticky: false, ghost: false, magnet: false, leash: null,
@@ -107,6 +110,8 @@ export class Ball {
     if (safe) this.lastSafe.set(p.x, p.y, p.z);
     this.state = 'idle';
     this.restTimer = 0;
+    this.pinned = false;
+    this.pinT = 0;
     this.mesh.visible = true;
     this.body.setEnabled(true);
     this.syncMesh(0);
@@ -128,6 +133,8 @@ export class Ball {
     this.body.setLinvel({ x: v.x + pv.x, y: v.y + pv.y, z: v.z + pv.z }, true);
     this.state = 'moving';
     this.restTimer = 0;
+    this.pinned = false;
+    this.pinT = 0;
   }
 
   platformVel() {
@@ -169,7 +176,7 @@ export class Ball {
     const pv = this.platformVel();
 
     if (this.state === 'idle') {
-      if (acc.wake) {
+      if (acc.wake && !this.pinned) {
         this.state = 'moving';
         this.restTimer = 0;
       } else {
@@ -287,18 +294,7 @@ export class Ball {
     // cup
     const cups = env.course?.cups || (env.course?.cup ? [env.course.cup] : []);
     for (const cup of cups) {
-      const dx = p.x - cup.x, dz = p.z - cup.z;
-      const d = Math.hypot(dx, dz);
-      const sp = Math.hypot(v.x, v.z);
-      const fits = this.radius < CUP_R * 0.92;
-      const near = Math.abs(p.y - this.radius - cup.y) < 0.25;
-      // a slow ball whose centre hangs over the hole drops in, like a real lip-hanger
-      const capR = this.mods.magnet ? CUP_R + 0.45 : sp < 0.6 ? CUP_R : CUP_R - this.radius * 0.25;
-      const spLim = (this.mods.magnet ? 9 : 4.3) * Math.sqrt(BALL_R / this.radius);
-      if (fits && near && d < capR && sp < spLim) {
-        this.startSink(cup);
-        return;
-      }
+      if (this.cupWants(cup, p, v, dt)) { this.startSink(cup); return; }
     }
 
     // falling / out of bounds
@@ -322,14 +318,55 @@ export class Ball {
         if (this.restTimer > 0.25) {
           this.state = 'idle';
           this.body.setLinvel({ x: pv.x, y: 0, z: pv.z }, true);
-          if (!this.groundMeta?.unsafe && !this.groundMeta?.mover) this.lastSafe.set(p.x, p.y, p.z);
+          if (!this.groundMeta?.unsafe && !this.groundMeta?.mover && !env.course?.unsafeAt?.(p)) this.lastSafe.set(p.x, p.y, p.z);
           this.onEvent('rest', {});
         }
       } else {
         this.restTimer = 0;
       }
+      // pinned: something keeps pushing (a belt into a wall, a slope against a post) but the
+      // ball isn't going anywhere. Call it at rest so the player can shoot.
+      if (this.state === 'moving') {
+        if (this.pinRef.distanceToSquared(_v.set(p.x, p.y, p.z)) > 0.1 * 0.1) { this.pinRef.copy(_v); this.pinT = 0; }
+        else if ((this.pinT += dt) > 1.0 && this.launchTimer <= 0 && !this.groundMeta?.mover) {
+          this.state = 'idle';
+          this.pinned = true;
+          this.restTimer = 0;
+          this.body.setLinvel({ x: 0, y: Math.min(0, v.y), z: 0 }, true);
+          this.onEvent('rest', {});
+        }
+      }
     }
     this.prevVel.set(v.x, v.y, v.z);
+  }
+
+  /**
+   * Does the ball drop into this cup? The hole is treated like a real one: while the ball's
+   * centre is over it, the ball falls under gravity, and it drops in if it falls a full radius
+   * before reaching the far rim. So slow balls drop even near the edge, fast ones lip out.
+   * Near the rim a gentle funnel (the lip's slope) pulls slow balls inward.
+   */
+  cupWants(cup, p, v, dt) {
+    const dx = p.x - cup.x, dz = p.z - cup.z;
+    const d = Math.hypot(dx, dz);
+    if (d > CUP_R + this.radius + 0.2) return false;
+    if (Math.abs(p.y - this.radius - cup.y) > 0.25) return false; // not at cup level (flying over)
+    if (this.radius >= CUP_R * 0.92) return false; // supersized: doesn't fit
+    const sp = Math.hypot(v.x, v.z);
+    if (this.mods.magnet) return d < CUP_R + 0.45 && sp < 9;
+    // the lip: a slow ball whose edge overhangs the hole is tipped inward
+    if (sp < 2.5 && d < CUP_R + 0.15 && d > 1e-3 && this.state === 'moving') {
+      const k = 3.2 * (1 - sp / 2.5) * dt;
+      this.body.setLinvel({ x: v.x - (dx / d) * k, y: v.y, z: v.z - (dz / d) * k }, true);
+    }
+    // resting on (or creeping over) the lip with the centre almost over the hole
+    if (sp < 0.35 && d < CUP_R + this.radius * 0.4) return true;
+    if (d >= CUP_R) return false;
+    // time over the hole along this path → how far it falls in that time
+    const b = sp > 1e-4 ? Math.abs(dx * v.z - dz * v.x) / sp : d;
+    const chord = 2 * Math.sqrt(Math.max(0, CUP_R * CUP_R - b * b));
+    const t = chord / Math.max(sp, 1e-3);
+    return 0.5 * GRAVITY * t * t >= this.radius;
   }
 
   touchingWall() {

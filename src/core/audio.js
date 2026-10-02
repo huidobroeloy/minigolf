@@ -3,8 +3,9 @@ class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
-    this.volume = 0.6;
-    this.muted = false;
+    this.sfxVolume = 0.6;   // sound effects
+    this.muted = false;     // everything off
+    this.musicMuted = false;
     this.loops = new Map();
   }
 
@@ -13,9 +14,16 @@ class Sfx {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
+    // master → speakers; effects and music each get their own bus so they have separate volumes
     this.master = this.ctx.createGain();
-    this.master.gain.value = this.volume;
+    this.master.gain.value = this.muted ? 0 : 1;
     this.master.connect(this.ctx.destination);
+    this.sfxBus = this.ctx.createGain();
+    this.sfxBus.gain.value = this.sfxVolume;
+    this.sfxBus.connect(this.master);
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = this.musicMuted ? 0 : 1;
+    this.musicBus.connect(this.master);
     const len = this.ctx.sampleRate;
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -25,7 +33,17 @@ class Sfx {
 
   setMuted(m) {
     this.muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : this.volume;
+    if (this.master) this.master.gain.value = m ? 0 : 1;
+  }
+
+  setSfxVolume(v) {
+    this.sfxVolume = v;
+    if (this.sfxBus) this.sfxBus.gain.value = v;
+  }
+
+  setMusicMuted(m) {
+    this.musicMuted = m;
+    if (this.musicBus) this.musicBus.gain.value = m ? 0 : 1;
   }
 
   tone({ type = 'sine', f0 = 440, f1 = null, dur = 0.15, vol = 0.3, delay = 0, attack = 0.005 }) {
@@ -39,7 +57,7 @@ class Sfx {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfxBus);
     o.start(t);
     o.stop(t + dur + 0.05);
   }
@@ -56,7 +74,7 @@ class Sfx {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(out || this.master);
+    src.connect(f).connect(g).connect(out || this.sfxBus);
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.05);
   }

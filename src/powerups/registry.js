@@ -34,7 +34,7 @@ export const POWERUPS = {
   possession:  { name: 'XANA Possession',   icon: '👁️', kind: 'one',    tier: 2, desc: 'XANA possesses a player: their aim and power controls are inverted for their next shot.' },
   devirtualize: { name: 'Devirtualize',     icon: '💥', kind: 'one',    tier: 3, desc: 'Sends a player\'s ball back to the tee (no extra stroke).' },
   bumper:      { name: 'Bumper Spawn',      icon: '🔴', kind: 'place',  tier: 1, aim: 'point', range: 0.5, desc: 'Place a bumper that sends balls back the way they came.' },
-  blackhole:   { name: 'Black Hole Bumper', icon: '🕳️', kind: 'place',  tier: 2, aim: 'point', range: 3.2, desc: 'Place a black hole that pulls in nearby balls (+1 if swallowed).' },
+  blackhole:   { name: 'Black Hole Bumper', icon: '🕳️', kind: 'place',  tier: 2, aim: 'point', range: 3, desc: 'Place a black hole for 20 s: it drags passing balls in and flings them out of its core like a bumper.' },
   swarm:       { name: 'Kankrelat Swarm',   icon: '🪲', kind: 'place',  tier: 2, aim: 'point', range: 3.5, desc: 'Five Kankrelats skitter around a spot for 20s.' },
   creativity:  { name: 'Aelita\'s Creativity', icon: '✨', kind: 'place', tier: 1, aim: 'line', desc: 'Draw a wall to block a lane — or a bridge across a gap. Lasts 30s.' },
   stickywalls: { name: 'Sticky Walls',      icon: '🪤', kind: 'global', tier: 2, desc: 'All walls are sticky for everyone (you too) until the hole ends.' },

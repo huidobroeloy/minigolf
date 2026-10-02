@@ -4,6 +4,7 @@ import { HOLES, SECTORS } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
 import { portrait, portraitBig } from './portraits.js';
+import { ballOrb } from './orb.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -53,11 +54,13 @@ export class UI {
         <div class="hud-power hidden"><div class="power-fill"></div><div class="power-lbl">POWER</div></div>
         <div class="hud-hint"></div>
         <button class="btn target-cancel hidden" data-act="cancelTarget">✖ Cancel</button>
+        <button class="btn unstick hidden" data-act="unstick">↺ Ball stuck? Reset it (no penalty)</button>
         <div class="hud-buttons">
           <button class="icon-btn" data-act="cam" title="Overhead view (C)">🗺️</button>
           <button class="icon-btn" data-act="spec" title="Spectate next player (Tab)">👁️</button>
           <button class="icon-btn" data-act="help" title="Help (H)">❔</button>
           <button class="icon-btn" data-act="mute" title="Mute (M)">🔊</button>
+          <button class="icon-btn" data-act="settings" title="Settings (Esc)">⚙️</button>
           <button class="icon-btn host-only hidden" data-act="skip" title="Host: end this hole now">⏭️</button>
           <button class="icon-btn" data-act="leave" title="Leave game">🚪</button>
         </div>
@@ -73,6 +76,7 @@ export class UI {
     `;
     this.$ = (s) => root.querySelector(s);
     this.$('.target-cancel').addEventListener('click', () => this.h.cancelTarget?.());
+    this.$('.unstick').addEventListener('click', () => this.h.unstick?.());
     this.$('.hud-buttons').addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.act;
       if (a === 'cam') this.h.toggleCam?.();
@@ -81,6 +85,7 @@ export class UI {
       if (a === 'leave' && confirm('Leave the game?')) this.h.leave?.();
       if (a === 'help') this.toggleHelp();
       if (a === 'mute') this.h.toggleMute?.();
+      if (a === 'settings') this.toggleSettings();
     });
     this.$('.hud-inventory').addEventListener('click', (e) => {
       const slot = e.target.closest('.slot');
@@ -129,12 +134,7 @@ export class UI {
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
-        <div class="row gfx"><label>Music</label>
-          <input id="musicVol" type="range" min="0" max="1" step="0.05" value="${p.music ?? 0.5}" />
-        </div>
-        <div class="row gfx"><label>Graphics</label>
-          <select id="quality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select>
-        </div>
+        <div class="row"><button class="btn" id="settingsBtn">⚙️ Sound &amp; graphics</button></div>
         <div class="small">Drag down from anywhere to set power, sideways to aim, release to putt. Press H in game for all controls.</div>
       </div>`);
     this.charSelect(s.querySelector('.cs-host'), {
@@ -154,8 +154,36 @@ export class UI {
     };
     s.querySelector('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') s.querySelector('#join').click(); });
     s.querySelector('#solo').onclick = () => this.h.solo?.(s.querySelector('#soloCourse').value, getMe());
-    s.querySelector('#quality').onchange = (e) => this.h.quality?.(e.target.value);
-    s.querySelector('#musicVol').oninput = (e) => this.h.musicVol?.(Number(e.target.value));
+    s.querySelector('#settingsBtn').onclick = () => this.toggleSettings();
+  }
+
+  /** Sound & graphics settings (menu button, ⚙️ in the HUD, or Esc). */
+  toggleSettings() {
+    if (this.$('#overlay').classList.contains('settings-ov')) { this.closeOverlay(); return; }
+    const p = this.prefs;
+    const o = this.overlay(`<div class="panel settings">
+      <h2>⚙️ Settings</h2>
+      <div class="set-row"><label>🎵 Music</label><input id="setMusic" type="range" min="0" max="1" step="0.05" value="${p.music ?? 0.5}" />
+        <button class="btn tog ${p.musicMuted ? 'off' : ''}" id="setMusicMute">${p.musicMuted ? 'OFF' : 'ON'}</button></div>
+      <div class="set-row"><label>💥 Sound FX</label><input id="setSfx" type="range" min="0" max="1" step="0.05" value="${p.sfx ?? 0.6}" /></div>
+      <div class="set-row"><label>🔇 Mute everything</label><button class="btn tog ${p.muted ? 'off' : ''}" id="setMute">${p.muted ? 'MUTED' : 'SOUND ON'}</button></div>
+      <div class="set-row"><label>🖥️ Graphics</label><select id="setQuality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select></div>
+      <div class="row"><button class="btn primary" id="setClose">Done</button></div>
+    </div>`, 'settings-ov');
+    o.querySelector('#setMusic').oninput = (e) => this.h.musicVol?.(Number(e.target.value));
+    o.querySelector('#setSfx').oninput = (e) => this.h.sfxVol?.(Number(e.target.value));
+    o.querySelector('#setMusicMute').onclick = (e) => {
+      const m = !this.prefs.musicMuted;
+      this.h.muteMusic?.(m);
+      e.target.textContent = m ? 'OFF' : 'ON'; e.target.classList.toggle('off', m);
+    };
+    o.querySelector('#setMute').onclick = (e) => {
+      this.h.toggleMute?.();
+      const m = !!this.prefs.muted;
+      e.target.textContent = m ? 'MUTED' : 'SOUND ON'; e.target.classList.toggle('off', m);
+    };
+    o.querySelector('#setQuality').onchange = (e) => this.h.quality?.(e.target.value);
+    o.querySelector('#setClose').onclick = () => this.toggleSettings();
   }
 
   showConnecting(text) {
@@ -228,7 +256,7 @@ export class UI {
             <div class="cs-info">
               <div class="cs-full sf-name">${esc(ch.full)}</div>
               <div class="cs-tag">${esc(ch.tag)}</div>
-              <div class="cs-ballrow"><i class="cs-ball" style="background:${characterCss(ch)}"></i><span>ball</span></div>
+              <div class="cs-ballrow"><img class="cs-orb" alt="" src="${ballOrb(ch)}" /><span class="cs-orbname" style="--c:${ch.ui}">${esc(ch.orb)}</span></div>
             </div>
           </div>
           <div class="cs-grid">${CHARACTERS.map((c) => {
@@ -346,6 +374,7 @@ export class UI {
   }
 
   setHint(text) { this.$('.hud-hint').innerHTML = text; }
+  showUnstick(on) { this.$('.unstick').classList.toggle('hidden', !on); }
 
   setAelita(on) { this.$('#aelita').classList.toggle('hidden', !on); }
 
@@ -511,10 +540,11 @@ export class UI {
     spin();
   }
 
-  showScoreboard({ players, plan, holeNo, results, myId, final, isHost }) {
+  showScoreboard({ players, plan, holeNo, results, myId, final, isHost, tiebreak }) {
     this.hideHud();
     const pars = plan.map((i) => HOLES[i].par);
-    const sorted = [...players].sort((a, b) => a.total - b.total);
+    // the final order comes from the host (it already applied the tiebreaks)
+    const sorted = final ? [...players] : [...players].sort((a, b) => a.total - b.total);
     const parSum = pars.slice(0, holeNo + 1).reduce((a, b) => a + b, 0);
     const resultMap = new Map((results || []).map((r) => [r.id, r]));
     const cell = (s, i) => {
@@ -526,6 +556,7 @@ export class UI {
       <div class="panel scoreboard">
         <h1>${final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
         <div class="joke">${esc(JOKES[Math.floor(Math.random() * JOKES.length)])}</div>
+        ${final && tiebreak ? `<div class="tiebreak">⚔️ TIEBREAK · ${esc(tiebreak)}</div>` : ''}
         ${final ? podium(sorted) + awards(players) : ''}
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Player</th>${plan.map((hi, i) => `<th title="${esc(HOLES[hi].name)}">${hi + 1}</th>`).join('')}<th>Total</th><th>±Par</th></tr>
@@ -563,7 +594,7 @@ const AWARDS = [
   ['hio', '⛳', 'Ace', 'holes in one'],
   ['chicken', '🐔', 'Montapollos Magnet', 'chicken hits'],
   ['timeouts', '⏰', 'Clockwatcher', 'holes timed out'],
-  ['swallowed', '🕳️', 'Event Horizon', 'swallowed by black holes'],
+  ['swallowed', '🕳️', 'Event Horizon', 'flung by black holes'],
   ['pickups', '🧺', 'Hoarder', 'pickups grabbed'],
 ];
 
@@ -587,8 +618,9 @@ function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}');
     const color = COLORS.includes(p.color) ? p.color : COLORS[Math.floor(Math.random() * COLORS.length)];
-    return { name: p.name || '', color, muted: !!p.muted, quality: p.quality || 'high', music: typeof p.music === 'number' ? p.music : 0.5 };
-  } catch { return { name: '', color: COLORS[0], muted: false }; }
+    const num = (v, d) => (typeof v === 'number' ? v : d);
+    return { name: p.name || '', color, muted: !!p.muted, musicMuted: !!p.musicMuted, quality: p.quality || 'high', music: num(p.music, 0.5), sfx: num(p.sfx, 0.6) };
+  } catch { return { name: '', color: COLORS[0], muted: false, musicMuted: false, quality: 'high', music: 0.5, sfx: 0.6 }; }
 }
 
 export function savePrefs(p) {

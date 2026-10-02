@@ -15,7 +15,7 @@ export default [
       tree(1.5, 17.2, 0.4), tree(-2.0, 19.6, 0.45),
       { t: 'zone', kind: 'slow', c: [-3.0, 4.5], r: 1.0, mul: 3 },
       // root slingshot into the log bridge
-      { t: 'zone', kind: 'boost', rect: [-0.9, 20.2, 0.9, 22], dir: [0, 1], speed: 10 },
+      { t: 'zone', kind: 'boost', rect: [-0.6, 20.2, 0.6, 22], dir: [0, 1], speed: 10, align: 2 },
       { t: 'floor', poly: rect(-0.9, 22, 0.9, 29.2), walls: false, mat: 'wood' },
       { t: 'floor', poly: circlePoly(0, 34, 5, 24), open: [17, 18] },
       tree(-2.6, 33.2, 0.5), tree(3.0, 32.4, 0.45), tree(-0.8, 36.6, 0.4),

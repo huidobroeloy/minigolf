@@ -42,7 +42,7 @@ export default [
         open: [5],
         holes: [{ poly: [[-2.2, 13], [4.0, 13], [4.0, 16.6], [-2.2, 16.6]] }],
       },
-      { t: 'ramp', a: [0, 10.2], b: [0, 12.8], w: 2.2, ya: 0, yb: 0.75 },
+      { t: 'ramp', a: [0, 10.2], b: [0, 12.8], w: 2.2, ya: 0, yb: 0.75, jump: true },
       // the canyon rim: an unwalled S-bend
       { t: 'floor', poly: rect(2.6, 24, 4.5, 30), walls: false },
       { t: 'floor', poly: rect(-3.5, 30, 4.5, 31.8), walls: false },

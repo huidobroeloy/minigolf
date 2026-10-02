@@ -29,6 +29,8 @@ class App {
     this.token = this.loadToken();
     this.debug = this.params.has('debug');
     sfx.setMuted(this.ui.prefs.muted);
+    sfx.setSfxVolume(this.ui.prefs.sfx ?? 0.6);
+    sfx.setMusicMuted(!!this.ui.prefs.musicMuted);
     music.volume = this.ui.prefs.music ?? 0.5;
     sfx.onUnlock = () => { if (music.want) music.play(music.want); };
     this.ui.on({
@@ -38,6 +40,8 @@ class App {
       leave: () => this.leave(),
       toggleMute: () => this.toggleMute(),
       musicVol: (v) => { music.setVolume(v); this.ui.prefs.music = v; savePrefs(this.ui.prefs); },
+      sfxVol: (v) => { sfx.setSfxVolume(v); this.ui.prefs.sfx = v; savePrefs(this.ui.prefs); sfx.play('beep'); },
+      muteMusic: (m) => { sfx.setMusicMuted(m); this.ui.prefs.musicMuted = m; savePrefs(this.ui.prefs); },
       quality: (q) => { this.renderer.setQuality(q); this.ui.prefs.quality = q; savePrefs(this.ui.prefs); },
     });
     window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });

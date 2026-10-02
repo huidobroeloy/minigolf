@@ -71,6 +71,7 @@ export class GameClient {
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
+      unstick: () => this.unstick(),
       tick: () => sfx.play('roulette'),
     });
   }
@@ -86,6 +87,7 @@ export class GameClient {
   get isHost() { return !!this.players.get(this.myId)?.host; }
 
   canShoot() {
+    if (this.playoff && this.strokes >= 1) return false;
     return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
@@ -162,6 +164,9 @@ export class GameClient {
       case 'emote':
         this.showEmote(m.id, m.e);
         break;
+      case 'feed':
+        this.ui.feed(m.text);
+        break;
       case 'rejoined':
         this.ui.feed(`${m.name} reconnected`);
         break;
@@ -193,12 +198,11 @@ export class GameClient {
         this.teardownHole();
         this.ui.hideHud();
         this.ui.setScreen('');
-        const best = Math.min(...m.standings.map((p) => p.total));
-        const winners = m.standings.filter((p) => p.total === best);
+        const winners = m.winnerId ? m.standings.filter((p) => p.id === m.winnerId) : m.standings.slice(0, 1);
         const show = () => {
           this.finale = null;
           this.app.showBackdrop();
-          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost });
+          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost, tiebreak: m.tiebreak });
         };
         this.app.hideBackdrop();
         music.play('forest');
@@ -245,6 +249,8 @@ export class GameClient {
     this.def = def;
     this.holeMsg = m;
     this.phase = 'hole';
+    this.playoff = m.playoff || null;
+    this.playoffSent = false;
     for (const p of m.players) this.upsertPlayer(p);
     this.physics = new Physics();
     this.course = buildCourse(def, this.physics, this.scene);
@@ -253,6 +259,7 @@ export class GameClient {
     this.ball = new Ball(this.physics, this.scene, this.me.color);
     this.ball.onEvent = (type, data) => this.onBallEvent(type, data);
     this.course.localBall = this.ball;
+    this.course.camera = this.cam.camera;
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
@@ -277,7 +284,11 @@ export class GameClient {
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
     this.ui.setStatus([]);
-    this.ui.banner(`HOLE ${m.holeNo + 1} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
+    if (this.playoff) {
+      const shooting = this.playoff.shooters.includes(this.myId);
+      this.ui.banner('SUDDEN DEATH', shooting ? `One shot · closest to the pin wins · ${def.name}` : `Tiebreak: ${this.playoff.shooters.map((id) => this.nameOf(id)).join(' vs ')}`);
+      if (!shooting) { this.ball.state = 'holed'; this.ball.mesh.visible = false; this.ball.body.setEnabled(false); }
+    } else this.ui.banner(`HOLE ${m.holeNo + 1} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
     this.playersDirty = true;
     this.lastBeep = 99;
     this.virtualize(this.ball.mesh.position);
@@ -344,7 +355,16 @@ export class GameClient {
     else if (type === 'rest') this.onRest();
   }
 
+  /** Playoff: report how close your one shot finished. */
+  sendPlayoff(holed) {
+    if (!this.playoff || this.playoffSent || this.strokes < 1) return;
+    this.playoffSent = true;
+    const p = this.ball.pos, c = this.course.nearestCup(p);
+    this.link.send({ t: 'playoffShot', dist: holed ? 0 : Math.hypot(p.x - c.x, p.z - c.z) });
+  }
+
   onRest() {
+    this.sendPlayoff(false);
     if (this.shotInProgress) {
       this.shotInProgress = false;
       this.effects.onShotEnd();
@@ -359,7 +379,8 @@ export class GameClient {
     if (this.strokes === 1) { sfx.play('hio'); this.stat('hio'); }
     if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
     this.endTrip(true);
-    this.link.send({ t: 'holed', strokes: this.strokes });
+    if (this.playoff) this.sendPlayoff(true);
+    else this.link.send({ t: 'holed', strokes: this.strokes });
     const me = this.players.get(this.myId);
     if (me) { me.holed = true; me.strokes = this.strokes; }
     this.playersDirty = true;
@@ -889,7 +910,8 @@ export class GameClient {
       if (this.targeting) return this.cancelTargeting();
       if (this.cam.mode === 'tactical') { this.cam.mode = 'chase'; return; }
       if (this.ui.overlayOpen && !this.effects.locked && !this.falling) return this.ui.closeOverlay();
-      return this.cancelAim();
+      if (this.aim || this.spaceCharge) return this.cancelAim();
+      return this.ui.toggleSettings();
     }
     if (this.phase !== 'hole') return;
     const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
@@ -941,6 +963,28 @@ export class GameClient {
     this.ui.toast(`Spectating ${this.nameOf(this.spectate)}`);
   }
 
+  /** Safety net: a ball that has barely moved for a while but still isn't shootable. */
+  watchStuck(dt) {
+    const b = this.ball;
+    const p = b.pos;
+    if (b.state !== 'moving' || this.falling) { this.stuck = null; this.ui.showUnstick(false); return; }
+    const s = this.stuck || (this.stuck = { x: p.x, z: p.z, t: 0 });
+    if (Math.hypot(p.x - s.x, p.z - s.z) > 0.5) { s.x = p.x; s.z = p.z; s.t = 0; this.ui.showUnstick(false); return; }
+    s.t += dt;
+    if (s.t > 5) this.ui.showUnstick(true);
+  }
+
+  unstick() {
+    if (!this.ball || this.ball.state !== 'moving') return;
+    this.stuck = null;
+    this.ui.showUnstick(false);
+    this.ball.respawnAtSafe();
+    this.cam.snapTo?.(this.ball.mesh.position);
+    sfx.play('teleport');
+    this.ui.toast('Ball reset to its last safe spot');
+    this.onRest();
+  }
+
   // ---------- per-frame ----------
   frame(dt) {
     if (this.phase !== 'hole' || !this.course) return;
@@ -982,6 +1026,8 @@ export class GameClient {
       steps++;
     }
     if (steps >= 10) this.acc = 0;
+
+    this.watchStuck(dt);
 
     // visuals
     this.ball.syncMesh(dt * ts);

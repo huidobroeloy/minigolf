@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeJumpPad, makeChevrons } from '../fx/jumppad.js';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
 import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly } from './geometry.js';
 import { CUP_R } from '../physics/ball.js';
@@ -135,6 +136,12 @@ export function buildCourse(def, physics, scene) {
       addMesh(geo, [floorMatFor(p), mats.side]).castShadow = false;
       physics.addConvex(new Float32Array([...bottom.flat(), ...top.flat()]), { kind: 'floor', mat: p.mat || mats.theme.floorMat });
       for (const [x, y, z] of top) expand(x, y, z);
+      if (p.jump) {
+        const chev = makeChevrons(mats.theme.flag, Math.min(1, w * 0.35));
+        chev.position.set(bx, yb + 0.25, bz);
+        group.add(chev);
+        course.animators.push((t) => chev.userData.animate(t, course.camera));
+      }
       if (p.walls !== false) {
         const h = p.wallH ?? WALL_H, t = WALL_T;
         for (const s of [1, -1]) {
@@ -349,12 +356,22 @@ export function buildCourse(def, physics, scene) {
     m.receiveShadow = true;
     group.add(m);
     if (z.kind === 'vent') {
-      // swirling particles column
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(z.r, z.r * 0.7, z.height ?? 3, 24, 1, true),
+      const cx = z.c ? z.c[0] : (z.rect[0] + z.rect[2]) / 2, cz = z.c ? z.c[1] : (z.rect[1] + z.rect[3]) / 2;
+      const r = z.r ?? Math.min(Math.abs(z.rect[2] - z.rect[0]), Math.abs(z.rect[3] - z.rect[1])) / 2;
+      // swirling column of air above it
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.7, z.height ?? 3, 24, 1, true),
         new THREE.MeshBasicMaterial({ color: '#c8ffff', transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
-      col.position.set(z.c[0], y + (z.height ?? 3) / 2, z.c[1]);
+      col.position.set(cx, y + (z.height ?? 3) / 2, cz);
       group.add(col);
-      course.animators.push((t) => { col.rotation.y = t * 2; col.material.opacity = 0.1 + 0.05 * Math.sin(t * 6); });
+      // a spring pad with "up" chevrons and the throw arc, so the jump is obvious
+      const pad = makeJumpPad({ r, color: mats.theme.flag, dir: z.push || [0, 1], launch: z.launch ?? 10.5, minSpeed: z.minSpeed ?? 2.8 });
+      pad.position.set(cx, y, cz);
+      group.add(pad);
+      z.pad = pad;
+      course.animators.push((t) => {
+        col.rotation.y = t * 2; col.material.opacity = 0.1 + 0.05 * Math.sin(t * 6);
+        pad.userData.animate(t, course.camera);
+      });
     }
     return m;
   }
@@ -456,7 +473,8 @@ export function buildCourse(def, physics, scene) {
       if (!z.contains(p)) continue;
       const zy = z.y ?? 0;
       if (z.kind === 'conveyor') {
-        if (!ball.grounded || Math.abs(p.y - zy - ball.radius) > 0.3) continue;
+        // on a ramp the belt follows the slope; on flat ground it only acts at its own level
+        if (!ball.grounded || (!z.ramp && Math.abs(p.y - zy - ball.radius) > 0.3)) continue;
         const sp = z.speed ?? 3;
         out.x += (z.dir[0] * sp - v.x) * 2.5 + z.dir[0] * 2;
         out.z += (z.dir[1] * sp - v.z) * 2.5 + z.dir[1] * 2;
@@ -483,6 +501,7 @@ export function buildCourse(def, physics, scene) {
         if (along < minSp) { nx += ux * (minSp - along); nz += uz * (minSp - along); }
         out.launch = { x: nx, y: z.launch ?? 10.5, z: nz };
         out.wake = true;
+        z.pad?.userData.fire(course.time ?? 0);
       } else if (z.kind === 'wind') {
         out.x += z.dir[0] * (z.force ?? 4); out.z += z.dir[1] * (z.force ?? 4);
         if (ball.state === 'moving') out.wake = true;
@@ -491,6 +510,9 @@ export function buildCourse(def, physics, scene) {
     for (const m of course.monsters) m.force?.(ball, course.time ?? 0, out);
     return out;
   };
+
+  /** Belts, boosts and launchers aren't somewhere to respawn. */
+  course.unsafeAt = (p) => course.zones.some((z) => (z.kind === 'conveyor' || z.kind === 'boost' || z.kind === 'vent') && z.contains(p));
 
   course.zoneDecel = (ball) => {
     const p = ball.pos;

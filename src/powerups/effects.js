@@ -11,6 +11,8 @@ import { CATEGORY_COLORS } from './registry.js';
 import { createMonster } from '../monsters/index.js';
 import { loop } from '../holes/helpers.js';
 
+const BH_CORE = 0.45, BH_MAX_BOUNCES = 3, BH_LIFE = 20;
+
 const NEXT_SHOT = ['steady', 'magnet', 'ghost', 'chip', 'aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'triplicate', 'scanner', 'possession'];
 
 /**
@@ -24,6 +26,7 @@ export class EffectManager {
     this.active = {};
     this.hazards = [];
     this.placed = [];
+    this.bhBounces = new Map();
     this.auras = [];
     this.stickyWalls = false;
     this.adUntil = 0;
@@ -53,6 +56,7 @@ export class EffectManager {
     this.setShield(false);
     this.hazards = [];
     this.placed = [];
+    this.bhBounces = new Map();
     this.auras = [];
     this.pending = {};
     this.active = {};
@@ -206,11 +210,11 @@ export class EffectManager {
       const b = { x: p[0], y: p[1] + 0.25, z: p[2], r, reverse: true, model, hitT: 0 };
       this.placed.push({ type: 'bumper', b, model });
     } else if (fx.pu === 'blackhole') {
-      const range = 3.2;
+      const range = 3;
       const model = makeBlackHole(range);
       model.position.set(p[0], p[1], p[2]);
       this.group.add(model);
-      this.placed.push({ type: 'blackhole', x: p[0], y: p[1], z: p[2], range, model });
+      this.placed.push({ type: 'blackhole', x: p[0], y: p[1], z: p[2], range, model, until: fx.at / 1000 + BH_LIFE });
     }
     sfx.play('use');
   }
@@ -294,6 +298,7 @@ export class EffectManager {
 
   /** Called when the local player shoots. Moves pending next-shot effects to active. */
   onShoot() {
+    this.resetBounces();
     this.active = { ...this.pending };
     this.pending = {};
     const a = this.active;
@@ -333,6 +338,9 @@ export class EffectManager {
 
   timeScale() { return this.has('aelita') ? 0.35 : 1; }
 
+  /** A new shot: black holes may bounce you again. */
+  resetBounces() { this.bhBounces.clear(); }
+
   /** Accelerations applied to the local ball. */
   forces(ball, out, t) {
     const myId = this.client.myId;
@@ -343,17 +351,30 @@ export class EffectManager {
       const dx = cup.x - p.x, dz = cup.z - p.z, d = Math.hypot(dx, dz);
       if (d < 7 && d > 0.05) { const k = 11 * (1 - d / 7) + 2.5; out.x += (dx / d) * k; out.z += (dz / d) * k; }
     }
-    // black holes
+    // black hole bumpers: pull balls that are rolling past, then fling them out of the core.
+    // They never grab a resting ball, and let go after a few bounces, so nobody gets trapped.
     for (const o of this.placed) {
-      if (o.type !== 'blackhole' || ball.mods.ghost) continue;
+      if (o.type !== 'blackhole' || ball.mods.ghost || ball.state !== 'moving' || t > o.until) continue;
       const p = ball.pos;
       const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
-      if (d < o.range && Math.abs(p.y - o.y) < 1.5) {
-        const k = 24 * (1 - d / o.range) + 4;
-        out.x += (dx / (d || 1)) * k; out.z += (dz / (d || 1)) * k;
-        out.wake = true;
-        if (d < 0.38) this.client.onSwallowed(ball);
+      if (d >= o.range || Math.abs(p.y - o.y) > 1.5) continue;
+      const bounces = this.bhBounces.get(o) || 0;
+      if (bounces >= BH_MAX_BOUNCES || t < (o.coolUntil || 0)) continue;
+      if (d < BH_CORE) {
+        // bumper kick: back out at a random angle, faster than it came in
+        const v = ball.vel;
+        const sp = Math.max(Math.hypot(v.x, v.z), 5) * 1.25;
+        const a = Math.atan2(-v.z, -v.x) + (Math.random() - 0.5) * 1.6;
+        ball.body.setLinvel({ x: Math.cos(a) * sp, y: v.y, z: Math.sin(a) * sp }, true);
+        this.bhBounces.set(o, bounces + 1);
+        o.coolUntil = t + 0.6;
+        o.kick = 1;
+        this.client.stat('swallowed');
+        sfx.play('bumper');
+        continue;
       }
+      const k = 18 * (1 - d / o.range) + 3;
+      out.x += (dx / (d || 1)) * k; out.z += (dz / (d || 1)) * k;
     }
     // unlovaball auras from other players push me away
     for (const a of this.auras) {
@@ -417,7 +438,15 @@ export class EffectManager {
       this.shieldMesh.scale.setScalar((this.client.ball.radius / 0.18) * (1 + Math.sin(t * 6) * 0.04));
     }
     for (const o of this.placed) {
-      if (o.type === 'blackhole') o.model.getObjectByName('disk').rotation.z = t * 3;
+      if (o.type === 'blackhole') {
+        o.model.getObjectByName('disk').rotation.z = t * 3;
+        // collapse and vanish when its time is up; pulse on each kick
+        const left = o.until - t;
+        const k = left < 1 ? Math.max(0, left) : 1;
+        o.kick = Math.max(0, (o.kick || 0) - dt * 3);
+        o.model.scale.setScalar(k * (1 + o.kick * 0.25));
+        o.model.visible = k > 0;
+      }
       if (o.type === 'bumper') { const s = 1 + Math.max(0, o.b.hitT - t) * 1.5; o.model.scale.set(s, 1, s); }
     }
     // hearts for active auras

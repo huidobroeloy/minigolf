@@ -3,11 +3,13 @@ import { R } from '../physics/world.js';
 import { TEX } from '../course/themes.js';
 import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
+import { RNG } from '../core/rng.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
 
 const UP = new THREE.Vector3(0, 1, 0);
+const HORNET_CHARGE = 0.9; // seconds of warning before a hornet fires
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.65, ...extra });
 let _eyeMat;
 const eyeMat = () => (_eyeMat ||= new THREE.MeshBasicMaterial({ map: TEX.xanaEye(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
@@ -214,11 +216,15 @@ class Hornet extends Monster {
     }
     super(spec, ctx, g);
     this.wings = wings;
-    this.period = spec.period ?? 2.6;
     this.shots = [];
     this.beamMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.9 });
     this.flashMat = new THREE.MeshBasicMaterial({ color: '#ff8a2a', transparent: true, opacity: 0.8, depthWrite: false });
-    this.lastShot = -1;
+    // each hornet keeps its own unhurried, seeded rhythm (the same on every client)
+    const s0 = spec.path ? spec.path(0) : { x: spec.p?.[0] ?? 0, z: spec.p?.[2] ?? 0 };
+    this.rng = new RNG(`${ctx.course.def.id}:hornet:${s0.x.toFixed(2)},${s0.z.toFixed(2)}`);
+    this.nextT = 2 + this.rng.range(0, 5);
+    this.charge = null; // telegraph before a shot: { t0, to, ring }
+    this.ringMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
   }
   frame(t) {
     const s = this.at(t);
@@ -246,18 +252,34 @@ class Hornet extends Monster {
     });
   }
   update(t) {
-    // fire on a fixed rhythm (same moment for everyone), aimed at the local ball
-    const n = Math.floor((t + (this.spec.phase ?? 0) * this.period) / this.period);
-    if (n !== this.lastShot) {
-      this.lastShot = n;
-      const ball = this.ctx.course.localBall;
-      if (!ball || ball.state === 'holed' || this.ctx.course.noAttacks) return;
+    const ball = this.ctx.course.localBall;
+    // telegraph: a red ring marks where the shot will land ~0.9 s later, so a rolling ball can dodge
+    if (this.charge) {
+      const c = this.charge;
+      const k = (t - c.t0) / HORNET_CHARGE;
+      c.ring.scale.setScalar(1.2 - 0.6 * Math.min(1, k));
+      c.ring.material.opacity = 0.35 + 0.5 * Math.abs(Math.sin(k * 9));
+      if (k >= 1) { this.ctx.group.remove(c.ring); this.charge = null; this.fire(t, c.to); }
+      return;
+    }
+    if (t < this.nextT) return;
+    this.nextT = t + 6 + this.rng.range(0, 4);
+    // hornets harass rolling balls; they never shoot a ball you're lining up
+    if (!ball || ball.state !== 'moving' || this.ctx.course.noAttacks) return;
+    const s = this.at(t);
+    const bp = ball.pos;
+    const to = new THREE.Vector3(bp.x + ball.vel.x * HORNET_CHARGE * 0.6, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * HORNET_CHARGE * 0.6);
+    if (Math.hypot(to.x - s.x, to.z - s.z) > 9) return;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.6, 28), this.ringMat.clone());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(to).add(new THREE.Vector3(0, 0.03, 0));
+    this.ctx.group.add(ring);
+    this.charge = { t0: t, to, ring };
+  }
+  fire(t, to) {
+    {
       const s = this.at(t);
       const from = new THREE.Vector3(s.x, s.y, s.z);
-      const bp = ball.pos;
-      // lead a little and scatter so it's dodgeable
-      const to = new THREE.Vector3(bp.x + ball.vel.x * 0.2 + (Math.random() - 0.5) * 0.8, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * 0.2 + (Math.random() - 0.5) * 0.8);
-      if (from.distanceTo(to) > 9) return;
       const beam = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), this.beamMat);
       beam.scale.set(1, 1, 3);
       beam.lookAt(to);
@@ -276,17 +298,18 @@ class Hornet extends Monster {
       sh.applied = true;
       const p = ball.pos;
       const dx = p.x - sh.to.x, dz = p.z - sh.to.z, d = Math.hypot(dx, dz);
-      if (d < 0.65) {
-        out.x += (dx / (d || 1)) * 380 + (Math.random() - 0.5) * 60;
-        out.z += (dz / (d || 1)) * 380 + (Math.random() - 0.5) * 60;
-        out.y += 120;
-        out.wake = true;
+      if (d < 0.6 && ball.state === 'moving') {
+        out.x += (dx / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
+        out.z += (dz / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
+        out.y += 60;
+        this.ctx.course.onMonsterHit?.('hornet');
       }
     }
   }
   dispose() {
     super.dispose();
     for (const sh of this.shots) this.ctx.group.remove(sh.beam, sh.flash);
+    if (this.charge) this.ctx.group.remove(this.charge.ring);
   }
 }
 

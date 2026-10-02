@@ -11,6 +11,36 @@ const BETWEEN_HOLES_MS = 8000;
 const ALL_HOLED_GRACE_MS = 2500;
 const RESPAWN_EVERY_MS = 25000;
 const PROTECT_MS = 5000;
+const PLAYOFF_MS = 45000;
+
+/**
+ * Rank players with golf-style tiebreaks: total strokes, then countback (last 3 holes, then the
+ * last hole), then most holes-in-one. Returns the ordered list, the rule that separated the
+ * leader (or null), and the ids still tied for first (more than one → sudden-death playoff).
+ */
+export function rankStandings(list) {
+  const key = (p) => {
+    const s = p.scores.map((x) => x ?? 0);
+    return { total: p.total, last3: s.slice(-3).reduce((a, b) => a + b, 0), last: s[s.length - 1] ?? 0, aces: p.stats?.hio || 0 };
+  };
+  const keyed = list.map((p) => ({ p, k: key(p) }));
+  const STAGES = [
+    ['total', (a, b) => a.total - b.total, null],
+    ['last3', (a, b) => a.last3 - b.last3, 'Countback · last 3 holes'],
+    ['last', (a, b) => a.last - b.last, 'Countback · last hole'],
+    ['aces', (a, b) => b.aces - a.aces, 'Most holes-in-one'],
+  ];
+  keyed.sort((x, y) => { for (const [, cmp] of STAGES) { const d = cmp(x.k, y.k); if (d) return d; } return 0; });
+  let rule = null;
+  let tied = keyed.filter((x) => x.k.total === keyed[0].k.total);
+  for (const [, cmp, label] of STAGES.slice(1)) {
+    if (tied.length < 2) break;
+    const next = tied.filter((x) => cmp(x.k, tied[0].k) === 0);
+    if (next.length < tied.length) rule = label;
+    tied = next;
+  }
+  return { ordered: keyed.map((x) => x.p), rule, tiedIds: tied.length > 1 ? tied.map((x) => x.p.id) : [] };
+}
 
 export const PU_LEVELS = { off: 0, few: 0.6, normal: 1, chaos: 1.7 };
 
@@ -106,7 +136,14 @@ export class HostRoom {
         p.pos = msg.p;
         this.broadcast({ ...msg, id }, id);
         return;
+      case 'playoffShot':
+        if (!p || !this.playoff || !this.playoff.shooters.includes(id) || id in this.playoff.results) return;
+        this.playoff.results[id] = Math.max(0, Number(msg.dist) || 0);
+        this.broadcast({ t: 'feed', text: `${p.name}: ${this.playoff.results[id] === 0 ? 'IN THE HOLE!' : this.playoff.results[id].toFixed(2) + ' from the pin'}` });
+        if (this.playoff.shooters.every((s) => s in this.playoff.results)) this.resolvePlayoff();
+        return;
       case 'holed':
+        if (this.playoff) return;
         if (!p || this.phase !== 'hole' || p.holed) return;
         p.holed = true;
         p.strokes = msg.strokes;
@@ -137,6 +174,15 @@ export class HostRoom {
             return;
           }
           if (tgt) { tgt.protectedUntil = performance.now() + PROTECT_MS; this.stat(tgt.id, 'targeted'); }
+        }
+        // black holes and bumpers can't be dropped on top of a tee or a ball (that's how traps happen)
+        if ((msg.pu === 'blackhole' || msg.pu === 'bumper') && Array.isArray(fx.params.pos)) {
+          const [x, , z] = fx.params.pos;
+          const tee = HOLES[this.plan[this.holeNo]].tee;
+          const clear = msg.pu === 'blackhole' ? 3.2 : 1.2;
+          const near = (q) => q && Math.hypot(q[0] - x, q[2] - z) < clear;
+          const blocked = near(tee) || [...this.players.values()].some((q) => !q.holed && near(q.pos));
+          if (blocked) { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Too close to a ball or the tee — place it somewhere else' }); return; }
         }
         this.stat(id, 'used');
         if (msg.pu === 'switch') {
@@ -240,6 +286,7 @@ export class HostRoom {
   }
 
   startMatch() {
+    this.playoff = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
     for (const p of this.players.values()) { p.scores = this.plan.map(() => null); }
@@ -258,7 +305,8 @@ export class HostRoom {
 
   holeMessage() {
     return {
-      t: 'hole', holeNo: this.holeNo, total: this.plan.length, index: this.plan[this.holeNo],
+      t: 'hole', holeNo: this.holeNo, total: this.plan.length, index: this.playoff ? this.playoff.index : this.plan[this.holeNo],
+      playoff: this.playoff ? { shooters: this.playoff.shooters } : null,
       seed: this.holeSeed, duration: this.duration, elapsed: this.elapsed(),
       pickupCount: this.pickups.length,
       taken: this.pickups.map((p) => p.taken || null),
@@ -317,14 +365,52 @@ export class HostRoom {
   }
 
   finish() {
+    const { ordered, rule, tiedIds } = rankStandings(this.playerList());
+    if (tiedIds.length > 1 && !this.solo) return this.startPlayoff(tiedIds);
+    this.finalize(ordered, ordered[0]?.id, rule);
+  }
+
+  finalize(ordered, winnerId, rule) {
     this.phase = 'final';
-    const standings = this.playerList().sort((a, b) => a.total - b.total);
-    this.finalMsg = { t: 'final', standings, plan: this.plan };
+    this.playoff = null;
+    this.finalMsg = { t: 'final', standings: ordered, plan: this.plan, winnerId, tiebreak: rule };
     this.broadcast(this.finalMsg);
     this.broadcastLobby();
   }
 
+  /** Still tied after every countback: one shot each on a par 3, closest to the pin wins. */
+  startPlayoff(ids) {
+    const par3 = HOLES.map((h, i) => [h, i]).filter(([h]) => h.par === 3 && !h.cups);
+    const [, index] = par3[Math.floor(Math.random() * par3.length)];
+    this.playoff = { shooters: ids, results: {}, index, round: (this.playoff?.round || 0) + 1 };
+    this.phase = 'hole';
+    this.holeSeed = randomSeed();
+    this.duration = PLAYOFF_MS;
+    this.holeStart = performance.now();
+    this.allHoledAt = null;
+    this.pickups = [];
+    for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; }
+    this.broadcast(this.holeMessage());
+  }
+
+  resolvePlayoff() {
+    const po = this.playoff;
+    const dist = (id) => (id in po.results ? po.results[id] : Infinity);
+    const best = Math.min(...po.shooters.map(dist));
+    const still = po.shooters.filter((id) => dist(id) === best);
+    if (still.length > 1 && po.round < 4) return this.startPlayoff(still); // dead heat: go again
+    const { ordered } = rankStandings(this.playerList());
+    const winnerId = still[0];
+    const rest = ordered.filter((p) => p.id !== winnerId);
+    const winner = ordered.find((p) => p.id === winnerId);
+    this.finalize([winner, ...rest], winnerId, 'Sudden death · closest to the pin');
+  }
+
   tick() {
+    if (this.phase === 'hole' && this.playoff) {
+      if (this.elapsed() >= this.duration || this.activePlayers().every((q) => !this.playoff.shooters.includes(q.id) || q.id in this.playoff.results)) this.resolvePlayoff();
+      return;
+    }
     if (this.phase === 'hole') {
       if (this.pickups.length && performance.now() - this.lastRespawn > RESPAWN_EVERY_MS) this.respawnPickups();
       if (this.elapsed() >= this.duration) this.endHole();

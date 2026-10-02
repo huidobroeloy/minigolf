@@ -6,14 +6,14 @@ import * as THREE from 'three';
  * `base`/`c2`/`c3` paint the ball itself.
  */
 export const CHARACTERS = [
-  { id: 'ulrich', name: 'Ulrich', full: 'Ulrich Stern', tag: 'Samurai of Lyoko. Triplicate is his thing.', ui: '#e0b04a', base: '#d6a23c', c2: '#4a2f17', c3: '#f4e6b8' },
-  { id: 'odd', name: 'Odd', full: 'Odd Della Robbia', tag: 'Laser arrows, cat ears and a terrible joke.', ui: '#b26bff', base: '#9a4dd6', c2: '#f2d24a', c3: '#ead9ff' },
-  { id: 'yumi', name: 'Yumi', full: 'Yumi Ishiyama', tag: 'Fans, telekinesis, zero patience for Odd.', ui: '#ff5c9a', base: '#24132f', c2: '#e94b86', c3: '#f8cfe0' },
-  { id: 'aelita', name: 'Aelita', full: 'Aelita Schaeffer', tag: 'Princess of Lyoko. Deactivates towers for fun.', ui: '#ff8ccc', base: '#ff86c8', c2: '#8c1f3f', c3: '#cfe6cf' },
-  { id: 'william', name: 'William', full: 'William Dunbar', tag: 'Spent a whole season as XANA’s puppet. Still bitter.', ui: '#e6e6f0', base: '#ececf4', c2: '#18181f', c3: '#8a8a9c' },
-  { id: 'jeremie', name: 'Jérémie', full: 'Jérémie Belpois', tag: 'Never leaves the supercomputer. Calculates every putt.', ui: '#4d8bff', base: '#3d6cff', c2: '#f2d24a', c3: '#ffffff' },
-  { id: 'franz', name: 'Franz Hopper', full: 'Franz Hopper', tag: 'Creator of Lyoko. Lost somewhere in the Digital Sea.', ui: '#9fe8ff', base: '#c8eeff', c2: '#ffffff', c3: '#5fc8ff', glow: '#6fd8ff' },
-  { id: 'xana', name: 'XANA', full: 'XANA', tag: 'Multi-agent program. Hates you personally.', ui: '#ff3b3b', base: '#141018', c2: '#ff2a2a', c3: '#4a0a12', glow: '#ff2a2a' },
+  { id: 'ulrich', orb: 'Katana Gold', name: 'Ulrich', full: 'Ulrich Stern', tag: 'Samurai of Lyoko. Triplicate is his thing.', ui: '#e0b04a', base: '#d6a23c', c2: '#4a2f17', c3: '#f4e6b8' },
+  { id: 'odd', orb: 'Laser Violet', name: 'Odd', full: 'Odd Della Robbia', tag: 'Laser arrows, cat ears and a terrible joke.', ui: '#b26bff', base: '#9a4dd6', c2: '#f2d24a', c3: '#ead9ff' },
+  { id: 'yumi', orb: 'Geisha Night', name: 'Yumi', full: 'Yumi Ishiyama', tag: 'Fans, telekinesis, zero patience for Odd.', ui: '#ff5c9a', base: '#24132f', c2: '#e94b86', c3: '#f8cfe0' },
+  { id: 'aelita', orb: 'Princess Pink', name: 'Aelita', full: 'Aelita Schaeffer', tag: 'Princess of Lyoko. Deactivates towers for fun.', ui: '#ff8ccc', base: '#ff86c8', c2: '#8c1f3f', c3: '#cfe6cf' },
+  { id: 'william', orb: 'Smoke White', name: 'William', full: 'William Dunbar', tag: 'Spent a whole season as XANA’s puppet. Still bitter.', ui: '#e6e6f0', base: '#ececf4', c2: '#18181f', c3: '#8a8a9c' },
+  { id: 'jeremie', orb: 'Supercomputer Blue', name: 'Jérémie', full: 'Jérémie Belpois', tag: 'Never leaves the supercomputer. Calculates every putt.', ui: '#4d8bff', base: '#3d6cff', c2: '#f2d24a', c3: '#ffffff' },
+  { id: 'franz', orb: 'Sphere of Light', name: 'Franz Hopper', full: 'Franz Hopper', tag: 'Creator of Lyoko. Lost somewhere in the Digital Sea.', ui: '#9fe8ff', base: '#c8eeff', c2: '#ffffff', c3: '#5fc8ff', glow: '#6fd8ff' },
+  { id: 'xana', orb: 'Eye of XANA', name: 'XANA', full: 'XANA', tag: 'Multi-agent program. Hates you personally.', ui: '#ff3b3b', base: '#141018', c2: '#ff2a2a', c3: '#4a0a12', glow: '#ff2a2a' },
 ];
 
 export const CHARACTER_COLORS = CHARACTERS.map((c) => c.ui);
