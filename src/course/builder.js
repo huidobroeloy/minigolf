@@ -507,7 +507,7 @@ export function buildCourse(def, physics, scene) {
         if (ball.state === 'moving') out.wake = true;
       }
     }
-    for (const m of course.monsters) m.force?.(ball, course.time ?? 0, out);
+    if (!ball.mods.monsterProof) for (const m of course.monsters) m.force?.(ball, course.time ?? 0, out);
     return out;
   };
 

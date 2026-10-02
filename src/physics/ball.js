@@ -6,8 +6,10 @@ export const BALL_R = 0.18;
 export const MAX_SHOT_SPEED = 17;
 export const CUP_R = 0.36;
 
-export const BALL_NORMAL = cg(GROUP.BALL, GROUP.FLOOR | GROUP.WALL | GROUP.OBST);
+export const BALL_NORMAL = cg(GROUP.BALL, GROUP.FLOOR | GROUP.WALL | GROUP.OBST | GROUP.MONSTER);
 export const BALL_GHOST = cg(GROUP.BALL, GROUP.FLOOR | GROUP.GHOSTFLOOR);
+export const BALL_SPRINT = cg(GROUP.BALL, GROUP.FLOOR | GROUP.WALL | GROUP.OBST); // Super Sprint: monsters can't touch it
+export const BALL_FLYING = cg(GROUP.BALL, 0); // Overwing: above everything
 
 const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -47,8 +49,11 @@ export class Ball {
     this.pinT = 0;
     this.prevVel = new THREE.Vector3();
     this.mods = {
-      decelMul: 1, speedMul: 1, sticky: false, ghost: false, magnet: false, leash: null,
+      decelMul: 1, speedMul: 1, sticky: false, ghost: false, magnet: false, leash: null, monsterProof: false,
     };
+    this.frozen = false; // Freeze / Lyoko Guardian
+    this.glideT = 0;     // Angel Wings: seconds of glide left
+    this.fly = null;     // Overwing: { left, y }
     this.onEvent = () => {};
 
     const bd = R.RigidBodyDesc.dynamic()
@@ -96,9 +101,34 @@ export class Ball {
     this.mesh.scale.setScalar(r);
   }
 
+  /** The collision groups this ball should use right now. */
+  groups() {
+    if (this.fly) return BALL_FLYING;
+    if (this.mods.ghost) return BALL_GHOST;
+    return this.mods.monsterProof ? BALL_SPRINT : BALL_NORMAL;
+  }
+
+  setMonsterProof(on) {
+    this.mods.monsterProof = on;
+    this.collider.setCollisionGroups(this.groups());
+  }
+
+  /** Angel Wings: glide level for a while. Overwing: fly straight over everything. */
+  startGlide(secs) { this.glideT = secs; }
+  startFly(dist, lift = 1.1) {
+    const p = this.body.translation();
+    this.fly = { left: dist, y: p.y + lift };
+    this.collider.setCollisionGroups(this.groups());
+  }
+  endFly() {
+    if (!this.fly) return;
+    this.fly = null;
+    this.collider.setCollisionGroups(this.groups());
+  }
+
   setGhost(on) {
     this.mods.ghost = on;
-    this.collider.setCollisionGroups(on ? BALL_GHOST : BALL_NORMAL);
+    this.collider.setCollisionGroups(this.groups());
     this.material.transparent = on;
     this.material.opacity = on ? 0.45 : 1;
   }
@@ -112,6 +142,8 @@ export class Ball {
     this.restTimer = 0;
     this.pinned = false;
     this.pinT = 0;
+    this.glideT = 0;
+    if (this.fly) this.endFly();
     this.mesh.visible = true;
     this.body.setEnabled(true);
     this.syncMesh(0);
@@ -146,6 +178,24 @@ export class Ball {
   /** env: { forces(ball, dt) -> {x,y,z,wake}, decelMul, stickyWalls } */
   preStep(dt, env) {
     if (this.state !== 'idle' && this.state !== 'moving') return;
+    if (this.frozen) { // encased in ice: nothing moves it
+      const fv = this.body.linvel();
+      this.body.setLinvel({ x: 0, y: Math.min(0, fv.y), z: 0 }, true);
+      if (this.state === 'moving') { this.state = 'idle'; this.restTimer = 0; }
+      return;
+    }
+    if (this.fly) { // Overwing: a straight, level flight, then it drops
+      const fv = this.body.linvel();
+      const hs = Math.max(7, Math.hypot(fv.x, fv.z));
+      const a = Math.atan2(fv.z, fv.x);
+      const p = this.body.translation();
+      this.body.setLinvel({ x: Math.cos(a) * hs, y: (this.fly.y - p.y) * 6, z: Math.sin(a) * hs }, true);
+      this.fly.left -= hs * dt;
+      this.launchTimer = 0.1;
+      this.state = 'moving';
+      if (this.fly.left <= 0) this.endFly();
+      return;
+    }
     if (this.launchTimer > 0) this.launchTimer -= dt;
     const v = this.body.linvel();
     const acc = env.forces ? env.forces(this, dt) : { x: 0, y: 0, z: 0, wake: false };
@@ -201,6 +251,12 @@ export class Ball {
       vx = rx + pv.x; vy = ry + pv.y; vz = rz + pv.z;
     }
     vx += acc.x * dt; vy += acc.y * dt; vz += acc.z * dt;
+    if (this.glideT > 0) { // Angel Wings: hold altitude (no sinking) until the glide runs out
+      this.glideT -= dt;
+      vy = Math.max(vy, 0) + GRAVITY * dt;
+      if (vy > 0.5) vy = 0.5;
+      this.launchTimer = Math.max(this.launchTimer, 0.05);
+    }
 
     // leash: tether to an anchor
     const L = this.mods.leash;
@@ -300,7 +356,7 @@ export class Ball {
     // falling / out of bounds
     const course = env.course;
     if (course) {
-      const pit = course.pitAt?.(p, this);
+      const pit = this.glideT > 0 || this.fly ? null : course.pitAt?.(p, this);
       if (pit) { env.onPit?.(this, pit); return; }
       if (p.y < course.killY) { env.onFall?.(this); return; }
     }

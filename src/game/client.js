@@ -3,12 +3,12 @@ import { HOLES, SECTOR_NAMES } from '../holes/index.js';
 import { Physics, FIXED_DT } from '../physics/world.js';
 import { Ball, BALL_R, aimWobble } from '../physics/ball.js';
 import { buildCourse } from '../course/builder.js';
-import { ChaseCam } from '../camera/chaseCam.js';
+import { ChaseCam, VIEWS, VIEW_INFO } from '../camera/chaseCam.js';
 import { Ghosts } from './ghosts.js';
 import { Pickups } from './pickups.js';
 import { EffectManager } from '../powerups/effects.js';
 import { POWERUPS } from '../powerups/registry.js';
-import { scoreName } from '../ui/ui.js';
+import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
 import { makeLabel } from '../fx/models.js';
@@ -64,7 +64,7 @@ export class GameClient {
     this.ui.on({
       use: (i) => this.useSlot(i),
       discard: (i) => this.discardSlot(i),
-      toggleCam: () => this.toggleOverhead(),
+      toggleCam: () => this.cycleView(),
       spectate: () => this.cycleSpectate(),
       cancelTarget: () => this.cancelTargeting(),
       start: () => this.link.send({ t: 'start' }),
@@ -88,6 +88,8 @@ export class GameClient {
 
   canShoot() {
     if (this.playoff && this.strokes >= 1) return false;
+    if (this.possessing) return !this.flyover && this.phase === 'hole' && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen;
+    if (this.possessedBy || this.ball?.frozen) return false;
     return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
@@ -167,6 +169,9 @@ export class GameClient {
       case 'feed':
         this.ui.feed(m.text);
         break;
+      case 'possessShot':
+        this.onPossessShot(m);
+        break;
       case 'rejoined':
         this.ui.feed(`${m.name} reconnected`);
         break;
@@ -240,6 +245,9 @@ export class GameClient {
     if (this.physics) { this.physics.dispose(); this.physics = null; }
     this.pickups = null;
     this.aimGroup.visible = false;
+    if (this.iceBlock) { this.scene.remove(this.iceBlock); this.iceBlock = null; }
+    this.possessing = null; this.possessedBy = null; this.possessQueued = null;
+    this.ui.setPossessing?.(null);
   }
 
   loadHole(m) {
@@ -271,6 +279,8 @@ export class GameClient {
     this.duration = m.duration;
     this.simTime = m.elapsed / 1000;
     this.cam.mode = 'chase';
+    this.cam.view = VIEWS.includes(this.app.ui.prefs.camView) ? this.app.ui.prefs.camView : 'chase';
+    this.ui.setCamButton(this.cam.view);
     this.cam.yaw = def.yaw ?? Math.atan2(this.course.cup.x - this.course.tee.x, this.course.cup.z - this.course.tee.z);
     this.cam.pitch = 0.32; this.cam.dist = 3.4;
     this.cam.snapTo(this.ball.mesh.position);
@@ -556,13 +566,27 @@ export class GameClient {
   // ---------- shooting ----------
   shoot(power) {
     if (!this.canShoot()) return;
+    if (this.possessing) { // XANA Possession: this shot is fired on the victim's ball
+      const yaw = this.cam.yaw + this.currentWobble(power);
+      this.link.send({ t: 'possessShot', target: this.possessing.target, yaw, power });
+      this.ui.bigToast('👁️ XANA strikes', `you shot ${this.nameOf(this.possessing.target)}'s ball`, 'good');
+      this.endPossessing();
+      return;
+    }
+    this.fireShot(this.cam.yaw + this.currentWobble(power), power);
+  }
+
+  /** Fire my ball at an exact yaw/power (my own shot, or one XANA took for me). */
+  fireShot(yaw, power) {
+    this.cam.aerial.off.set(0, 0, 0);
     this.addStrokes(1);
-    const yaw = this.cam.yaw + this.currentWobble(power);
     const p0 = this.ball.pos;
     this.preShot = { pos: new THREE.Vector3(p0.x, p0.y + 0.02, p0.z), safe: this.ball.lastSafe.clone() };
     const opts = this.effects.onShoot();
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
+    if (opts.glide) this.ball.startGlide(2.5);
+    if (opts.fly) this.ball.startFly(8);
     if (opts.triplicate) this.spawnClones(yaw, power * opts.powerMul, opts.chip);
     this.shotInProgress = true;
     sfx.play('putt', power);
@@ -641,6 +665,124 @@ export class GameClient {
     this.trip = null;
   }
 
+  // ---------- Freeze / Lyoko Guardian ----------
+  freezeBall(secs, kind, fromName) {
+    const b = this.ball;
+    if (!b || b.state === 'holed' || b.state === 'sinking') return;
+    this.cancelAim();
+    b.frozen = true;
+    this.frozenUntil = performance.now() + secs * 1000;
+    if (this.iceBlock) this.scene.remove(this.iceBlock);
+    const g = new THREE.Group();
+    if (kind === 'guardian') {
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 16), new THREE.MeshPhysicalMaterial({ color: '#f4f8ff', transparent: true, opacity: 0.35, roughness: 0.1, transmission: 0.4, depthWrite: false })));
+      for (let i = 0; i < 2; i++) {
+        const r = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.015, 6, 40), new THREE.MeshBasicMaterial({ color: '#ff2a2a' }));
+        r.rotation.x = Math.PI / 2 + i * 0.9;
+        g.add(r);
+      }
+    } else {
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), new THREE.MeshPhysicalMaterial({ color: '#bfeaff', transparent: true, opacity: 0.55, roughness: 0.05, depthWrite: false })));
+    }
+    g.userData.kind = kind;
+    this.iceBlock = g;
+    this.scene.add(g);
+    sfx.play('debuff');
+    this.ui.bigToast(kind === 'guardian' ? '🔮 TRAPPED IN A GUARDIAN' : '🧊 FROZEN', `${fromName} · ${secs} s`, 'bad');
+  }
+
+  unfreeze() {
+    if (!this.ball?.frozen) return;
+    this.ball.frozen = false;
+    this.frozenUntil = 0;
+    if (this.iceBlock) {
+      const p = this.iceBlock.position;
+      for (let i = 0; i < 30; i++) this.effects.particles?.spawn({ pos: [p.x, p.y, p.z], vel: [(Math.random() - 0.5) * 3, Math.random() * 3, (Math.random() - 0.5) * 3], color: this.iceBlock.userData.kind === 'guardian' ? '#ffffff' : '#bfeaff', size: 0.12, life: 0.8, gravity: 6 });
+      this.scene.remove(this.iceBlock);
+      this.iceBlock = null;
+    }
+    sfx.play('stick');
+  }
+
+  updateFrozen(t) {
+    if (!this.iceBlock) return;
+    this.iceBlock.position.copy(this.ball.mesh.position);
+    this.iceBlock.rotation.y = this.iceBlock.userData.kind === 'guardian' ? t * 1.5 : 0;
+    if (performance.now() > this.frozenUntil) this.unfreeze();
+  }
+
+  // ---------- Telekinesis ----------
+  nudgeBall(pos) {
+    const b = this.ball;
+    if (!b || b.state !== 'idle' || !pos) return;
+    const p = b.pos;
+    const dx = pos[0] - p.x, dz = pos[2] - p.z, d = Math.hypot(dx, dz);
+    const k = d > 1.5 ? 1.5 / d : 1;
+    const x = p.x + dx * k, z = p.z + dz * k;
+    const y = this.course.floorYAt(x, z);
+    if (y === null) return this.ui.toast('🌀 Telekinesis needs solid ground');
+    b.place(new THREE.Vector3(x, y + b.radius + 0.02, z));
+    this.cam.snapTo(b.mesh.position);
+    sfx.play('teleport');
+    this.ui.toast('🌀 Telekinesis');
+    this.sendState(true);
+  }
+
+  // ---------- XANA Possession ----------
+  /** I'm XANA: aim from my victim's ball and take their next shot. */
+  startPossessing(target) {
+    this.cancelAim();
+    this.possessing = { target, until: performance.now() + 15000, yaw0: this.cam.yaw };
+    this.ui.setPossessing?.(this.nameOf(target));
+    this.ui.bigToast('👁️ YOU ARE XANA', `aim and shoot for ${this.nameOf(target)} · 15 s`, 'good');
+  }
+
+  endPossessing() {
+    if (!this.possessing) return;
+    this.possessing = null;
+    this.ui.setPossessing?.(null);
+  }
+
+  /** XANA has my ball: I can't shoot until it fires (or 15 s pass and it fires at random). */
+  becomePossessed(from, fromName) {
+    this.cancelAim();
+    this.possessedBy = from;
+    this.possessedUntil = performance.now() + 15500;
+    this.ui.bigToast('👁️ POSSESSED', `${fromName} controls your ball`, 'bad');
+    sfx.play('debuff');
+  }
+
+  endPossessed() {
+    this.possessedBy = null;
+    this.possessedUntil = 0;
+    delete this.effects.pending.possession;
+    this.effects.applyBallMods();
+  }
+
+  /** XANA's shot arrives (or time ran out): fire it on my ball as soon as it's still. */
+  onPossessShot(m) {
+    if (!this.possessedBy || !this.ball || this.ball.state === 'holed') return;
+    this.possessQueued = m;
+  }
+
+  updatePossession() {
+    if (this.possessing && performance.now() > this.possessing.until) { this.endPossessing(); this.ui.toast('👁️ Possession over'); }
+    if (!this.possessedBy) return;
+    const b = this.ball;
+    if (!b || b.state === 'holed' || b.state === 'sinking') return this.endPossessed();
+    if (!this.possessQueued && performance.now() > this.possessedUntil) {
+      this.possessQueued = { yaw: Math.random() * Math.PI * 2, power: 0.3 + Math.random() * 0.5, random: true };
+    }
+    if (this.possessQueued && b.state === 'idle' && !this.falling && !b.frozen) {
+      const q = this.possessQueued;
+      this.possessQueued = null;
+      this.endPossessed();
+      this.cam.yaw = q.yaw;
+      this.fireShot(q.yaw, Math.max(0.05, Math.min(1, q.power)));
+      this.ui.bigToast('👁️ XANA SHOT FOR YOU', q.random ? 'nobody aimed… it went somewhere' : 'hope you like where it went', 'bad');
+    }
+  }
+
   // ---------- Return to the Past / Devirtualize ----------
   undoShot() {
     const b = this.ball;
@@ -689,7 +831,11 @@ export class GameClient {
 
   /** The sway the aim line is showing right now (the shot uses exactly this). */
   currentWobble(power) {
-    return aimWobble(performance.now() / 1000, power, this.effects.has('steady'));
+    const t = performance.now() / 1000;
+    const w = aimWobble(t, power, this.effects.has('steady'));
+    if (!this.effects.has('stun')) return w;
+    // stunned: a big lurching sway on top
+    return w * 4 + Math.sin(t * 5.3) * 0.25 + Math.sin(t * 11.7 + 2) * 0.12;
   }
 
   cancelAim() {
@@ -754,6 +900,11 @@ export class GameClient {
   finishTargeting(params) {
     const t = this.targeting;
     if (!t) return;
+    if (t.id === 'arrow') { const p = this.ball.pos; params = { ...params, from: [p.x, p.y, p.z] }; }
+    if (t.id === 'telekinesis') {
+      const p = this.ball.pos, q = params.pos;
+      if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.6) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
+    }
     if (this.inventory[t.slot] === t.id) {
       this.inventory.splice(t.slot, 1);
       this.ui.renderInventory(this.inventory);
@@ -769,7 +920,18 @@ export class GameClient {
     this.targeting = null;
   }
 
-  /** C: free aerial view to survey the course (and back). */
+  /** Camera button / C: chase → first person → aerial. */
+  cycleView() {
+    if (this.targeting) return;
+    if (this.cam.mode === 'tactical') this.cam.mode = 'chase';
+    const v = this.cam.cycleView();
+    this.app.ui.prefs.camView = v;
+    savePrefs(this.app.ui.prefs);
+    this.ui.setCamButton(v);
+    this.ui.toast(`${VIEW_INFO[v].icon} ${VIEW_INFO[v].name}`);
+  }
+
+  /** Free map view (power-up targeting uses it). */
   toggleOverhead() {
     if (this.targeting) return;
     if (this.cam.mode === 'tactical') this.cam.mode = 'chase';
@@ -778,7 +940,7 @@ export class GameClient {
 
   /** Big rings + names over every ball while in the aerial view. */
   updateMarkers(t) {
-    const show = this.cam.mode === 'tactical';
+    const show = this.cam.mode === 'tactical' || (this.cam.view === 'aerial' && this.cam.aerial.h > 12);
     if (!this.markers) this.markers = new Map();
     const want = new Map();
     if (show) {
@@ -802,7 +964,7 @@ export class GameClient {
         this.markers.set(id, m);
       }
       const s = 1 + 0.25 * Math.sin(t * 5);
-      m.ring.scale.setScalar(s * Math.max(1, this.cam.tac.height / 18));
+      m.ring.scale.setScalar(s * Math.max(1, (this.cam.mode === 'tactical' ? this.cam.tac.height : this.cam.aerial.h) / 18));
       m.ring.position.set(w.p.x, w.p.y - 0.15, w.p.z);
       if (m.label) m.label.position.set(w.p.x, w.p.y + 0.6, w.p.z);
     }
@@ -848,6 +1010,13 @@ export class GameClient {
         this.cam.pan((p.dx || 0) * 0.5, (p.dy || 0) * 0.5);
         return;
       }
+      if (inp.pointers.size >= 2 && this.cam.view === 'aerial') {
+        const d = this.pinchDist();
+        if (this.pinch && d) this.cam.aerialZoom(this.pinch / d);
+        this.pinch = d;
+        this.cam.aerialPan((p.dx || 0) * 0.5, (p.dy || 0) * 0.5);
+        return;
+      }
       const inv = this.effects.has('possession') ? 1 : -1; // XANA flips your controls
       if (this.aim) {
         if (!this.canShoot()) { this.cancelAim(); return; }
@@ -857,11 +1026,13 @@ export class GameClient {
         const range = Math.max(70, Math.min(220, h * 0.22, room * 0.8));
         let pw = (e.clientY - this.aim.sy) / range;
         if (inv > 0) pw = -pw;
+        if (this.effects.has('stun')) pw += Math.sin(performance.now() / 95) * 0.3; // the bar won't sit still
         this.aim.power = Math.max(0, Math.min(1, pw));
         this.cam.rotate(inv * (p.dx || 0) * 0.0022 * ts);
         this.ui.setPower(this.aim.power);
       } else if (this.rotating) {
         if (tactical()) this.cam.pan(p.dx || 0, p.dy || 0);
+        else if (this.cam.view === 'aerial') this.cam.aerialPan(p.dx || 0, p.dy || 0);
         else {
           this.cam.rotate(inv * (p.dx || 0) * 0.006 * ts);
           this.cam.tilt((p.dy || 0) * 0.004 * ts);
@@ -884,6 +1055,7 @@ export class GameClient {
     }));
     this.disposers.push(inp.on('wheel', (e) => {
       if (tactical()) this.cam.tacZoom(e.deltaY > 0 ? 1.12 : 0.89);
+      else if (this.cam.view === 'aerial') this.cam.aerialZoom(e.deltaY > 0 ? 1.12 : 0.89);
       else this.cam.zoom(e.deltaY > 0 ? 1.1 : 0.9);
     }));
     this.disposers.push(inp.on('keydown', (e) => this.onKey(e)));
@@ -908,6 +1080,7 @@ export class GameClient {
     if (e.code === 'KeyM') return this.app.toggleMute();
     if (e.code === 'Escape') {
       if (this.targeting) return this.cancelTargeting();
+      if (this.possessing) { this.endPossessing(); return this.ui.toast('👁️ You let go'); }
       if (this.cam.mode === 'tactical') { this.cam.mode = 'chase'; return; }
       if (this.ui.overlayOpen && !this.effects.locked && !this.falling) return this.ui.closeOverlay();
       if (this.aim || this.spaceCharge) return this.cancelAim();
@@ -916,7 +1089,7 @@ export class GameClient {
     if (this.phase !== 'hole') return;
     const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (digit !== undefined) return e.shiftKey ? this.discardSlot(digit) : this.useSlot(digit);
-    if (e.code === 'KeyC') return this.toggleOverhead();
+    if (e.code === 'KeyC') return this.cycleView();
     const emo = { Digit7: 0, Digit8: 1, Digit9: 2, Digit0: 3 }[e.code];
     if (emo !== undefined && performance.now() - this.lastEmote > 1200) {
       this.lastEmote = performance.now();
@@ -1028,6 +1201,8 @@ export class GameClient {
     if (steps >= 10) this.acc = 0;
 
     this.watchStuck(dt);
+    this.updateFrozen(this.simTime);
+    this.updatePossession();
 
     // visuals
     this.ball.syncMesh(dt * ts);
@@ -1118,7 +1293,9 @@ export class GameClient {
       return;
     }
     let target = this.ball.mesh.position;
-    if (this.ball.state === 'holed') {
+    const victim = this.possessing && this.ghosts.position(this.possessing.target);
+    if (victim) target = victim;
+    else if (this.ball.state === 'holed') {
       const sp = this.spectate && this.ghosts.position(this.spectate);
       if (sp) target = sp;
       else { const c = this.ball.sinkCup || this.course.cup; target = new THREE.Vector3(c.x, c.y + 0.2, c.z); }

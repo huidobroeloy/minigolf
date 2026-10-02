@@ -56,7 +56,7 @@ export class UI {
         <button class="btn target-cancel hidden" data-act="cancelTarget">✖ Cancel</button>
         <button class="btn unstick hidden" data-act="unstick">↺ Ball stuck? Reset it (no penalty)</button>
         <div class="hud-buttons">
-          <button class="icon-btn" data-act="cam" title="Overhead view (C)">🗺️</button>
+          <button class="icon-btn" data-act="cam" title="Camera: chase / first person / aerial (C)">🎥</button>
           <button class="icon-btn" data-act="spec" title="Spectate next player (Tab)">👁️</button>
           <button class="icon-btn" data-act="help" title="Help (H)">❔</button>
           <button class="icon-btn" data-act="mute" title="Mute (M)">🔊</button>
@@ -68,7 +68,9 @@ export class UI {
       <div id="toasts"></div>
       <div id="overlay"></div>
       <div id="aelita" class="hidden"><span>🌸 A E L I T A · slow motion</span></div>
-      <div id="possessed" class="hidden"><span>👁️ POSSESSED BY XANA · controls inverted</span></div>
+      <div id="possessed" class="hidden"><span>👁️ POSSESSED · XANA is taking your next shot</span></div>
+      <div id="possessing" class="hidden"><span></span></div>
+      <div id="meme" class="hidden"></div>
       <div id="flash" class="hidden"></div>
       <div id="vs" class="hidden"></div>
       <div id="finale" class="hidden"><div class="ft"></div><div class="fs"></div></div>
@@ -314,7 +316,7 @@ export class UI {
     this.$('[data-act="skip"]').classList.toggle('hidden', !isHost);
   }
 
-  hideHud() { this.$('#hud').classList.add('hidden'); this.setAelita(false); this.closeOverlay(); }
+  hideHud() { this.$('#hud').classList.add('hidden'); this.setAelita(false); this.closeOverlay(); this.hideMeme(); this.setPossessing(null); }
 
   setTimer(msLeft, msTotal) {
     const t = this.$('.timer');
@@ -375,10 +377,61 @@ export class UI {
 
   setHint(text) { this.$('.hud-hint').innerHTML = text; }
   showUnstick(on) { this.$('.unstick').classList.toggle('hidden', !on); }
+  setCamButton(view) {
+    const b = this.$('[data-act="cam"]');
+    if (b) b.textContent = { chase: '🎥', pov: '🔭', aerial: '🛰️' }[view] || '🎥';
+  }
 
   setAelita(on) { this.$('#aelita').classList.toggle('hidden', !on); }
 
   setPossession(on) { this.$('#possessed').classList.toggle('hidden', !on); }
+
+  /** I'm XANA and I have someone's ball. */
+  setPossessing(name) {
+    const el = this.$('#possessing');
+    el.classList.toggle('hidden', !name);
+    if (name) el.querySelector('span').textContent = `👁️ YOU CONTROL ${name.toUpperCase()}'S BALL · drag to shoot · Esc to let go`;
+  }
+
+  /**
+   * Unskippable Ad: a low-res meme video over most of the screen. It ignores clicks and touches,
+   * so the victim can still aim and shoot underneath it — badly.
+   */
+  showMemeAd(secs, rng, fromName) {
+    this.hideMeme();
+    const el = this.$('#meme');
+    const clip = MEMES[rng.int(0, MEMES.length - 1)];
+    const online = navigator.onLine !== false;
+    el.innerHTML = `<div class="meme-frame">
+        <div class="meme-top"><span class="ad-tag">AD</span> Sponsored by ${esc(fromName)} · <span class="meme-left">0:${secs}</span></div>
+        <div class="meme-vid">${online
+          ? `<iframe src="https://www.youtube-nocookie.com/embed/${clip.id}?autoplay=1&controls=0&disablekb=1&fs=0&modestbranding=1&playsinline=1&rel=0&start=${clip.start || 0}&vq=tiny" allow="autoplay; encrypted-media" title="ad"></iframe>`
+          : '<canvas width="640" height="360"></canvas>'}</div>
+        <div class="meme-bottom">Skip ad in ∞</div>
+      </div>`;
+    el.classList.remove('hidden');
+    // a 256×144 player scaled up: YouTube streams it at potato quality, which is the point
+    const fit = () => { const v = el.querySelector('.meme-vid'); if (v) v.style.setProperty('--k', v.clientWidth / 256); };
+    fit();
+    window.addEventListener('resize', fit);
+    const stopCanvas = online ? null : runAd(el.querySelector('canvas'), secs, rng, () => {});
+    const left = el.querySelector('.meme-left');
+    const end = performance.now() + secs * 1000;
+    const timer = setInterval(() => {
+      const s = Math.max(0, Math.ceil((end - performance.now()) / 1000));
+      left.textContent = `0:${String(s).padStart(2, '0')}`;
+      if (s <= 0) this.hideMeme();
+    }, 250);
+    this.memeStop = () => { clearInterval(timer); window.removeEventListener('resize', fit); stopCanvas?.(); };
+  }
+
+  hideMeme() {
+    this.memeStop?.();
+    this.memeStop = null;
+    const el = this.$('#meme');
+    el.innerHTML = '';
+    el.classList.add('hidden');
+  }
 
   finaleText(title, sub = '') {
     const f = this.$('#finale');
@@ -481,11 +534,11 @@ export class UI {
           <tr><td>W S / ↑ ↓ · mouse wheel</td><td>Tilt · zoom</td></tr>
           <tr><td>Space (hold)</td><td>Charge power, release to putt</td></tr>
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
-          <tr><td>C</td><td>Aerial view (drag/WASD pan, wheel zoom, Q/E rotate)</td></tr>
+          <tr><td>C · 🎥 button</td><td>Camera: chase → first person → aerial (aerial: wheel/pinch zoom, right-drag or two fingers to look around)</td></tr>
           <tr><td>Placing power-ups</td><td>Click a spot · drag an arrow or line · right-click / Esc cancels</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
           <tr><td>7 8 9 0</td><td>Emotes 😂 😡 👏 💀</td></tr>
-          <tr><td>M · H · Esc</td><td>Mute · help · cancel</td></tr>
+          <tr><td>M · H · Esc</td><td>Mute · help · cancel / settings</td></tr>
         </table>
         <h2>Rules</h2>
         <p>Everyone plays at the same time. Lowest total strokes wins. Falling into the Digital Sea costs +1.
@@ -586,6 +639,24 @@ export class UI {
   }
 }
 
+// Unskippable Ad clips: classic, family-friendly memes (each checked to exist and allow embedding)
+const MEMES = [
+  { id: 'J---aiyznGQ' },              // Keyboard Cat
+  { id: 'dQw4w9WgXcQ' },              // Never Gonna Give You Up
+  { id: 'oavMtUWDBTM', start: 20 },   // Trololo
+  { id: 'EIyixC9NsLI' },              // Badger Badger Badger
+  { id: 'jofNR_WkoCE', start: 40 },   // What Does The Fox Say
+  { id: '9bZkp7q19f0', start: 60 },   // Gangnam Style
+  { id: 'k85mRPqvMbE' },              // Crazy Frog
+  { id: 'feA64wXhbjo', start: 40 },   // Shooting Stars
+  { id: '_OBlgSz8sSM' },              // Charlie bit my finger
+  { id: 'eRBOgtp0Hac' },              // Peanut Butter Jelly Time
+  { id: 'j9V78UbdzWI' },              // Coffin Dance
+  { id: 'ZZ5LpwO-An4' },              // HEYYEYAAEYAAAEYAEYAA
+  { id: 'hFZFjoX2cGg', start: 60 },   // Backyard squirrel maze
+  { id: 'Ct6BUPvE2sM' },              // PPAP
+];
+
 const AWARDS = [
   ['falls', '🌊', 'Digital Sea Diver', 'fell into the Digital Sea'],
   ['targeted', '🎯', 'XANA\'s Favourite Victim', 'got hit by power-ups'],
@@ -619,7 +690,7 @@ function loadPrefs() {
     const p = JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}');
     const color = COLORS.includes(p.color) ? p.color : COLORS[Math.floor(Math.random() * COLORS.length)];
     const num = (v, d) => (typeof v === 'number' ? v : d);
-    return { name: p.name || '', color, muted: !!p.muted, musicMuted: !!p.musicMuted, quality: p.quality || 'high', music: num(p.music, 0.5), sfx: num(p.sfx, 0.6) };
+    return { name: p.name || '', color, muted: !!p.muted, musicMuted: !!p.musicMuted, quality: p.quality || 'high', music: num(p.music, 0.5), sfx: num(p.sfx, 0.6), camView: p.camView || 'chase' };
   } catch { return { name: '', color: COLORS[0], muted: false, musicMuted: false, quality: 'high', music: 0.5, sfx: 0.6 }; }
 }
 

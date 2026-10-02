@@ -375,3 +375,14 @@ td.na { color: rgba(255,255,255,0.2); }
 
 .cs-orb { width: 46px; height: 46px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c, #6fe7ff) 60%, transparent)); }
 .cs-orbname { font: italic 900 13px var(--font-head); letter-spacing: 1px; text-transform: uppercase; color: var(--c); text-shadow: 2px 2px 0 #000, 0 0 10px var(--c); }
+
+/* ---------- Unskippable Ad (meme video) and possession banners ---------- */
+#meme { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; pointer-events: none; }
+.meme-frame { width: min(76vw, 118vh); background: #000; border: 3px solid #ffd23a; box-shadow: 0 0 40px rgba(0,0,0,0.7); }
+.meme-top, .meme-bottom { font: 700 13px var(--font-body); color: #fff; background: #111; padding: 4px 8px; }
+.meme-bottom { text-align: right; color: #aaa; }
+.meme-vid { position: relative; aspect-ratio: 16 / 9; overflow: hidden; --k: 3; }
+.meme-vid iframe { position: absolute; left: 0; top: 0; width: 256px; height: 144px; border: 0; transform: scale(var(--k)); transform-origin: 0 0; filter: saturate(1.3) contrast(1.1); }
+.meme-vid canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+#possessing { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); z-index: 3; pointer-events: none; }
+#possessing span { display: inline-block; padding: 6px 14px; font: italic 900 14px var(--font-head); color: #fff; background: rgba(160, 0, 0, 0.85); border: 2px solid #ff2a2a; box-shadow: 0 0 20px #ff2a2a; }

@@ -11,7 +11,7 @@ export async function initPhysics() {
 
 // Collision groups: high 16 bits = membership, low 16 bits = filter.
 // GHOSTFLOOR: invisible covers over pits that only Ghost balls roll on.
-export const GROUP = { FLOOR: 1, WALL: 2, OBST: 4, BALL: 8, GHOSTFLOOR: 16 };
+export const GROUP = { FLOOR: 1, WALL: 2, OBST: 4, BALL: 8, GHOSTFLOOR: 16, MONSTER: 32 };
 export const cg = (member, filter) => ((member & 0xffff) << 16) | (filter & 0xffff);
 
 export const GRAVITY = 16;
@@ -57,6 +57,7 @@ export class Physics {
     if (kind === 'floor') return cg(GROUP.FLOOR, GROUP.BALL);
     if (kind === 'wall') return cg(GROUP.WALL, GROUP.BALL);
     if (kind === 'ghostfloor') return cg(GROUP.GHOSTFLOOR, GROUP.BALL);
+    if (kind === 'monster') return cg(GROUP.MONSTER, GROUP.BALL);
     return cg(GROUP.OBST, GROUP.BALL);
   }
 

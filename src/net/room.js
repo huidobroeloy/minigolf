@@ -10,7 +10,8 @@ export const MAX_PLAYERS = 8;
 const BETWEEN_HOLES_MS = 8000;
 const ALL_HOLED_GRACE_MS = 2500;
 const RESPAWN_EVERY_MS = 25000;
-const PROTECT_MS = 5000;
+const PROTECT_MS = 12000;
+const HOSTILE_WINDOW_MS = 20000; // at most 2 targeted attacks on one player in this window
 const PLAYOFF_MS = 45000;
 
 /**
@@ -64,6 +65,7 @@ export function timeoutScore(par, strokes) {
  */
 export class HostRoom {
   constructor(code, { solo = false } = {}) {
+    this.possess = new Map(); // victim id → { by, until }
     this.code = code;
     this.solo = solo;
     this.links = new Map();       // id -> send(msg)
@@ -136,6 +138,14 @@ export class HostRoom {
         p.pos = msg.p;
         this.broadcast({ ...msg, id }, id);
         return;
+      case 'possessShot': {
+        // XANA's shot for a possessed player: only the one who possessed them, only once
+        const ps = this.possess.get(msg.target);
+        if (!p || !ps || ps.by !== id || performance.now() > ps.until) return;
+        this.possess.delete(msg.target);
+        this.sendTo(msg.target, { t: 'possessShot', from: id, yaw: Number(msg.yaw) || 0, power: Math.max(0.03, Math.min(1, Number(msg.power) || 0)) });
+        return;
+      }
       case 'playoffShot':
         if (!p || !this.playoff || !this.playoff.shooters.includes(id) || id in this.playoff.results) return;
         this.playoff.results[id] = Math.max(0, Number(msg.dist) || 0);
@@ -169,11 +179,14 @@ export class HostRoom {
         const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, seed: randomSeed(), at: this.elapsed() };
         if (def.kind === 'one') {
           const tgt = this.players.get(msg.target);
-          if (tgt && performance.now() < (tgt.protectedUntil || 0)) {
+          const now = performance.now();
+          if (tgt) tgt.hits = (tgt.hits || []).filter((h) => now - h < HOSTILE_WINDOW_MS);
+          if (tgt && msg.pu !== 'steal' && (now < (tgt.protectedUntil || 0) || tgt.hits.length >= 2)) {
             this.sendTo(id, { t: 'refund', pu: msg.pu, reason: `${tgt.name} was just hit — protected for a moment` });
             return;
           }
-          if (tgt) { tgt.protectedUntil = performance.now() + PROTECT_MS; this.stat(tgt.id, 'targeted'); }
+          if (tgt) { tgt.protectedUntil = now + PROTECT_MS; tgt.hits.push(now); this.stat(tgt.id, 'targeted'); }
+          if (tgt && msg.pu === 'possession') this.possess.set(tgt.id, { by: id, until: now + 17000 });
         }
         // black holes and bumpers can't be dropped on top of a tee or a ball (that's how traps happen)
         if ((msg.pu === 'blackhole' || msg.pu === 'bumper') && Array.isArray(fx.params.pos)) {
@@ -198,6 +211,7 @@ export class HostRoom {
         const f = msg.fx;
         if (!p || !f || f.reflected || this.phase !== 'hole' || !POWERUPS[f.pu]) return;
         if (f.pu === 'switch') return;
+        if (f.pu === 'possession') this.possess.set(f.from, { by: id, until: performance.now() + 17000 });
         this.broadcast({ ...f, t: 'fx', from: id, target: f.from, reflected: true, seed: randomSeed(), at: this.elapsed() });
         return;
       }

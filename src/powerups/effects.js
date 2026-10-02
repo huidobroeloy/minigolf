@@ -13,7 +13,10 @@ import { loop } from '../holes/helpers.js';
 
 const BH_CORE = 0.45, BH_MAX_BOUNCES = 3, BH_LIFE = 20;
 
-const NEXT_SHOT = ['steady', 'magnet', 'ghost', 'chip', 'aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'triplicate', 'scanner', 'possession'];
+const NEXT_SHOT = ['steady', 'magnet', 'ghost', 'chip', 'aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'triplicate', 'scanner', 'possession',
+  'stun', 'gas', 'sprint', 'wings', 'overwing'];
+// effects Hopper's Light washes off
+const NEGATIVE = ['aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'possession', 'stun', 'gas'];
 
 /**
  * Applies power-up effects on this client. Every client receives every `fx` message and decides
@@ -34,6 +37,9 @@ export class EffectManager {
     this.shield = false;
     this.swarms = [];
     this.creations = [];
+    this.immuneUntil = 0;
+    this.slashed = []; // Zweihänder: { thing, until }
+    this.nextBurp = 0;
   }
 
   reset(course, physics, scene) {
@@ -61,6 +67,8 @@ export class EffectManager {
     this.pending = {};
     this.active = {};
     this.stickyWalls = false;
+    this.immuneUntil = 0;
+    this.slashed = [];
     this.removeLady();
     if (this.group) { this.scene.remove(this.group); this.group = null; }
     this.particles?.dispose(); this.hearts?.dispose();
@@ -72,7 +80,10 @@ export class EffectManager {
   get locked() { return performance.now() < this.adUntil; }
 
   ctx() {
-    return { group: this.group, course: this.course, physics: this.physics, particles: this.particles, onStat: (k) => this.client.stat(k) };
+    return {
+      group: this.group, course: this.course, physics: this.physics, particles: this.particles, onStat: (k) => this.client.stat(k),
+      myId: this.client.myId, positionOf: (id) => this.client.positionOf(id),
+    };
   }
 
   /** Every fx message from the host lands here. */
@@ -93,6 +104,10 @@ export class EffectManager {
     const myBallActive = c.ball && c.ball.state !== 'holed' && c.ball.state !== 'sinking';
     // Firewall: bounce the first sabotage aimed at me back to its sender
     const aimedAtMe = def.kind === 'one' ? targetMe : def.kind === 'others' ? (fx.reflected ? targetMe : !isMe) : false;
+    if (aimedAtMe && performance.now() < this.immuneUntil) {
+      c.ui.bigToast('🌟 HOPPER\'S LIGHT', `${label} from ${fromName} dissolved`, 'good');
+      return;
+    }
     if (aimedAtMe && this.shield && !fx.reflected && fx.pu !== 'switch') {
       this.setShield(false);
       c.link.send({ t: 'reflect', fx });
@@ -106,6 +121,8 @@ export class EffectManager {
         if (!isMe || !myBallActive) break;
         if (fx.pu === 'returnpast') { c.undoShot(); break; }
         if (fx.pu === 'firewall') { this.setShield(true); c.ui.bigToast('🛡️ Firewall up', 'the next attack on you bounces back', 'good'); break; }
+        if (fx.pu === 'hopper') { this.cleanse(); break; }
+        if (fx.pu === 'telekinesis') { c.nudgeBall(fx.params.pos); break; }
         this.pending[fx.pu] = true;
         this.applyBallMods();
         break;
@@ -122,6 +139,7 @@ export class EffectManager {
       case 'one':
         if (targetMe) this.applyTargeted(fx, fromName, label);
         if (isMe && fx.pu === 'switch') this.doSwitch(fx.params.b);
+        if (isMe && fx.pu === 'possession') c.startPossessing(fx.target);
         break;
       case 'aura':
         this.auras.push({ from: fx.from, start: fx.at / 1000, dur: 10, r: 3.8 });
@@ -147,12 +165,27 @@ export class EffectManager {
     const c = this.client;
     const active = c.ball && c.ball.state !== 'holed' && c.ball.state !== 'sinking';
     switch (fx.pu) {
-      case 'zany': case 'leash': case 'possession':
+      case 'zany': case 'leash': case 'stun': case 'gas':
         if (!active) return;
         this.pending[fx.pu] = true;
+        if (fx.pu === 'gas') this.nextBurp = performance.now() + 1200;
         this.applyBallMods();
         c.ui.bigToast(label + '!', `courtesy of ${fromName}`, 'bad');
         sfx.play('debuff');
+        break;
+      case 'possession':
+        if (!active) return;
+        this.pending.possession = true;
+        this.applyBallMods();
+        c.becomePossessed(fx.from, fromName);
+        break;
+      case 'freeze':
+        if (!active) return;
+        c.freezeBall(6, 'ice', fromName);
+        break;
+      case 'guardian':
+        if (!active) return;
+        c.freezeBall(8, 'guardian', fromName);
         break;
       case 'steal': {
         const inv = c.inventory;
@@ -176,14 +209,12 @@ export class EffectManager {
         c.devirtualize(fromName);
         break;
       case 'ad': {
+        // a meme video over most of the screen for 20 s: annoying, but you can still play
         const rng = new RNG(fx.seed);
-        const secs = rng.int(5, 10);
-        this.adUntil = performance.now() + secs * 1000;
-        c.cancelAim();
-        c.ui.showAd(secs, rng, fromName);
+        c.ui.showMemeAd(20, rng, fromName);
         sfx.play('ad');
         music.duck(true);
-        setTimeout(() => music.duck(false), secs * 1000);
+        setTimeout(() => music.duck(false), 20000);
         break;
       }
     }
@@ -197,8 +228,43 @@ export class EffectManager {
     sfx.play('teleport');
   }
 
+  /** Hopper's Light: wash off every bad effect and shrug off new ones for a while. */
+  cleanse() {
+    const c = this.client;
+    for (const k of NEGATIVE) { delete this.pending[k]; delete this.active[k]; }
+    this.leash = null;
+    this.immuneUntil = performance.now() + 15000;
+    c.unfreeze();
+    c.endPossessed();
+    this.applyBallMods();
+    c.ui.flash();
+    c.ui.bigToast('🌟 HOPPER\'S LIGHT', 'cleansed · immune for 15 s', 'good');
+    sfx.play('hio');
+  }
+
+  /** William's Zweihänder: the monster or moving obstacle nearest the point is cut out for 15 s. */
+  slash(fx) {
+    const p = fx.params.pos;
+    const t = fx.at / 1000;
+    let best = null, bd = 2.5;
+    const consider = (thing, x, z) => { const d = Math.hypot(x - p[0], z - p[2]); if (d < bd) { bd = d; best = thing; } };
+    for (const m of this.course.monsters) { const s = m.model?.position; if (s && !m.slashed) consider(m, s.x, s.z); }
+    for (const mv of this.course.movers) if (!mv.slashed) consider(mv, mv.cur.x, mv.cur.z);
+    if (!best) { this.client.ui.toast('🗡️ The Zweihänder hit nothing'); return; }
+    best.slashed = true;
+    const body = best.body;
+    if (body) body.setEnabled(false);
+    const mesh = best.model || best.mesh;
+    if (mesh) mesh.visible = false;
+    const at = mesh ? mesh.position : new THREE.Vector3(p[0], p[1], p[2]);
+    for (let i = 0; i < 40; i++) this.particles?.spawn({ pos: [at.x, at.y + 0.4, at.z], vel: [(Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4], color: i % 2 ? '#ffffff' : '#9fe8ff', size: 0.14, life: 0.9, gravity: 4 });
+    this.slashed.push({ thing: best, body, mesh, until: t + 15 });
+    sfx.play('laser');
+  }
+
   place(fx) {
     if (fx.pu === 'creativity') return this.create(fx);
+    if (fx.pu === 'zweihander') return this.slash(fx);
     const p = fx.params.pos;
     if (!p) return;
     if (fx.pu === 'swarm') return this.spawnSwarm(fx);
@@ -302,7 +368,7 @@ export class EffectManager {
     this.active = { ...this.pending };
     this.pending = {};
     const a = this.active;
-    const res = { chip: !!a.chip, powerMul: a.leash ? 0.5 : 1, steady: !!a.steady, triplicate: !!a.triplicate };
+    const res = { chip: !!a.chip, powerMul: a.leash ? 0.5 : 1, steady: !!a.steady, triplicate: !!a.triplicate, glide: !!a.wings, fly: !!a.overwing, stun: !!a.stun };
     if (a.leash) {
       const p = this.client.ball.pos;
       this.leash = { anchor: new THREE.Vector3(p.x, p.y, p.z), len: 3.2 };
@@ -321,7 +387,8 @@ export class EffectManager {
     const ball = this.client.ball;
     if (!ball) return;
     const e = { ...this.active, ...this.pending };
-    ball.mods.speedMul = e.zany ? 2.4 : 1;
+    ball.mods.speedMul = (e.zany ? 2.4 : 1) * (e.sprint ? 1.6 : 1);
+    if (ball.mods.monsterProof !== !!e.sprint) ball.setMonsterProof(!!e.sprint);
     ball.mods.decelMul = (e.zany ? 0.55 : 1) * (e.sticky ? 1.5 : 1);
     ball.mods.sticky = !!e.sticky;
     ball.mods.magnet = !!e.magnet;
@@ -410,6 +477,27 @@ export class EffectManager {
 
   /** Physics-rate update: expire hazards, move swarms, expire creations. */
   update(t) {
+    // Zweihänder cuts heal after 15 s
+    for (let i = this.slashed.length - 1; i >= 0; i--) {
+      const s = this.slashed[i];
+      if (t < s.until) continue;
+      s.thing.slashed = false;
+      s.body?.setEnabled(true);
+      if (s.mesh) s.mesh.visible = true;
+      this.slashed.splice(i, 1);
+    }
+    // Gas Giant: the waiting ball burps
+    const c = this.client, ball = c.ball;
+    if (this.pending.gas && ball && ball.state === 'idle' && !c.aim && !ball.frozen && performance.now() > this.nextBurp) {
+      this.nextBurp = performance.now() + 1500 + Math.random() * 1500;
+      const a = Math.random() * Math.PI * 2, sp = 1.4 + Math.random() * 1.4;
+      ball.pinned = false;
+      ball.state = 'moving';
+      ball.body.setLinvel({ x: Math.cos(a) * sp, y: 1.2, z: Math.sin(a) * sp }, true);
+      const p = ball.pos;
+      for (let i = 0; i < 18; i++) this.particles?.spawn({ pos: [p.x, p.y, p.z], vel: [(Math.random() - 0.5) * 1.5, 0.5 + Math.random(), (Math.random() - 0.5) * 1.5], color: i % 2 ? '#9bd86a' : '#c9f08a', size: 0.22, life: 1.1 });
+      sfx.play('burp');
+    }
     for (const s of this.swarms) for (const m of s.monsters) m.update(t);
     for (let i = this.swarms.length - 1; i >= 0; i--) {
       if (t > this.swarms[i].until) { for (const m of this.swarms[i].monsters) m.dispose(); this.swarms.splice(i, 1); }

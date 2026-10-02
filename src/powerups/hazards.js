@@ -400,4 +400,95 @@ class Montapollos extends Hazard {
   }
 }
 
-export const HAZARDS = { wind: Wind, tornado: Tornado, volcano: Volcano, icerink: IceRink, tsunami: Tsunami, montapollos: Montapollos };
+/** Odd's Laser Arrow: flies from the shooter's ball along the dragged direction; the first ball it meets gets launched. */
+class LaserArrow extends Hazard {
+  constructor(ctx, fx) {
+    super(ctx, fx, 1.8);
+    const f = fx.params.from || [ctx.course.tee.x, ctx.course.tee.y, ctx.course.tee.z];
+    this.from = new THREE.Vector3(f[0], f[1] + 0.25, f[2]);
+    const d = fx.params.dir || [0, 1];
+    this.dir = new THREE.Vector3(d[0], 0, d[1]).normalize();
+    this.speed = 16;
+    const g = new THREE.Group();
+    const glow = new THREE.MeshBasicMaterial({ color: '#c58bff' });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6), glow);
+    shaft.rotation.x = Math.PI / 2;
+    g.add(shaft);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+    tip.rotation.x = Math.PI / 2;
+    tip.position.z = 0.55;
+    g.add(tip);
+    g.lookAt(this.dir.clone().add(g.position));
+    this.model = g;
+    this.group.add(g);
+    this.hit = false;
+    this.head = new THREE.Vector3();
+    sfx.play('laser');
+  }
+  headAt(t) { return this.head.copy(this.from).addScaledVector(this.dir, Math.min(this.local(t), this.dur) * this.speed); }
+  force(ball, t, out) {
+    if (this.hit || this.fx.from === this.ctx.myId || ball.mods.ghost) return;
+    const h = this.headAt(t);
+    const p = ball.pos;
+    if (Math.hypot(p.x - h.x, p.z - h.z) < 0.5 + ball.radius && Math.abs(p.y - h.y) < 1) {
+      this.hit = true;
+      out.x += this.dir.x * 950; out.z += this.dir.z * 950; out.y += 380;
+      out.wake = true;
+      this.ctx.onStat?.('arrowed');
+      sfx.play('bumper');
+    }
+  }
+  frame(t) {
+    const h = this.headAt(t);
+    this.model.position.copy(h);
+    this.model.visible = !this.hit && this.local(t) < this.dur;
+    this.ctx.particles.spawn({ pos: [h.x, h.y, h.z], color: '#c58bff', size: 0.16, life: 0.35 });
+  }
+}
+
+/** Aelita's Energy Field: one pink shockwave from the user's ball. */
+class EnergyField extends Hazard {
+  constructor(ctx, fx) {
+    super(ctx, fx, 1.0);
+    const c = ctx.positionOf?.(fx.from);
+    this.center = c ? new THREE.Vector3(c.x, c.y, c.z) : null;
+    this.R = 4;
+    this.done1 = false;
+    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 48), new THREE.MeshBasicMaterial({ color: '#ff8ccc', transparent: true, opacity: 0.9 }));
+    this.ring.rotation.x = Math.PI / 2;
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffb3dc', transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide }));
+    if (this.center) { this.ring.position.copy(this.center); this.dome.position.copy(this.center); this.group.add(this.ring, this.dome); }
+    sfx.play('whoosh');
+  }
+  force(ball, t, out) {
+    if (this.done1 || !this.center) return;
+    this.done1 = true;
+    if (this.fx.from === this.ctx.myId || ball.mods.ghost) return;
+    const p = ball.pos;
+    const dx = p.x - this.center.x, dz = p.z - this.center.z, d = Math.hypot(dx, dz);
+    if (d > this.R || Math.abs(p.y - this.center.y) > 1.5) return;
+    const k = (9 * (1 - d / this.R) + 3) * 120;
+    out.x += (dx / (d || 1)) * k; out.z += (dz / (d || 1)) * k; out.y += 150;
+    out.wake = true;
+  }
+  frame(t) {
+    const k = Math.min(1, this.local(t) / this.dur);
+    const r = 0.3 + k * this.R;
+    this.ring.scale.setScalar(r);
+    this.dome.scale.setScalar(r);
+    this.ring.material.opacity = 0.9 * (1 - k);
+    this.dome.material.opacity = 0.25 * (1 - k);
+  }
+}
+
+/** XANA activates a tower: monsters get aggressive for a while. */
+class TowerActivation extends Hazard {
+  constructor(ctx, fx) {
+    super(ctx, fx, 15);
+    ctx.course.enrageUntil = this.start + this.dur;
+    sfx.play('jackpot');
+  }
+  frame() {}
+}
+
+export const HAZARDS = { wind: Wind, tornado: Tornado, volcano: Volcano, icerink: IceRink, tsunami: Tsunami, montapollos: Montapollos, arrow: LaserArrow, energyfield: EnergyField, tower: TowerActivation };

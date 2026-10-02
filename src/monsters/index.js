@@ -37,7 +37,7 @@ function kinematic(physics, pos) {
 }
 
 function collider(physics, body, desc, restitution = 0.6) {
-  desc.setFriction(0).setRestitution(restitution).setCollisionGroups(physics.groupFor('obst'));
+  desc.setFriction(0).setRestitution(restitution).setCollisionGroups(physics.groupFor('monster'));
   const c = physics.world.createCollider(desc, body);
   physics.meta.set(c.handle, { kind: 'obst', collider: c, body });
   return c;
@@ -263,7 +263,8 @@ class Hornet extends Monster {
       return;
     }
     if (t < this.nextT) return;
-    this.nextT = t + 6 + this.rng.range(0, 4);
+    const enraged = t < (this.ctx.course.enrageUntil ?? -1); // XANA activated a tower
+    this.nextT = t + (6 + this.rng.range(0, 4)) * (enraged ? 0.5 : 1);
     // hornets harass rolling balls; they never shoot a ball you're lining up
     if (!ball || ball.state !== 'moving' || this.ctx.course.noAttacks) return;
     const s = this.at(t);
@@ -298,7 +299,7 @@ class Hornet extends Monster {
       sh.applied = true;
       const p = ball.pos;
       const dx = p.x - sh.to.x, dz = p.z - sh.to.z, d = Math.hypot(dx, dz);
-      if (d < 0.6 && ball.state === 'moving') {
+      if (d < 0.6 && ball.state === 'moving' && !ball.mods.monsterProof) {
         out.x += (dx / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
         out.z += (dz / (d || 1)) * 160 + (Math.random() - 0.5) * 30;
         out.y += 60;

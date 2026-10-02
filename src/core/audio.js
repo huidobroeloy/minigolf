@@ -152,6 +152,10 @@ class Sfx {
       case 'heart':
         this.tone({ type: 'sine', f0: 660, f1: 330, dur: 0.3, vol: 0.12 });
         break;
+      case 'burp':
+        this.tone({ type: 'sawtooth', f0: 95 + Math.random() * 30, f1: 60, dur: 0.45, vol: 0.18, attack: 0.03 });
+        this.hiss({ dur: 0.35, vol: 0.12, freq: 250, type: 'lowpass' });
+        break;
       case 'ad':
         [392, 523, 659, 523].forEach((f, i) => this.tone({ type: 'triangle', f0: f, dur: 0.18, vol: 0.12, delay: i * 0.18 }));
         break;
