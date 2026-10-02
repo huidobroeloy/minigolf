@@ -72,7 +72,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 ## Hole-in-one checking
 Run `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })`. That is 2196 simulated shots, about 2–5 minutes per hole.
 
-Known state:
-- **Frozen U-Turn** (index 8): still about 2.5% because the ice bend funnels balls into the lane. Moving the cup didn't help; it needs a layout change.
-- **Arena Entry** and **Kankrelat Canyon:** only narrow ace lines that the coarse grid misses (verified with fine searches).
-- **Fortune Falls** (index 17, the pachinko rebuild): the ace rate isn't verified yet.
+Last full run: every hole has an ace.
+- **Highest:** Avalanche Alley at about 1.9% (42 hits), acceptable for a short par 3.
+- **Frozen U-Turn:** 1.4% after squaring off the far end. A round bank funnels every shot into the cup, so don't bring it back.
+- **Fortune Falls:** about 0.2%, by design a luck hole.
+- **Kankrelat Canyon:** shows 0 on the coarse grid but has a narrow full-power line (yaw −1° to −1.25°). Hornet Grove, Megatank Mesa, Krabe Crossing, Arena Entry and Closing Walls also needed the automatic finer re-search to find theirs.
