@@ -92,11 +92,23 @@ class App {
       sfx.unlock();
       boot.classList.add('out');
       setTimeout(() => boot.remove(), 400);
-      if (this.ui.prefs.intro === false) return this.showMenu();
-      this.intro = new Intro(this, () => { this.intro = null; this.showMenu(); });
+      this.showMenu();
     };
     boot.addEventListener('pointerdown', go);
     addEventListener('keydown', go);
+  }
+
+  /** The match intro (see Intro): the client starts it on matchStart and ends it on hole 1. */
+  startIntro(opts) {
+    this.endIntro();
+    this.intro = new Intro(this, { ...opts, onDone: () => { this.intro = null; } });
+  }
+
+  endIntro() {
+    if (!this.intro) return;
+    const it = this.intro;
+    this.intro = null;
+    it.finish();
   }
 
   async shareTracks() {

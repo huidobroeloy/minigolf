@@ -170,7 +170,7 @@ export class UI {
       <div class="set-row"><label>💥 Sound FX</label><input id="setSfx" type="range" min="0" max="1" step="0.05" value="${p.sfx ?? 0.6}" /></div>
       <div class="set-row"><label>🔇 Mute everything</label><button class="btn tog ${p.muted ? 'off' : ''}" id="setMute">${p.muted ? 'MUTED' : 'SOUND ON'}</button></div>
       <div class="set-row"><label>🖥️ Graphics</label><select id="setQuality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select></div>
-      <div class="set-row"><label>🎬 Intro on start</label><button class="btn tog ${p.intro === false ? 'off' : ''}" id="setIntro">${p.intro === false ? 'OFF' : 'ON'}</button></div>
+      <div class="set-row"><label>🎬 Intro before matches</label><button class="btn tog ${p.intro === false ? 'off' : ''}" id="setIntro">${p.intro === false ? 'OFF' : 'ON'}</button></div>
       <h3 class="st-h">🎧 Soundtrack</h3>
       <div class="st-note">Load your own music (audio or video files). It stays in this browser, and when you host, your friends hear it too.</div>
       <div class="st-slots"></div>

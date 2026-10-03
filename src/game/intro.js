@@ -1,34 +1,54 @@
 import * as THREE from 'three';
 import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
-import { CHARACTERS, applyCharacter } from './characters.js';
+import { CHARACTERS, applyCharacter, characterByColor } from './characters.js';
 import { portraitBig } from '../ui/portraits.js';
 import { SECTOR_NAMES, HOLES } from '../holes/index.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
 
-// The opening cinematic (about 24 s, click or any key skips):
-//   1. the supercomputer screen: XANA has activated a tower
-//   2. TRANSFER… SCANNER… VIRTUALIZATION! with each hero cut in over pink rings and data rain
-//   3. Lyoko: the balls virtualize one by one inside scanning rings, the camera swoops to the red tower
-//   4. the title card
+// The match intro, played when the host clicks Start (the host can skip it for everyone):
+//   1. the supercomputer screen: XANA has activated a tower in hole 1's sector
+//   2. TRANSFER… SCANNER… for each player's character (XANA isn't virtualized: if someone plays
+//      XANA, it gets its own "XANA ACTIVATES A TOWER" beat), then VIRTUALIZATION!
+//   3. on hole 1's real course, the party's balls virtualize at the tee and the camera swoops to the
+//      tower over the cup
+//   4. the title card, held until hole 1 starts
 // All drawn in code: canvases, CSS and the game's own 3D scenery.
 
 const HEROES = ['ulrich', 'yumi', 'odd', 'aelita', 'william'];
-const T_SCAN = 4.6, T_LYOKO = 12.2, T_TITLE = 19.6, T_END = 24.5;
+const T_SCAN = 3.2, PER_CUT = 1.1, T_VIRT = 0.8, T_3D = 6, T_CARD = 2.5;
+
+/** How long the room should wait for the intro (ms), given the players. */
+export function introDuration(players) {
+  const cuts = players.filter((p) => characterByColor(p.color)?.id !== 'xana').length + (players.some((p) => characterByColor(p.color)?.id === 'xana') ? 1 : 0);
+  return Math.round((T_SCAN + Math.max(1, cuts) * PER_CUT + T_VIRT + T_3D + T_CARD) * 1000);
+}
 
 export class Intro {
-  constructor(app, onDone) {
+  /** opts: { players: [{name, color}], firstHole: index, isHost, onSkip(), onDone() } */
+  constructor(app, { players = [], firstHole = null, isHost = true, onSkip = null, onDone = null } = {}) {
     this.app = app;
     this.onDone = onDone;
+    this.onSkip = onSkip;
+    this.isHost = isHost;
     this.t = 0;
-    this.heroes = HEROES.map((id) => CHARACTERS.find((c) => c.id === id)).filter(Boolean);
+    // the party: every non-XANA character virtualizes; XANA gets its own beat
+    const party = players.map((p) => ({ ch: characterByColor(p.color), name: p.name })).filter((x) => x.ch);
+    this.heroes = party.filter((x) => x.ch.id !== 'xana').map((x) => ({ ...x.ch, playerName: x.name }));
+    this.xana = party.find((x) => x.ch.id === 'xana');
+    if (!players.length) this.heroes = HEROES.map((id) => CHARACTERS.find((c) => c.id === id)).filter(Boolean);
+    this.cuts = [...(this.xana ? [{ ...this.xana.ch, playerName: this.xana.name, isXana: true }] : []), ...this.heroes];
+    this.T_LYOKO = T_SCAN + Math.max(1, this.cuts.length) * PER_CUT + T_VIRT;
+    this.T_TITLE = this.T_LYOKO + T_3D;
+    this.T_END = this.T_TITLE + T_CARD;
+    this.hold = firstHole !== null; // in a match: keep the title up until hole 1 arrives
     // the overlay
     this.el = document.createElement('div');
     this.el.className = 'intro';
     this.el.innerHTML = `
       <canvas class="in-cv"></canvas>
       <div class="in-layer in-comp hidden"><div class="in-head">SUPERCOMPUTER · LYOKO SCAN</div><div class="in-alert">⚠ ACTIVATED TOWER DETECTED</div><div class="in-sub"></div></div>
-      <div class="in-layer in-cut hidden"><div class="in-rings"></div><img class="in-face px" alt="" /><div class="in-name"></div><div class="in-cmd"></div></div>
+      <div class="in-layer in-cut hidden"><div class="in-rings"></div><img class="in-face px" alt="" /><div class="in-name"></div><div class="in-player"></div><div class="in-cmd"></div></div>
       <div class="in-layer in-virt hidden"><div class="in-big">VIRTUALIZATION!</div></div>
       <div class="in-layer in-bars hidden"><div class="in-bar top"></div><div class="in-bar bot"></div><div class="in-cap"></div></div>
       <div class="in-layer in-title hidden">
@@ -36,22 +56,25 @@ export class Intro {
         <div class="in-row">${this.heroes.map((h) => `<img class="px" alt="" src="${portraitBig(h.id)}" />`).join('')}</div>
         <div class="in-tag">XANA is attacking. Get every ball to the cup.</div>
       </div>
-      <button class="in-skip">Skip ▸</button>`;
+      <button class="in-skip">${isHost ? 'Skip ▸' : 'The host can skip'}</button>`;
     document.body.appendChild(this.el);
     this.cv = this.el.querySelector('.in-cv');
     this.g = this.cv.getContext('2d');
     this.resize = () => { this.cv.width = innerWidth; this.cv.height = innerHeight; };
     this.resize();
     addEventListener('resize', this.resize);
-    // which sector XANA hit: the one the 3D part shows
-    // XANA strikes one of the four outer sectors (the ones on the supercomputer map)
+    // XANA strikes hole 1's sector: the 3D part is hole 1 itself
     app.hideBackdrop();
-    app.showBackdrop(HOLES.filter((h) => ['desert', 'forest', 'ice', 'mountain'].includes(h.sector)));
+    app.showBackdrop(firstHole !== null && HOLES[firstHole] ? [HOLES[firstHole]] : HOLES.filter((h) => ['desert', 'forest', 'ice', 'mountain'].includes(h.sector)));
     this.b = app.backdrop;
     this.sector = this.b.course.def?.sector || 'forest';
     this.el.querySelector('.in-sub').textContent = `SECTOR: ${(SECTOR_NAMES[this.sector] || this.sector).toUpperCase()}`;
     this.rain = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), v: 0.2 + Math.random() * 0.6, s: 10 + Math.random() * 10 }));
-    this.skip = (e) => { if (e.type === 'keydown' || e.target.closest?.('.in-skip') || this.t > 1) this.finish(); };
+    this.skip = (e) => {
+      if (!(e.type === 'keydown' || e.target.closest?.('.in-skip') || this.t > 1)) return;
+      if (!this.isHost) return; // only the host skips, for everyone
+      if (this.onSkip) this.onSkip(); else this.finish();
+    };
     addEventListener('keydown', this.skip);
     this.el.addEventListener('pointerdown', this.skip);
     music.play('intro');
@@ -68,10 +91,10 @@ export class Intro {
     const g = this.g, W = this.cv.width, H = this.cv.height;
     g.clearRect(0, 0, W, H);
     if (t < T_SCAN) this.computer(t, g, W, H);
-    else if (t < T_LYOKO) this.transfer(t - T_SCAN, g, W, H);
-    else if (t < T_TITLE) this.lyoko(t - T_LYOKO, dt);
-    else this.title(t - T_TITLE, dt);
-    if (t > T_END) this.finish();
+    else if (t < this.T_LYOKO) this.transfer(t - T_SCAN, g, W, H);
+    else if (t < this.T_TITLE) this.lyoko(t - this.T_LYOKO, dt);
+    else this.title(t - this.T_TITLE, dt);
+    if (t > this.T_END && !this.hold) this.finish();
   }
 
   // ---------- 1. the supercomputer screen ----------
@@ -92,14 +115,16 @@ export class Intro {
     const cx = W / 2, cy = H / 2 + 20, R = Math.min(W, H) * 0.24;
     const order = ['ice', 'desert', 'forest', 'mountain'];
     const hit = this.sector;
+    const elsewhere = !order.includes(hit) && hit !== 'sector5'; // a Replika, the Digital Sea, the Network…
     g.lineWidth = 2;
-    g.strokeStyle = 'rgba(120,220,255,0.6)'; g.beginPath(); g.arc(cx, cy, R * 0.32, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = hit === 'sector5' || elsewhere ? `rgba(255,60,60,${0.5 + 0.5 * Math.abs(Math.sin(t * 6))})` : 'rgba(120,220,255,0.6)';
+    g.beginPath(); g.arc(cx, cy, R * 0.32, 0, Math.PI * 2); g.stroke();
     g.fillStyle = 'rgba(120,220,255,0.7)'; g.font = 'bold 12px monospace'; g.textAlign = 'center';
     g.fillText('SECTOR 5', cx, cy + 4);
     order.forEach((s, i) => {
       const a = -Math.PI / 2 + i * Math.PI / 2;
       const x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
-      const isHit = s === hit;
+      const isHit = s === hit || elsewhere;
       g.strokeStyle = isHit ? `rgba(255,60,60,${0.5 + 0.5 * Math.abs(Math.sin(t * 6))})` : 'rgba(120,220,255,0.6)';
       g.beginPath(); g.arc(x, y, R * 0.36, 0, Math.PI * 2); g.stroke();
       g.fillStyle = isHit ? '#ff5050' : 'rgba(120,220,255,0.7)';
@@ -129,25 +154,27 @@ export class Intro {
       g.fillStyle = `rgba(90,170,255,${0.25 + d.v * 0.5})`;
       for (let k = 0; k < 6; k++) g.fillText(String.fromCharCode(0x30a0 + ((d.x * 999 + k * 7 + Math.floor(u * 8)) % 90)), d.x * W, (d.y - k * 0.025) * H);
     }
-    const per = 1.25, n = this.heroes.length;
+    const per = PER_CUT, n = this.cuts.length;
     const i = Math.floor(u / per);
     const cut = this.el.querySelector('.in-cut');
     if (i < n) {
       this.show('.in-cut', true);
       this.show('.in-virt', false);
+      const h = this.cuts[i];
       if (i !== this.cutIdx) {
         this.cutIdx = i;
-        const h = this.heroes[i];
         cut.querySelector('.in-face').src = portraitBig(h.id);
         cut.querySelector('.in-name').textContent = h.full || h.name;
+        cut.querySelector('.in-player').textContent = h.playerName ? `played by ${h.playerName}` : '';
         cut.style.setProperty('--hc', h.ui);
         cut.classList.toggle('flip', i % 2 === 1);
+        cut.classList.toggle('xana', !!h.isXana);
         cut.classList.remove('go'); void cut.offsetWidth; cut.classList.add('go');
-        sfx.play('whoosh');
+        sfx.play(h.isXana ? 'buzzer' : 'whoosh');
       }
       const k = (u - i * per) / per;
-      const nm = this.heroes[i].name.toUpperCase();
-      cut.querySelector('.in-cmd').textContent = k < 0.5 ? `TRANSFER ${nm}` : `SCANNER ${nm}`;
+      const nm = h.name.toUpperCase();
+      cut.querySelector('.in-cmd').textContent = h.isXana ? 'XANA ACTIVATES A TOWER' : k < 0.5 ? `TRANSFER ${nm}` : `SCANNER ${nm}`;
     } else {
       this.show('.in-cut', false);
       if (!this.virtShown) { this.virtShown = true; sfx.play('teleport'); this.app.ui.flash?.(); }
@@ -194,10 +221,12 @@ export class Intro {
     const cam = this.app.renderer.camera;
     const s = THREE.MathUtils.smoothstep(u, 3.4, 7.2);
     const from = new THREE.Vector3(tee.x + 1.4, tee.y + 1.0, tee.z + 3.1);
-    const to = new THREE.Vector3((tee.x + this.tower.position.x) / 2 + 6, tee.y + 9, (tee.z + this.tower.position.z) / 2);
+    const cupV = c.cup ? new THREE.Vector3(c.cup.x, c.cup.y, c.cup.z) : this.tower.position;
+    const to = new THREE.Vector3(cupV.x + 3.5, cupV.y + 3.2, cupV.z - 4.5);
     cam.position.copy(from.lerp(to, s));
     const lookA = new THREE.Vector3(tee.x, tee.y + 0.55, tee.z);
-    const lookB = this.tower.position.clone().add(new THREE.Vector3(0, 7, 0));
+    const cupP = c.cup ? new THREE.Vector3(c.cup.x, c.cup.y + 1.6, c.cup.z) : this.tower.position.clone().add(new THREE.Vector3(0, 7, 0));
+    const lookB = cupP;
     cam.lookAt(lookA.lerp(lookB, s));
     this.el.querySelector('.in-cap').textContent = u < 3.4 ? `LYOKO · ${(SECTOR_NAMES[this.sector] || '').toUpperCase()}` : 'XANA HAS ACTIVATED A TOWER';
   }
@@ -248,13 +277,14 @@ export class Intro {
 
   finish() {
     if (this.done) return;
+    this.hold = false;
     this.done = true;
     removeEventListener('keydown', this.skip);
     removeEventListener('resize', this.resize);
     if (this.group) this.app.renderer.scene.remove(this.group);
     this.el.classList.add('out');
     setTimeout(() => this.el.remove(), 500);
-    this.onDone();
+    this.onDone?.();
   }
 }
 

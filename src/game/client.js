@@ -71,7 +71,7 @@ export class GameClient {
       toggleCam: () => this.cycleView(),
       spectate: () => this.cycleSpectate(),
       cancelTarget: () => this.cancelTargeting(),
-      start: () => this.link.send({ t: 'start' }),
+      start: () => this.link.send({ t: 'start', intro: this.app.ui.prefs.intro !== false }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
@@ -116,7 +116,7 @@ export class GameClient {
         if (this.phase === 'connecting' || this.phase === 'lobby' || (this.phase === 'final' && m.phase === 'lobby')) {
           this.phase = 'lobby';
           if (!m.solo) this.ui.showLobby(m, this.myId);
-          else if (m.phase === 'lobby') this.link.send({ t: 'start' });
+          else if (m.phase === 'lobby') this.link.send({ t: 'start', intro: this.app.ui.prefs.intro !== false });
         }
         break;
       }
@@ -126,9 +126,13 @@ export class GameClient {
       case 'matchStart':
         this.inventory = [];
         this.plan = m.plan;
-        this.ui.showVS(m.players || [...this.players.values()]);
+        if (m.intro) {
+          this.ui.setScreen('');
+          this.app.startIntro({ players: m.players || [...this.players.values()], firstHole: m.plan[0], isHost: this.isHost, onSkip: () => this.link.send({ t: 'skipIntro' }) });
+        } else this.ui.showVS(m.players || [...this.players.values()]);
         break;
       case 'hole':
+        this.app.endIntro();
         this.loadHole(m);
         break;
       case 'st': {

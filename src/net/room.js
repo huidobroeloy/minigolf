@@ -1,4 +1,5 @@
 import { HOLES, buildPlan } from '../holes/index.js';
+import { introDuration } from '../game/intro.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
 import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
@@ -148,7 +149,10 @@ export class HostRoom {
         return;
       }
       case 'start':
-        if (p?.host && (this.phase === 'lobby' || this.phase === 'final')) this.startMatch();
+        if (p?.host && (this.phase === 'lobby' || this.phase === 'final')) this.startMatch({ intro: msg.intro !== false });
+        return;
+      case 'skipIntro':
+        if (p?.host && this.phase === 'intro') { clearTimeout(this.introTimer); this.nextHole(); }
         return;
       case 'skip':
         if (p?.host && this.phase === 'hole') this.endHole();
@@ -257,7 +261,7 @@ export class HostRoom {
     if (old) return this.rejoin(old, id);
     if (this.players.size >= MAX_PLAYERS) { this.sendTo(id, { t: 'reject', reason: 'Room is full (8 players)' }); return; }
     const used = new Set([...this.players.values()].map((p) => p.color));
-    let color = msg.color && !used.has(msg.color) ? msg.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
+    let color = msg.color && COLORS.includes(msg.color) && !used.has(msg.color) ? msg.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
     const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi].par, 0) : null));
@@ -318,18 +322,21 @@ export class HostRoom {
     return buildPlan(s);
   }
 
-  startMatch() {
+  startMatch({ intro = true } = {}) {
     this.playoff = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
     for (const p of this.players.values()) { p.scores = this.plan.map(() => null); }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
-    this.broadcast({ t: 'matchStart', plan: this.plan, players: this.playerList() });
-    // leave time for the VS intro before hole 1
+    // the intro (transfer, scanner, virtualization) before hole 1; single-hole practice skips it
+    const players = this.playerList();
+    const playIntro = intro && !String(this.settings.course).startsWith('hole:');
+    const introMs = playIntro ? introDuration(players) : 3600;
+    this.broadcast({ t: 'matchStart', plan: this.plan, players, intro: playIntro, introMs });
     this.phase = 'intro';
     clearTimeout(this.introTimer);
-    this.introTimer = setTimeout(() => { if (this.phase === 'intro') this.nextHole(); }, 3600);
+    this.introTimer = setTimeout(() => { if (this.phase === 'intro') this.nextHole(); }, introMs);
   }
 
   activePlayers() { return [...this.players.values()].filter((p) => p.connected); }
