@@ -1,4 +1,4 @@
-import { HOLES } from '../holes/index.js';
+import { HOLES, buildPlan } from '../holes/index.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
 import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
@@ -71,7 +71,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'all', timeMul: 1, puLevel: 'normal' };
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal' };
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -290,13 +290,8 @@ export class HostRoom {
   // ---------- match flow ----------
   buildPlan() {
     const s = this.settings.course;
-    const all = HOLES.map((_, i) => i);
-    if (s === 'front') return all.slice(0, 9);
-    if (s === 'back') return all.slice(9);
-    if (s === 'random9') return all.sort(() => Math.random() - 0.5).slice(0, 9).sort((a, b) => a - b);
-    if (typeof s === 'string' && s.startsWith('hole:')) return [Number(s.slice(5))];
-    const bySector = all.filter((i) => HOLES[i].sector === s);
-    return bySector.length ? bySector : all;
+    if (s === 'all') return HOLES.map((_, i) => i);
+    return buildPlan(s);
   }
 
   startMatch() {

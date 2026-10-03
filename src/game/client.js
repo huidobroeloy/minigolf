@@ -299,7 +299,20 @@ export class GameClient {
       const shooting = this.playoff.shooters.includes(this.myId);
       this.ui.banner('SUDDEN DEATH', shooting ? `One shot · closest to the pin wins · ${def.name}` : `Tiebreak: ${this.playoff.shooters.map((id) => this.nameOf(id)).join(' vs ')}`);
       if (!shooting) { this.ball.state = 'holed'; this.ball.mesh.visible = false; this.ball.body.setEnabled(false); }
-    } else this.ui.banner(`HOLE ${m.holeNo + 1} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
+    } else {
+      // a new course starts: big title card
+      const plan = this.plan || [m.index];
+      const prev = m.holeNo > 0 ? HOLES[plan[m.holeNo - 1]] : null;
+      if (!prev || prev.sector !== def.sector) {
+        const starts = plan.filter((hi, i) => i === 0 || HOLES[plan[i - 1]].sector !== HOLES[hi].sector).length;
+        const n = plan.slice(0, m.holeNo + 1).filter((hi, i) => i === 0 || HOLES[plan[i - 1]].sector !== HOLES[hi].sector).length;
+        const holes = plan.filter((hi) => HOLES[hi].sector === def.sector).length;
+        if (plan.length > 1) this.ui.courseCard(n, starts, SECTOR_NAMES[def.sector], holes);
+      }
+      const inCourse = plan.slice(0, m.holeNo + 1).reverse().findIndex((hi) => HOLES[hi].sector !== def.sector);
+      const k = inCourse < 0 ? m.holeNo + 1 : inCourse;
+      this.ui.banner(`HOLE ${k} · ${def.name}`, `${SECTOR_NAMES[def.sector]} · Par ${def.par}`);
+    }
     this.playersDirty = true;
     this.lastBeep = 99;
     this.virtualize(this.ball.mesh.position);

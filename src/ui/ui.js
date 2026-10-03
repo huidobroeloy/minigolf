@@ -1,6 +1,6 @@
 import { POWERUPS, POWERUP_IDS } from '../powerups/registry.js';
 import { COLORS } from '../net/room.js';
-import { HOLES, SECTORS } from '../holes/index.js';
+import { HOLES, SECTORS, COURSES, formatOptions } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
 import { portrait, portraitBig } from './portraits.js';
@@ -115,7 +115,7 @@ export class UI {
     const s = this.setScreen(`
       <div class="panel menu">
         <div class="logo">LYOKO<span>MINIGOLF</span></div>
-        <div class="tagline">18 holes · 6 sectors · way too many power-ups</div>
+        <div class="tagline">The Lyoko World Cup · ${COURSES.length} sectors · ${HOLES.length} holes · way too many power-ups</div>
         ${error ? `<div class="error">${esc(error)}</div>` : ''}
         <label>Your name</label>
         <input id="name" maxlength="16" value="${esc(p.name)}" placeholder="Ulrich" />
@@ -130,9 +130,8 @@ export class UI {
         </div>
         <div class="row solo">
           <select id="soloCourse">
-            <option value="all">Solo · full 18</option>
-            ${SECTORS.map((sc) => `<option value="${sc.key}">Solo · ${esc(sc.name)}</option>`).join('')}
-            ${HOLES.map((hh, i) => `<option value="hole:${i}">Hole ${i + 1} · ${esc(hh.name)}</option>`).join('')}
+            ${formatOptions().map(([v, n]) => `<option value="${v}">Solo · ${esc(n)}</option>`).join('')}
+            ${COURSES.map((c) => `<optgroup label="${esc(c.name)}">${c.holes.map((hh) => { const i = HOLES.indexOf(hh); return `<option value="hole:${i}">Practice · ${esc(hh.name)} (par ${hh.par})</option>`; }).join('')}</optgroup>`).join('')}
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
@@ -199,10 +198,7 @@ export class UI {
     const isHost = !!me?.host;
     const st = lobby.settings;
     const url = `${location.origin}${location.pathname}?room=${lobby.code}`;
-    const courseOpts = [
-      ['all', 'All 18 holes'], ['front', 'Front 9 (Desert · Forest · Ice)'], ['back', 'Back 9 (Mountain · Sector 5 · Fortune Falls)'], ['random9', 'Random 9'],
-      ...SECTORS.map((sc) => [sc.key, sc.name + ' (3 holes)']),
-    ];
+    const courseOpts = formatOptions();
     const s = this.setScreen(`
       <div class="panel lobby">
         <div class="logo small">LYOKO<span>MINIGOLF</span></div>
@@ -217,7 +213,7 @@ export class UI {
           <div class="small">${lobby.players.length}/8 players</div>
         </div>
         <div class="settings ${isHost ? '' : 'readonly'}">
-          <label>Course</label>
+          <label>Format</label>
           <select id="course" ${isHost ? '' : 'disabled'}>${courseOpts.map(([v, n]) => `<option value="${v}" ${st.course === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
           <label>Time limit</label>
           <select id="timeMul" ${isHost ? '' : 'disabled'}>${[[0.75, 'Short (×0.75)'], [1, 'Normal'], [1.5, 'Relaxed (×1.5)'], [2, 'Chill (×2)']].map(([v, n]) => `<option value="${v}" ${Number(st.timeMul) === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
@@ -505,6 +501,14 @@ export class UI {
     setTimeout(() => t.remove(), 3000);
   }
 
+  /** Big title card when a new course starts. */
+  courseCard(n, total, name, holes) {
+    const c = el(`<div class="course-card"><div class="cc-n">COURSE ${n} / ${total}</div><div class="cc-name">${esc(name)}</div><div class="cc-s">${holes} holes</div></div>`);
+    this.$('#toasts').appendChild(c);
+    setTimeout(() => c.classList.add('fade'), 2800);
+    setTimeout(() => c.remove(), 3500);
+  }
+
   banner(title, sub) {
     const b = el(`<div class="banner"><div class="t">${esc(title)}</div><div class="s">${esc(sub)}</div></div>`);
     this.$('#toasts').appendChild(b);
@@ -600,6 +604,13 @@ export class UI {
     const sorted = final ? [...players] : [...players].sort((a, b) => a.total - b.total);
     const parSum = pars.slice(0, holeNo + 1).reduce((a, b) => a + b, 0);
     const resultMap = new Map((results || []).map((r) => [r.id, r]));
+    // group the plan into its courses (consecutive holes of the same sector)
+    const groups = [];
+    plan.forEach((hi, i) => {
+      const key = HOLES[hi].sector;
+      if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, name: COURSES.find((c) => c.key === key)?.name || key, idx: [] });
+      groups[groups.length - 1].idx.push(i);
+    });
     const cell = (s, i) => {
       if (s === null || s === undefined) return '<td class="na">·</td>';
       const d = s - pars[i];
@@ -612,13 +623,15 @@ export class UI {
         ${final && tiebreak ? `<div class="tiebreak">⚔️ TIEBREAK · ${esc(tiebreak)}</div>` : ''}
         ${final ? podium(sorted) + awards(players) : ''}
         <div class="table-wrap"><table>
-          <thead><tr><th>#</th><th>Player</th>${plan.map((hi, i) => `<th title="${esc(HOLES[hi].name)}">${hi + 1}</th>`).join('')}<th>Total</th><th>±Par</th></tr>
-            <tr class="pars"><td></td><td>Par</td>${pars.map((p) => `<td>${p}</td>`).join('')}<td>${pars.reduce((a, b) => a + b, 0)}</td><td></td></tr></thead>
+          <thead><tr class="courses"><th></th><th></th>${groups.map((g) => `<th colspan="${g.idx.length + 1}" class="cg">${esc(g.name)}</th>`).join('')}<th></th><th></th></tr>
+            <tr><th>#</th><th>Player</th>${groups.map((g) => g.idx.map((i, k) => `<th title="${esc(HOLES[plan[i]].name)}">${k + 1}</th>`).join('') + '<th class="sub">Σ</th>').join('')}<th>Total</th><th>±Par</th></tr>
+            <tr class="pars"><td></td><td>Par</td>${groups.map((g) => g.idx.map((i) => `<td>${pars[i]}</td>`).join('') + `<td class="sub">${g.idx.reduce((a, i) => a + pars[i], 0)}</td>`).join('')}<td>${pars.reduce((a, b) => a + b, 0)}</td><td></td></tr></thead>
           <tbody>${sorted.map((p, rank) => {
             const r = resultMap.get(p.id);
             const rel = p.total - parSum;
+            const subt = (g) => { const v = g.idx.map((i) => p.scores[i]).filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) : '·'; };
             return `<tr class="${p.id === myId ? 'me' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${esc(p.name)}${r?.timeout ? ' ⏰' : ''}</td>
-              ${plan.map((_, i) => cell(p.scores[i], i)).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
+              ${groups.map((g) => g.idx.map((i) => cell(p.scores[i], i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
           }).join('')}</tbody>
         </table></div>
         <div class="row">
