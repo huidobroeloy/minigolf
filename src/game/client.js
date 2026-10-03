@@ -17,6 +17,7 @@ import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
 import { Finale } from './finale.js';
 import { TowerTrip } from '../fx/towerCup.js';
+import { stats, trailParticle } from './stats.js';
 import { XanaFinale } from './xanaFinale.js';
 import { characterByColor } from './characters.js';
 import { emojiTexture } from '../fx/particles.js';
@@ -43,7 +44,7 @@ export class GameClient {
     this.inventory = [];
     this.cam = new ChaseCam(this.renderer.camera);
     this.ghosts = new Ghosts(this.scene);
-    this.ghosts.onTrail = (p, color, r) => this.trail(p, color, r);
+    this.ghosts.onTrail = (p, color, r, id) => this.trail(p, color, r, this.players.get(id)?.trail);
     this.effects = new EffectManager(this);
     this.sendTimer = 0;
     this.simTime = 0;
@@ -63,7 +64,7 @@ export class GameClient {
 
     link.onMessage = (m) => this.onMessage(m);
     link.onClose = () => this.app.onDisconnect();
-    link.send({ t: 'join', name: me.name, color: me.color, token: app.token });
+    link.send({ t: 'join', name: me.name, color: me.color, token: app.token, trail: app.ui.prefs.trail || 'default' });
     this.bindInput();
     this.ui.on({
       use: (i) => this.useSlot(i),
@@ -72,6 +73,7 @@ export class GameClient {
       spectate: () => this.cycleSpectate(),
       cancelTarget: () => this.cancelTargeting(),
       start: () => this.link.send({ t: 'start', intro: this.app.ui.prefs.intro !== false }),
+      trail: (k) => this.link.send({ t: 'trail', trail: k }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
@@ -156,6 +158,9 @@ export class GameClient {
       case 'fx':
         this.effects.apply(m);
         break;
+      case 'xanaAttack':
+        this.effects.xanaAttack(m);
+        break;
       case 'gift':
         if (m.pu) { this.addPowerup(m.pu, 'steal'); this.ui.bigToast('🦝 Got it!', `stole ${POWERUPS[m.pu].name} from ${this.nameOf(m.from)}`, 'good'); }
         else this.ui.toast(`${this.nameOf(m.from)} had nothing to steal`);
@@ -215,6 +220,9 @@ export class GameClient {
         this.ui.hideHud();
         this.ui.setScreen('');
         const winners = m.winnerId ? m.standings.filter((p) => p.id === m.winnerId) : m.standings.slice(0, 1);
+        stats.add('matches');
+        if (winners[0]?.id === this.myId) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
+        if ((m.plan?.length ?? 0) >= 54) stats.add('worldcups');
         // XANA won: the catastrophic ending instead of the tower being saved
         const xanaWins = characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
@@ -384,12 +392,20 @@ export class GameClient {
     // record results
     for (const p of m.players) this.upsertPlayer(p);
     const mine = m.results.find((r) => r.id === this.myId);
-    if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); }
+    if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); stats.add('holes'); }
     this.phase = 'between';
     music.play('menu');
     this.teardownHole();
     this.app.showBackdrop();
     this.ui.showScoreboard({ players: m.players, plan: m.plan, holeNo: m.holeNo, results: m.results, myId: this.myId, final: false, isHost: this.isHost });
+    // shot of the hole: the best score (an ace beats everything)
+    const done = (m.results || []).filter((r) => !r.timeout && r.score > 0);
+    if (done.length >= 2) {
+      const best = Math.min(...done.map((r) => r.score));
+      const who = done.filter((r) => r.score === best).map((r) => this.nameOf(r.id));
+      const par = HOLES[m.plan[m.holeNo]]?.par ?? 3;
+      this.ui.bigToast('🏅 SHOT OF THE HOLE', `${who.join(' & ')} · ${best === 1 ? 'HOLE IN ONE' : scoreName(best, par)}`, 'good');
+    }
   }
 
   // ---------- ball events ----------
@@ -436,6 +452,13 @@ export class GameClient {
     this.ui.stamp(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
     if (this.rawStrokes === 1) this.aceFireworks();
     if (this.rawStrokes === 1) { sfx.play('hio'); this.stat('hio'); }
+    // lifetime stats (achievements)
+    stats.add('holes'); stats.add('towers'); stats.add('strokes', this.strokes);
+    if (this.rawStrokes === 1) stats.add('aces');
+    if (this.strokes <= this.def.par - 3) stats.add('under3');
+    if ((this.lp ?? 100) <= 10) stats.add('survivor');
+    if (mod < 0) stats.add('fortuneWon', -mod);
+    if (this.preShot) { const c = this.ball.sinkCup || this.course.cup; stats.max('longest', Math.hypot(this.preShot.pos.x - c.x, this.preShot.pos.z - c.z)); }
     if (this.rawStrokes === 1) this.ui.comms.say('ace', {}, { force: true });
     else if (this.strokes < this.def.par) this.ui.comms.say('birdie', {}, { force: true });
     else if (this.strokes >= this.def.par + 2) this.ui.comms.say('bogey');
@@ -453,8 +476,8 @@ export class GameClient {
   }
 
   /** Glowing dotted trail behind fast balls (yours and the ghosts'). */
-  trail(p, color, r) {
-    this.effects.particles?.spawn({ pos: [p.x, p.y, p.z], color, size: 0.22 * (r / 0.18), life: 0.35 });
+  trail(p, color, r, style = 'default') {
+    this.effects.particles?.spawn(trailParticle(style, p, color, r, this.simTime ?? 0));
   }
 
   /** Rings in the player's colour rise out of the cup, sparkles burst, the flag spins. */
@@ -779,7 +802,7 @@ export class GameClient {
   /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
   vaporize(quiet = false) {
     const b = this.ball;
-    if (b && b.state !== 'holed') this.ui.comms.say('vaporized', {}, { force: true });
+    if (b && b.state !== 'holed') { this.ui.comms.say('vaporized', {}, { force: true }); stats.add('devirt'); }
     if (!b || b.state === 'holed' || b.state === 'sinking' || this.falling) return;
     this.endTrip();
     const fid = ++this.fallId;
@@ -1017,7 +1040,7 @@ export class GameClient {
     if (this.effects.locked) return this.ui.toast('You can\'t skip this ad 📺');
     const def = POWERUPS[id];
     const myActive = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking';
-    const consume = () => { this.inventory.splice(i, 1); this.ui.renderInventory(this.inventory); sfx.play('use'); };
+    const consume = () => { this.inventory.splice(i, 1); this.ui.renderInventory(this.inventory); sfx.play('use'); stats.add('powerups'); };
     if ((def.kind === 'self' || def.kind === 'aura' || def.needSelf) && !myActive) return this.ui.toast('Your ball is already in the cup');
     if (id === 'returnpast' && !this.preShot) return this.ui.toast('Nothing to undo yet — take a shot first');
     if (id === 'firewall' && this.effects.shield) return this.ui.toast('Your Firewall is already up');
@@ -1372,7 +1395,7 @@ export class GameClient {
     // visuals
     this.ball.syncMesh(dt * ts);
     const bv = this.ball.vel;
-    if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.me.color, this.ball.radius);
+    if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.me.color, this.ball.radius, this.app.ui.prefs.trail);
     this.course.frame(this.simTime, dt);
     this.effects.frame(this.simTime, dt);
     this.pickups.frame(this.simTime);
@@ -1487,10 +1510,17 @@ export class GameClient {
     if (me && me.strokes !== this.strokes) { me.strokes = this.strokes; this.playersDirty = true; }
   }
 
+  /** Live leaderboard: rank, score against par so far, and strokes on this hole. */
   renderPlayers() {
-    const list = [...this.players.values()].filter((p) => p.connected !== false)
-      .map((p) => ({ ...p, total: (p.scores || []).reduce((a, b) => a + (b ?? 0), 0) }))
-      .sort((a, b) => a.total - b.total);
+    const plan = this.plan || [];
+    const list = [...this.players.values()].filter((p) => p.connected !== false).map((p) => {
+      const sc = p.scores || [];
+      let total = 0, par = 0;
+      sc.forEach((s, i) => { if (s !== null && s !== undefined) { total += s; par += HOLES[plan[i]]?.par ?? 0; } });
+      return { ...p, total, toPar: total - par };
+    }).sort((a, b) => a.toPar - b.toPar || a.total - b.total);
+    let rank = 0, prev = null;
+    list.forEach((p, i) => { if (p.toPar !== prev) { rank = i + 1; prev = p.toPar; } p.rank = rank; });
     this.ui.renderPlayers(list, this.myId);
   }
 

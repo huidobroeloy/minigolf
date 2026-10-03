@@ -7,6 +7,7 @@ import { sfx } from './core/audio.js';
 import { music } from './core/music.js';
 import { soundtrack } from './core/soundtrack.js';
 import { Intro } from './game/intro.js';
+import { stats } from './game/stats.js';
 import { HostRoom } from './net/room.js';
 import { LocalLink, hostPeer, joinPeer, makeCode } from './net/transport.js';
 import { GameClient } from './game/client.js';
@@ -47,6 +48,7 @@ class App {
       quality: (q) => { this.renderer.setQuality(q); this.ui.prefs.quality = q; savePrefs(this.ui.prefs); },
     });
     window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+    stats.onUnlock = (a) => { this.ui.bigToast(`${a.icon} ACHIEVEMENT`, `${a.name}${a.trail ? ' · new ball trail unlocked!' : ''}`, 'good'); sfx.play('hio'); };
     // the host shares its own soundtrack with the room
     soundtrack.onChange(() => { clearTimeout(this.shareT); this.shareT = setTimeout(() => this.shareTracks(), 400); });
 
@@ -74,7 +76,7 @@ class App {
     requestAnimationFrame(loop);
     window.__app = this;
     if (this.debug) {
-      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__holes = HOLES; });
+      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__probeWarp = m.probeWarp; window.__holes = HOLES; });
     }
   }
 

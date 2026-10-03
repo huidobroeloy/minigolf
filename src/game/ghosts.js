@@ -55,7 +55,7 @@ export class Ghosts {
         if (g.mesh.position.distanceTo(g.target) > 4) g.mesh.position.copy(g.target);
         else g.mesh.position.lerp(g.target, k);
         const sp = dt > 0 ? before.distanceTo(g.mesh.position) / dt : 0;
-        if (sp > 2.5 && sp < 60 && g.state !== 'holed') this.onTrail?.(g.mesh.position, g.trailColor, g.radius);
+        if (sp > 2.5 && sp < 60 && g.state !== 'holed') this.onTrail?.(g.mesh.position, g.trailColor, g.radius, g.id);
       }
       const visible = g.seen && g.state !== 'holed' && g.state !== 'gone';
       g.mesh.visible = visible;

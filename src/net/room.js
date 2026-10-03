@@ -121,7 +121,7 @@ export class HostRoom {
 
   playerList() {
     return [...this.players.values()].map((p) => ({
-      id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected,
+      id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default',
       scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {},
     }));
   }
@@ -138,6 +138,9 @@ export class HostRoom {
       case 'join': return this.onJoin(id, msg);
       case 'settings':
         if (p?.host && this.phase === 'lobby') { Object.assign(this.settings, msg.settings); this.broadcastLobby(); }
+        return;
+      case 'trail':
+        if (p && typeof msg.trail === 'string') { p.trail = msg.trail.slice(0, 16); this.broadcastLobby(); }
         return;
       case 'pick': {
         // change character in the lobby (one player per character)
@@ -265,7 +268,8 @@ export class HostRoom {
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
     const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi].par, 0) : null));
-    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token });
+    const trail = typeof msg.trail === 'string' ? msg.trail.slice(0, 16) : 'default';
+    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token, trail });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
     this.broadcastLobby();
     if (id !== 'host' && id !== 'solo') this.streamTracks(id);
@@ -369,7 +373,24 @@ export class HostRoom {
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
     for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; }
+    // XANA attack: about one hole in three, somewhere between 20% and 55% of the way through
+    this.xanaAt = !this.playoff && Math.random() < 0.34 ? this.duration * (0.2 + Math.random() * 0.35) : null;
     this.broadcast(this.holeMessage());
+  }
+
+  /** XANA launches an attack on everyone for 20 s (rage, glitched floor, mirror world or a swarm). */
+  xanaAttack() {
+    this.xanaAt = null;
+    const kinds = ['rage', 'glitch', 'mirror', 'swarm'];
+    let kind = kinds[Math.floor(Math.random() * kinds.length)];
+    // the swarm goes after the leader (best total among players still playing)
+    let pos = null;
+    if (kind === 'swarm') {
+      const live = this.activePlayers().filter((q) => !q.holed && q.pos).sort((a, b) => a.scores.reduce((s, v) => s + (v ?? 0), 0) - b.scores.reduce((s, v) => s + (v ?? 0), 0));
+      pos = live[0]?.pos ? [live[0].pos[0], live[0].pos[1] - 0.18, live[0].pos[2]] : null;
+      if (!pos) kind = 'rage';
+    }
+    this.broadcast({ t: 'xanaAttack', kind, pos, seed: randomSeed(), at: this.elapsed(), dur: 20000 });
   }
 
   endHole() {
@@ -453,6 +474,7 @@ export class HostRoom {
     }
     if (this.phase === 'hole') {
       if (this.pickups.length && performance.now() - this.lastRespawn > RESPAWN_EVERY_MS) this.respawnPickups();
+      if (this.xanaAt !== null && this.xanaAt !== undefined && this.elapsed() >= this.xanaAt && !this.allHoledAt) this.xanaAttack();
       if (this.elapsed() >= this.duration) this.endHole();
       else if (this.allHoledAt && performance.now() - this.allHoledAt > ALL_HOLED_GRACE_MS) this.endHole();
       else if (this.activePlayers().length === 0) this.endHole();

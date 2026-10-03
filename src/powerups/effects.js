@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { stats } from '../game/stats.js';
 import { POWERUPS } from './registry.js';
 import { HAZARDS } from './hazards.js';
 import { RNG } from '../core/rng.js';
@@ -56,6 +57,11 @@ export class EffectManager {
   }
 
   clear() {
+    // a XANA attack never outlives its hole
+    clearTimeout(this.mirrorT); clearTimeout(this.alertT);
+    document.body.classList.remove('mirror-world', 'xana-alert');
+    for (const gl of this.glitches || []) this.group.remove(gl.mesh);
+    this.glitches = [];
     for (const h of this.hazards) h.dispose();
     for (const s of this.swarms) for (const m of s.monsters) m.dispose();
     for (const c of this.creations) { this.physics?.removeBody(c.body); }
@@ -256,6 +262,7 @@ export class EffectManager {
     for (const mv of this.course.movers) if (!mv.slashed) consider(mv, mv.cur.x, mv.cur.z);
     if (!best) { this.client.ui.toast('🗡️ The Zweihänder hit nothing'); return; }
     best.slashed = true;
+    if (best.spec) stats.add('slashed'); // a monster (not a moving platform)
     const body = best.body;
     if (body) body.setEnabled(false);
     const mesh = best.model || best.mesh;
@@ -287,6 +294,44 @@ export class EffectManager {
       this.placed.push({ type: 'blackhole', x: p[0], y: p[1], z: p[2], range, model, until: fx.at / 1000 + BH_LIFE });
     }
     sfx.play('use');
+  }
+
+  /** XANA attack (from the room, everyone at once). */
+  xanaAttack(m) {
+    const c = this.client;
+    if (!this.course) return;
+    const t0 = m.at / 1000, dur = (m.dur ?? 20000) / 1000;
+    const sub = { rage: 'every monster is enraged', glitch: 'the floor is glitching', mirror: 'the world is mirrored', swarm: 'a Kankrelat swarm is loose' }[m.kind] || '';
+    c.ui.bigToast('⚠️ XANA ATTACK', sub, 'bad');
+    c.ui.comms?.say('xanaAttack', {}, { force: true });
+    sfx.play('buzzer');
+    document.body.classList.add('xana-alert');
+    clearTimeout(this.alertT);
+    this.alertT = setTimeout(() => document.body.classList.remove('xana-alert'), dur * 1000);
+    for (const tw of this.course.towers || []) tw.holo.userData.flash(t0);
+    if (m.kind === 'rage') this.course.enrageUntil = t0 + dur;
+    if (m.kind === 'swarm' && m.pos) this.spawnSwarm({ params: { pos: m.pos }, seed: m.seed, at: m.at });
+    if (m.kind === 'mirror') {
+      document.body.classList.add('mirror-world');
+      clearTimeout(this.mirrorT);
+      this.mirrorT = setTimeout(() => document.body.classList.remove('mirror-world'), 15000);
+    }
+    if (m.kind === 'glitch') {
+      // patches of corrupted floor: some slick as ice, some sticky as sludge
+      const rng = new RNG(m.seed);
+      for (let i = 0; i < 6; i++) {
+        const pt = this.course.randomFloorPoint(rng);
+        if (!pt) continue;
+        const slick = i % 2 === 0, r = 1.1 + rng.next() * 0.6;
+        const zone = { kind: 'slow', mul: slick ? 0.15 : 4, contains: (p) => Math.hypot(p.x - pt.x, p.z - pt.z) <= r, glitch: true };
+        const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 6), new THREE.MeshBasicMaterial({ color: slick ? '#7ff6ff' : '#ff2a6a', transparent: true, opacity: 0.45, depthWrite: false }));
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(pt.x, pt.y + 0.03, pt.z);
+        this.group.add(mesh);
+        this.course.zones.push(zone);
+        (this.glitches ||= []).push({ zone, mesh, until: t0 + dur });
+      }
+    }
   }
 
   /** Kankrelat Swarm: five Kankrelats skitter on seeded loops around the chosen spot. */
@@ -503,6 +548,13 @@ export class EffectManager {
       sfx.play('burp');
     }
     for (const s of this.swarms) for (const m of s.monsters) m.update(t);
+    // XANA's glitched floor patches flicker and expire
+    for (let i = (this.glitches?.length ?? 0) - 1; i >= 0; i--) {
+      const gl = this.glitches[i];
+      gl.mesh.material.opacity = 0.25 + 0.3 * Math.abs(Math.sin(t * 9 + i));
+      gl.mesh.rotation.z = Math.floor(t * 6 + i) * 0.5;
+      if (t > gl.until) { this.group.remove(gl.mesh); this.course.zones.splice(this.course.zones.indexOf(gl.zone), 1); this.glitches.splice(i, 1); }
+    }
     for (let i = this.swarms.length - 1; i >= 0; i--) {
       if (t > this.swarms[i].until) { for (const m of this.swarms[i].monsters) m.dispose(); this.swarms.splice(i, 1); }
     }

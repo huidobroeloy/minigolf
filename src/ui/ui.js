@@ -7,6 +7,7 @@ import { portrait, portraitBig } from './portraits.js';
 import { ballOrb } from './orb.js';
 import { soundtrack, SLOTS } from '../core/soundtrack.js';
 import { Comms } from './comms.js';
+import { stats, ACHIEVEMENTS, TRAILS } from '../game/stats.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -139,7 +140,7 @@ export class UI {
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
-        <div class="row"><button class="btn" id="settingsBtn">⚙️ Sound &amp; graphics</button></div>
+        <div class="row"><button class="btn" id="settingsBtn">⚙️ Sound &amp; graphics</button><button class="btn" id="achBtn">🏆 Achievements</button></div>
         <div class="small">Drag down from anywhere to set power, sideways to aim, release to putt. Press H in game for all controls.</div>
       </div>`);
     this.charSelect(s.querySelector('.cs-host'), {
@@ -160,6 +161,33 @@ export class UI {
     s.querySelector('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') s.querySelector('#join').click(); });
     s.querySelector('#solo').onclick = () => this.h.solo?.(s.querySelector('#soloCourse').value, getMe());
     s.querySelector('#settingsBtn').onclick = () => this.toggleSettings();
+    s.querySelector('#achBtn').onclick = () => this.showAchievements();
+  }
+
+  /** Lifetime stats, achievements and the ball-trail picker. */
+  showAchievements() {
+    const d = stats.data, have = new Set(d.unlocked), trails = stats.unlockedTrails();
+    const cur = this.prefs.trail || 'default';
+    const o = this.overlay(`<div class="panel achievements">
+      <h2>🏆 Achievements <small>${have.size}/${ACHIEVEMENTS.length}</small></h2>
+      <div class="ach-stats">
+        <span><b>${d.holes}</b> holes</span><span><b>${d.aces}</b> aces</span><span><b>${d.towers}</b> towers</span>
+        <span><b>${d.wins}</b>/${d.matches} wins</span><span><b>${d.devirt}</b> devirtualized</span><span><b>${(d.longest || 0).toFixed(1)}</b> longest putt</span>
+      </div>
+      <div class="ach-list">${ACHIEVEMENTS.map((a) => `<div class="ach ${have.has(a.id) ? 'got' : ''}"><span class="ai">${a.icon}</span><div><b>${esc(a.name)}</b><small>${esc(a.desc)}${a.trail ? ` · unlocks the ${esc(TRAILS[a.trail].name)} trail` : ''}</small></div></div>`).join('')}</div>
+      <h3>Ball trail</h3>
+      <div class="trail-pick">${Object.entries(TRAILS).map(([k, t]) => `<button class="btn ${k === cur ? 'primary' : ''}" data-trail="${k}" ${trails.includes(k) ? '' : 'disabled title="Locked"'}>${trails.includes(k) ? '' : '🔒 '}${esc(t.name)}</button>`).join('')}</div>
+      <div class="row"><button class="btn primary" id="achClose">Done</button></div>
+    </div>`, 'ach-ov');
+    o.querySelector('.trail-pick').onclick = (e) => {
+      const k = e.target.closest('[data-trail]')?.dataset.trail;
+      if (!k || !trails.includes(k)) return;
+      this.prefs.trail = k;
+      savePrefs(this.prefs);
+      this.h.trail?.(k);
+      o.querySelectorAll('[data-trail]').forEach((b) => b.classList.toggle('primary', b.dataset.trail === k));
+    };
+    o.querySelector('#achClose').onclick = () => this.closeOverlay();
   }
 
   /** Sound & graphics settings (menu button, ⚙️ in the HUD, or Esc). */
@@ -386,10 +414,11 @@ export class UI {
   }
 
   renderPlayers(list, myId) {
+    const rel = (n) => (n === 0 ? 'E' : n > 0 ? `+${n}` : `−${-n}`);
     this.$('.hud-players').innerHTML = list.map((p) => `
-      <div class="hp ${p.holed ? 'holed' : ''} ${p.connected === false ? 'gone' : ''}">
-        <i style="background:${p.color}"></i><span class="n">${esc(p.name)}${p.id === myId ? ' (you)' : ''}</span>
-        <span class="s">${p.holed ? '⛳ ' + p.strokes : p.strokes}</span><span class="tot">${p.total}</span>
+      <div class="hp ${p.holed ? 'holed' : ''} ${p.connected === false ? 'gone' : ''} ${p.id === myId ? 'me' : ''}" title="Total ${p.total}">
+        <span class="rk">${p.rank ?? ''}</span><i style="background:${p.color}"></i><span class="n">${esc(p.name)}${p.id === myId ? ' (you)' : ''}</span>
+        <span class="s">${p.holed ? '⛳ ' + p.strokes : p.strokes}</span><span class="tot ${p.toPar < 0 ? 'under' : p.toPar > 0 ? 'over' : ''}">${rel(p.toPar ?? 0)}</span>
       </div>`).join('');
   }
 
