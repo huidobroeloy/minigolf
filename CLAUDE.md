@@ -92,8 +92,11 @@ a round bank around the cup. Fix with an off-line cup, a lava strip or sinkhole 
 
 Run `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })`. That is 2196 simulated shots, about 2–5 minutes per hole.
 
-Last full run: every hole has an ace.
-- **Highest:** Avalanche Alley at about 1.9% (42 hits), acceptable for a short par 3.
-- **Frozen U-Turn:** 1.4% after squaring off the far end. A round bank funnels every shot into the cup, so don't bring it back.
-- **Fortune Falls:** about 0.2%, by design a luck hole.
-- **Kankrelat Canyon:** shows 0 on the coarse grid but has a narrow full-power line (yaw −1° to −1.25°). Hornet Grove, Megatank Mesa, Krabe Crossing, Arena Entry and Closing Walls also needed the automatic finer re-search to find theirs.
+Last full run (v5, new cup capture): every hole has an ace.
+- **Highest:** Avalanche Alley ~2.4% and Frozen U-Turn ~2.0% (the friendlier cup lip made slow arrivals drop more).
+  Eruption Ridge 1.9%, The Hub 1.7%, Kongre's Abyss 1.5%. Accepted; trim them if players complain.
+- **Fortune Falls Casino:** exempt (luck holes by design).
+- **Coarse grid shows 0, ace found by the fine re-search or by hand:** Kankrelat Canyon (yaw −1° to −1.25°, full power,
+  t0 0), Sandstorm Pass, Krabe Crossing, Arena Entry, Firewall Maze, The Summit, Celestial Dome lines are narrow too.
+- The searcher's fine pass centres on the closest miss, which can be the wrong region: when it reports 0, trace the
+  intended route with `__sim(def, { yaw, power, t0, trace: true })` before redesigning.
