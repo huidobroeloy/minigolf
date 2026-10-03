@@ -8,7 +8,7 @@ import { CHARACTER_COLORS } from '../game/characters.js';
 export const COLORS = CHARACTER_COLORS; // one per character: Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA
 export const MAX_PLAYERS = 8;
 const BETWEEN_HOLES_MS = 8000;
-const ALL_HOLED_GRACE_MS = 2500;
+const ALL_HOLED_GRACE_MS = 3800; // long enough for the last ball's trip into the tower
 const RESPAWN_EVERY_MS = 25000;
 const PROTECT_MS = 12000;
 const HOSTILE_WINDOW_MS = 20000; // at most 2 targeted attacks on one player in this window

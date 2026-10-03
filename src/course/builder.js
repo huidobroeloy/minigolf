@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeJumpPad, makeChevrons } from '../fx/jumppad.js';
+import { makeTowerHolo } from '../fx/towerCup.js';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
 import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly, circlePoly } from './geometry.js';
 import { CUP_R, CUP_DEPTH } from '../physics/ball.js';
@@ -42,6 +43,8 @@ export function buildCourse(def, physics, scene) {
   course.cup.mod = def.cupMod ?? null;
   course.cups = [course.cup, ...(def.cups || []).map((c) => ({ x: c[0], y: c[1], z: c[2], mod: c[3] ?? null, extra: true }))];
   /** The cup closest to a point (for holes with several). */
+  /** The tower hologram over a cup. */
+  course.towerFor = (cup) => course.towers?.find((tw) => tw.cup === cup)?.holo ?? null;
   course.nearestCup = (pt) => {
     if (!pt || course.cups.length === 1) return course.cup;
     let best = course.cup, bd = Infinity;
@@ -785,16 +788,6 @@ export function buildCourse(def, physics, scene) {
     for (const a of course.animators) a(t, dt);
     for (const m of course.monsters) m.frame?.(t, dt);
     course.decoration?.frame?.(t, dt);
-    if (course.flag) {
-      const spin = course.flagSpin !== undefined ? Math.max(0, 1.2 - (t - course.flagSpin)) : 0;
-      course.flag.rotation.y = Math.sin(t * 2) * 0.25 + (spin > 0 ? (1.2 - spin) * 14 : 0);
-      const pos = course.flag.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const x = course.flagBase[i * 3];
-        pos.setZ(i, Math.sin(t * 6 + x * 6) * 0.05 * x);
-      }
-      pos.needsUpdate = true;
-    }
   };
 
   function updateCrumble(tile, dt) {
@@ -1014,26 +1007,10 @@ function makeCupAt(course, group, mats, cup) {
   group.add(glow);
   course.animators.push((t) => { glow.material.opacity = 0.35 + 0.3 * Math.sin(t * 3); glow.scale.setScalar(1 + 0.08 * Math.sin(t * 3)); });
 
-  if (cup.extra) { // extra cups: a short neon marker instead of a full flag
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 8), new THREE.MeshBasicMaterial({ color: mats.theme.flag }));
-    post.position.set(x, y + 0.55, z);
-    group.add(post);
-    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.14), new THREE.MeshBasicMaterial({ color: mats.theme.flag }));
-    tip.position.set(x, y + 1.2, z);
-    group.add(tip);
-    course.animators.push((t) => { tip.rotation.y = t * 2; tip.position.y = y + 1.2 + Math.sin(t * 2 + x) * 0.06; });
-    return;
-  }
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.2, 8), new THREE.MeshStandardMaterial({ color: '#dddddd', metalness: 0.6, roughness: 0.3 }));
-  pole.position.set(x, y + 1.1, z);
-  pole.castShadow = true;
-  group.add(pole);
-  const fgeo = new THREE.PlaneGeometry(0.8, 0.5, 10, 4);
-  fgeo.translate(0.4, 0, 0);
-  const flag = new THREE.Mesh(fgeo, new THREE.MeshStandardMaterial({ color: mats.theme.flag, side: THREE.DoubleSide, emissive: mats.theme.flag, emissiveIntensity: 0.3 }));
-  flag.position.set(x + 0.02, y + 1.95, z);
-  flag.castShadow = true;
-  group.add(flag);
-  course.flag = flag;
-  course.flagBase = Float32Array.from(fgeo.attributes.position.array);
+  // the cup leads into a tower XANA has activated: its hologram floats over the hole
+  const holo = makeTowerHolo({ mini: !!cup.extra, aura: cup.extra && cup.mod !== null && cup.mod !== undefined ? ringCol : '#ff2a2a' });
+  holo.position.set(x, y, z);
+  group.add(holo);
+  (course.towers ||= []).push({ cup, holo });
+  course.animators.push((t) => holo.userData.animate(t));
 }

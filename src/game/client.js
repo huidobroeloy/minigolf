@@ -16,6 +16,7 @@ import { makeLabel } from '../fx/models.js';
 import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
 import { Finale } from './finale.js';
+import { TowerTrip } from '../fx/towerCup.js';
 import { XanaFinale } from './xanaFinale.js';
 import { characterByColor } from './characters.js';
 import { emojiTexture } from '../fx/particles.js';
@@ -243,6 +244,7 @@ export class GameClient {
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
     if (this.targeting) { this.targeting.dispose(); this.targeting = null; }
     this.endTrip(true);
+    if (this.towerTrip) { this.towerTrip.dispose(); this.towerTrip = null; }
     if (this.scanner) { this.scanner.dispose(); this.scanner = null; }
     this.preShot = null;
     this.clearMarkers();
@@ -429,6 +431,8 @@ export class GameClient {
     this.playersDirty = true;
     this.sendState(true);
     this.ui.setHint('You\'re in! Keep using power-ups on the others · <kbd>Tab</kbd> to spectate');
+    // down the hole and into the tower, to deactivate it
+    if (!this.playoff) this.towerTrip = new TowerTrip(this, this.ball.sinkCup || this.course.cup, this.me.color);
   }
 
   /** Glowing dotted trail behind fast balls (yours and the ghosts'). */
@@ -453,7 +457,8 @@ export class GameClient {
       const a = Math.random() * Math.PI * 2;
       this.effects.particles?.spawn({ pos: [c.x, c.y + 0.1, c.z], vel: [Math.cos(a) * 1.6, 2 + Math.random() * 3, Math.sin(a) * 1.6], color: i % 2 ? color : '#ffffff', size: 0.14, life: 1.1, gravity: 2 });
     }
-    if (!isGhost) { this.course.flagSpin = this.simTime; this.cam.dist = Math.max(2.2, this.cam.dist * 0.75); }
+    this.course.towerFor(this.course.nearestCup(c))?.userData.flash(this.simTime);
+    if (!isGhost) this.cam.dist = Math.max(2.2, this.cam.dist * 0.75);
   }
 
   updateCelebrations(dt) {
@@ -1369,6 +1374,11 @@ export class GameClient {
   }
 
   updateCamera(dt) {
+    if (this.towerTrip) {
+      if (this.towerTrip.frame(dt)) return;
+      this.towerTrip = null;
+      this.cam.snapTo(this.ball?.mesh.position || this.cam.target);
+    }
     if (this.flyover) {
       const f = this.flyover;
       f.t += dt;
