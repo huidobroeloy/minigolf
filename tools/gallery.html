@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monster gallery (dev)</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #9aa7b8; overflow: hidden; font-family: sans-serif; }
+    canvas { display: block; }
+    .lbl { position: absolute; color: #102; font: bold 14px sans-serif; transform: translateX(-50%); text-shadow: 0 0 4px #fff; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <!-- Dev tool: every monster model side by side, to compare with the references in .local/refs.
+       ?only=hornet shows one; ?angle=0.6 turns them; ?t=1.2 sets the animation time. -->
+  <script type="module">
+    import * as THREE from 'three';
+    import * as L from '../src/monsters/looks.js';
+    const q = new URLSearchParams(location.search);
+    const names = ['kankrelat', 'hornet', 'krabe', 'tarantula', 'blok', 'creeper', 'manta', 'megatank', 'scyphozoa', 'shark'];
+    const list = q.get('only') ? q.get('only').split(',') : names;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setClearColor('#b9c3d0');
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight('#ffffff', '#556070', 1.6));
+    const sun = new THREE.DirectionalLight('#ffffff', 2.2); sun.position.set(3, 6, 5); scene.add(sun);
+    const cols = Math.min(list.length, q.get('only') ? list.length : 5);
+    const gap = 3.2;
+    const models = [];
+    list.forEach((n, i) => {
+      const f = L[n + 'Look'];
+      if (!f) return;
+      const look = f();
+      const g = look.g;
+      const x = (i % cols - (cols - 1) / 2) * gap, z = -Math.floor(i / cols) * gap * 1.1;
+      g.position.set(x, n === 'manta' || n === 'scyphozoa' || n === 'hornet' ? 1.2 : 0, z);
+      g.rotation.y = Number(q.get('angle') ?? 0.5);
+      scene.add(g);
+      models.push({ n, g, look, x, z });
+    });
+    const rows = Math.ceil(list.length / cols);
+    const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 200);
+    const span = Math.max(cols * gap, rows * gap * 1.6);
+    const zoom = Number(q.get('zoom') ?? 1);
+    camera.position.set(0, span * 0.32 / zoom + 0.6, (span * 0.95 + 2) / zoom);
+    camera.lookAt(0, 0.8, -(rows - 1) * gap * 0.55);
+    if (q.get('cam')) camera.position.set(...q.get('cam').split(',').map(Number));
+    if (q.get('look')) camera.lookAt(...q.get('look').split(',').map(Number));
+    if (q.get('t')) for (const m of models) m.look.animate?.(Number(q.get('t')));
+    renderer.render(scene, camera);
+    for (const m of models) {
+      const p = new THREE.Vector3(m.x, -0.25, m.z).project(camera);
+      const el = document.createElement('div');
+      el.className = 'lbl';
+      el.textContent = m.n;
+      el.style.left = `${(p.x + 1) / 2 * innerWidth}px`;
+      el.style.top = `${(1 - p.y) / 2 * innerHeight}px`;
+      document.body.appendChild(el);
+    }
+    /** Save the current view to .local/shots/<name>.png (needs tools/devserver.py). */
+    const shot = (name) => new Promise((res) => { renderer.render(scene, camera); renderer.domElement.toBlob((b) => fetch('/__shot?name=' + encodeURIComponent(name), { method: 'POST', body: b }).then(res)); });
+    /** Each monster alone, framed by its size, from two angles → .local/shots/<name>-a|b.png */
+    const shootAll = async (angles = [0.6, -2.3]) => {
+      const saved = models.map((m) => [m.g.position.clone(), m.g.rotation.y, m.g.visible]);
+      for (const m of models) {
+        models.forEach((o) => { o.g.visible = o === m; });
+        m.g.position.set(0, ['manta', 'scyphozoa', 'hornet'].includes(m.n) ? 1.6 : 0, 0);
+        const box = new THREE.Box3().setFromObject(m.g);
+        const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+        const d = Math.max(size.x, size.y, size.z) * 1.9 + 0.6;
+        for (const [i, a] of angles.entries()) {
+          m.g.rotation.y = a;
+          camera.position.set(c.x, c.y + d * 0.35, c.z + d);
+          camera.lookAt(c);
+          await shot(`${m.n}-${'ab'[i]}`);
+        }
+      }
+      models.forEach((m, i) => { m.g.position.copy(saved[i][0]); m.g.rotation.y = saved[i][1]; m.g.visible = saved[i][2]; });
+      return 'done';
+    };
+    document.querySelectorAll('.lbl').forEach((e) => { e.style.display = q.get('labels') === '0' ? 'none' : ''; });
+    window.__gallery = { scene, camera, renderer, models, shot, shootAll };
+  </script>
+</body>
+</html>

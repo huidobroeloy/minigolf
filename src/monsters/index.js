@@ -709,7 +709,14 @@ export function createMonster(spec, ctx) {
   if (m.guns?.length) {
     const up = m.update.bind(m), fr = m.frame.bind(m), fo = m.force?.bind(m), di = m.dispose.bind(m);
     m.update = (t) => { up(t); if (!m.slashed) for (const g of m.guns) g.update(t); };
-    m.frame = (t) => { fr(t); for (const g of m.guns) g.frame(t); };
+    m.frame = (t) => {
+      fr(t);
+      for (const g of m.guns) g.frame(t);
+      // charging up: the monster swells and throbs, so you can see who's about to fire
+      const ch = m.guns.find((g) => g.charge)?.charge;
+      if (ch) { const k = Math.min(1, (t - ch.t0) / ch.cfg.charge); m.model.scale.setScalar(1 + 0.09 * k * Math.abs(Math.sin(t * 16))); m.charged = true; }
+      else if (m.charged) { m.model.scale.setScalar(1); m.charged = false; }
+    };
     m.force = (ball, t, out) => { fo?.(ball, t, out); for (const g of m.guns) g.force(ball, t, out); };
     m.dispose = () => { di(); for (const g of m.guns) g.dispose(); };
   }
