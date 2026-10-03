@@ -466,10 +466,20 @@ export function buildCourse(def, physics, scene) {
     const colors = { conveyor: '#ffb800', vent: '#9ff0ff', boost: '#00ff88', slow: '#6b3d1f', magma: '#ff4a00', sand: '#d9a35f', ice: '#cbefff', current: '#6fe7ff', bubble: '#bff2ff' };
     let mat;
     if (z.kind === 'lava') {
-      mat = new THREE.MeshBasicMaterial({ color: '#ff4a0a' });
+      // molten rock: dark crust plates floating on glowing magma, slowly drifting
+      const tex = lavaTexture().clone();
+      tex.needsUpdate = true;
+      const [sx, sz] = z.rect ? [Math.abs(z.rect[2] - z.rect[0]), Math.abs(z.rect[3] - z.rect[1])] : [z.r * 2, z.r * 2];
+      tex.repeat.set(sx / 3, sz / 3);
+      mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
       const m = new THREE.Mesh(geo, mat);
       group.add(m);
-      course.animators.push((t) => { mat.color.setHSL(0.04 + Math.sin(t * 1.7 + 1) * 0.015, 1, 0.48 + Math.sin(t * 2.3) * 0.06); });
+      const ph = (z.rect?.[0] ?? z.c?.[0] ?? 0) * 0.37;
+      course.animators.push((t) => {
+        tex.offset.set(Math.sin(t * 0.13 + ph) * 0.2, t * 0.035);
+        const k = 0.8 + Math.sin(t * 2.1 + ph) * 0.12;
+        mat.color.setRGB(k, k, k);
+      });
       return m;
     }
     if (z.kind === 'bubble') {
@@ -659,22 +669,28 @@ export function buildCourse(def, physics, scene) {
       } else if (z.kind === 'current') {
         // a water current carries the ball along, on the floor or floating
         if (p.y < zy - 0.2 || p.y > zy + (z.height ?? 2.5)) continue;
+        // it pushes along its flow only, so a ball cutting across keeps its own speed
         const sp = z.speed ?? 3;
-        out.x += (z.dir[0] * sp - v.x) * 1.2 + z.dir[0] * 1.5;
-        out.z += (z.dir[1] * sp - v.z) * 1.2 + z.dir[1] * 1.5;
+        const along = v.x * z.dir[0] + v.z * z.dir[1];
+        const k = Math.max(0, sp - along) * 1.2 + 1.5;
+        out.x += z.dir[0] * k; out.z += z.dir[1] * k;
         out.wake = true;
       } else if (z.kind === 'bubble') {
-        // a rising column of bubbles lifts the ball up and out the top
-        if (p.y < zy - 0.2 || p.y > zy + (z.height ?? 4)) continue;
-        out.y += GRAVITY * (z.lift ?? 1.6);
+        // a rising column of bubbles: carries the ball up at a steady speed, centred, and near
+        // the top nudges it out sideways (push) so it lands on the ledge above
+        const h = z.height ?? 4;
+        if (p.y < zy - 0.2 || p.y > zy + h) continue;
+        const rise = z.rise ?? 3.2;
+        out.y += GRAVITY + (rise - v.y) * 5;
         const dx = z.c[0] - p.x, dz = z.c[1] - p.z;
-        out.x += dx * 2; out.z += dz * 2;
-        if (z.push) { out.x += z.push[0] * 3; out.z += z.push[1] * 3; }
+        const top = p.y > zy + h * 0.7;
+        if (top && z.push) { out.x += z.push[0] * 9 - v.x * 1.5; out.z += z.push[1] * 9 - v.z * 1.5; }
+        else { out.x += dx * 4 - v.x * 3; out.z += dz * 4 - v.z * 3; }
         out.wake = true;
       }
     }
     if (def.water && !ball.grounded) { out.y += GRAVITY * 0.35; out.x -= v.x * 0.25; out.z -= v.z * 0.25; }
-    if (!ball.mods.monsterProof) for (const m of course.monsters) m.force?.(ball, course.time ?? 0, out);
+    if (!ball.mods.monsterProof) for (const m of course.monsters) if (!m.slashed) m.force?.(ball, course.time ?? 0, out);
     return out;
   };
 
@@ -683,7 +699,7 @@ export function buildCourse(def, physics, scene) {
 
   /** Is the ball touching lava? */
   course.lavaAt = (p, ball) => {
-    if (ball?.mods.ghost || ball?.fly || ball?.glideT > 0) return false;
+    if (ball?.mods.ghost || ball?.fly || ball?.glideT > 0 || ball?.groundMeta?.mover) return false; // rafts over lava are safe
     for (const z of course.zones) if (z.kind === 'lava' && z.contains(p) && p.y - ball.radius - (z.y ?? 0) < 0.12) return true;
     return false;
   };
@@ -848,6 +864,39 @@ export function lookMaterial(look, mats) {
   }
   lookCache.set(look, m);
   return m;
+}
+
+let lavaTex = null;
+function lavaTexture() {
+  if (lavaTex) return lavaTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 256, 256);
+  grd.addColorStop(0, '#ff5a00'); grd.addColorStop(0.5, '#ff2a00'); grd.addColorStop(1, '#ff7a10');
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+  // hot yellow veins
+  g.strokeStyle = 'rgba(255,220,80,0.7)'; g.lineWidth = 3;
+  for (let i = 0; i < 18; i++) {
+    g.beginPath(); let x = Math.random() * 256, y = Math.random() * 256; g.moveTo(x, y);
+    for (let k = 0; k < 5; k++) { x += (Math.random() - 0.5) * 60; y += (Math.random() - 0.5) * 60; g.lineTo(x, y); }
+    g.stroke();
+  }
+  // dark crust plates (drawn wrapped so the texture tiles)
+  for (let i = 0; i < 26; i++) {
+    const cx = Math.random() * 256, cy = Math.random() * 256, r = 10 + Math.random() * 22;
+    const pts = Array.from({ length: 7 }, (_, a) => { const ang = (a / 7) * Math.PI * 2, rr = r * (0.7 + Math.random() * 0.4); return [Math.cos(ang) * rr, Math.sin(ang) * rr]; });
+    g.fillStyle = `rgba(${40 + Math.random() * 30},${10 + Math.random() * 10},8,0.92)`;
+    for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) {
+      g.beginPath();
+      for (const [px, py] of pts) g.lineTo(cx + ox + px, cy + oy + py);
+      g.closePath(); g.fill();
+    }
+  }
+  lavaTex = new THREE.CanvasTexture(c);
+  lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping;
+  lavaTex.colorSpace = THREE.SRGBColorSpace;
+  return lavaTex;
 }
 
 function diceFace(n) {

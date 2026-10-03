@@ -110,10 +110,10 @@ export const TEX = {
   }),
   seabed: () => canvasTexture('seabed', 256, (g, s, rng) => {
     const grd = g.createLinearGradient(0, 0, s, s);
-    grd.addColorStop(0, '#0f4f86'); grd.addColorStop(1, '#0a3768');
+    grd.addColorStop(0, '#b9c79a'); grd.addColorStop(1, '#93a77c'); // pale sea sand, so the course reads against the blue
     g.fillStyle = grd; g.fillRect(0, 0, s, s);
     // caustic light ripples
-    g.strokeStyle = 'rgba(160,230,255,0.35)';
+    g.strokeStyle = 'rgba(225,255,255,0.45)';
     for (let i = 0; i < 22; i++) {
       g.lineWidth = rng.range(1, 3);
       g.beginPath();
@@ -264,7 +264,7 @@ export const THEMES = {
   sea: {
     name: 'Digital Sea',
     sky: ['#010a24', '#0a3a7a'], fog: '#052a5c', fogDensity: 0.03,
-    sun: { color: '#bfe8ff', intensity: 1.5, dir: [0, 1, 0.2] }, hemi: ['#8fd8ff', '#03122e', 1.1],
+    sun: { color: '#bfe8ff', intensity: 1.05, dir: [0.3, 1, 0.4] }, hemi: ['#8fd8ff', '#03122e', 0.75],
     floorMat: 'seabed', floorTex: 'seabed', floorColor: '#ffffff',
     wallTex: null, wallColor: '#0d3f73', wallTrim: '#6fe7ff', wallEmissive: '#3fc6ff', wallGlass: true,
     sideColor: '#072546', particles: 'bubbles', flag: '#6fe7ff', underwater: true,

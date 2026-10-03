@@ -4,6 +4,9 @@ import ice from './ice.js';
 import mountain from './mountain.js';
 import sector5 from './sector5.js';
 import fortune from './fortune.js';
+import volcano from './volcano.js';
+import sea from './sea.js';
+import network from './network.js';
 
 /**
  * The Lyoko World Cup: every course is a sector of (up to) 6 holes. A match plays whole courses:
@@ -16,6 +19,9 @@ export const COURSES = [
   { key: 'ice', name: 'Ice Sector', holes: ice },
   { key: 'mountain', name: 'Mountain Sector', holes: mountain },
   { key: 'sector5', name: 'Sector 5 · Carthage', holes: sector5 },
+  { key: 'volcano', name: 'Volcano Replika', holes: volcano },
+  { key: 'sea', name: 'The Digital Sea', holes: sea },
+  { key: 'network', name: 'The Network', holes: network },
   { key: 'fortune', name: 'Fortune Falls Casino', holes: fortune },
 ].filter((c) => c.holes.length);
 

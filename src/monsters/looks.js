@@ -317,3 +317,63 @@ export function megatankLook(r = 0.85) {
   inside.visible = false;
   return { g, roller, halves, inside, core, axle, r };
 }
+
+// ---------- Shark (Digital Sea): steel-blue torpedo with fins and a XANA eye on its snout ----------
+export function sharkLook() {
+  const g = new THREE.Group();
+  const hull = std('#5d7fa6', { metalness: 0.4, roughness: 0.35 }), belly = std('#dfe8f2', { roughness: 0.4 });
+  const body = add(g, new THREE.SphereGeometry(0.34, 20, 14), hull, [0, 0, 0], [0, 0, 0], [0.75, 0.7, 1.9]);
+  add(g, new THREE.SphereGeometry(0.3, 18, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45), belly, [0, 0.02, 0.02], [0, 0, 0], [0.78, 0.72, 1.85]);
+  const fin = (w, h) => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(-w, 0); s.quadraticCurveTo(-w * 0.2, h * 0.4, w * 0.25, h); s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }); };
+  // dorsal fin
+  add(g, fin(0.35, 0.32), hull, [-0.015, 0.2, 0.05], [0, -Math.PI / 2, 0]);
+  // side fins
+  for (const s of [-1, 1]) add(g, fin(0.28, 0.22), hull, [s * 0.2, -0.08, 0.15], [Math.PI / 2, 0, s * 0.9]);
+  // tail: a forked fin on a wagging joint
+  const tail = new THREE.Group();
+  tail.position.set(0, 0, -0.62);
+  g.add(tail);
+  const tg = new THREE.Shape();
+  tg.moveTo(0, 0); tg.lineTo(-0.32, 0.3); tg.lineTo(-0.2, 0); tg.lineTo(-0.32, -0.26); tg.closePath();
+  const tfin = add(tail, new THREE.ExtrudeGeometry(tg, { depth: 0.03, bevelEnabled: false }), hull, [-0.015, 0, 0.05], [0, Math.PI / 2, 0]);
+  // red gill slits and the eye on the snout
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) add(g, new THREE.BoxGeometry(0.01, 0.12, 0.02), std('#ff2a2a', { emissive: '#ff2a2a', emissiveIntensity: 0.6 }), [s * 0.245, 0.02, 0.28 - i * 0.07]);
+  const eyeM = decal(g, [0, 0.12, 0.5], 0.22, [-0.5, 0, 0]);
+  return { g, body, tail, tfin, eye: eyeM };
+}
+
+// ---------- Kongre (Digital Sea): one of its giant tentacles, reaching up out of the deep ----------
+export function kongreArmLook(len) {
+  const g = new THREE.Group();
+  const mat = std('#3a2a63', { emissive: '#7a3cff', emissiveIntensity: 0.25, roughness: 0.4 });
+  const sucker = std('#e0b8ff', { emissive: '#ff6fe0', emissiveIntensity: 0.4 });
+  // lies along +z from the pivot, thinning to a curled tip
+  const n = 10;
+  for (let i = 0; i < n; i++) {
+    const r = 0.42 - (i / n) * 0.3;
+    add(g, new THREE.SphereGeometry(r, 12, 8), mat, [0, r * 0.7, (i + 0.5) * (len / n)], [0, 0, 0], [1, 0.8, 1.15]);
+    if (i % 2 === 0) for (const s of [-1, 1]) add(g, new THREE.SphereGeometry(r * 0.25, 8, 6), sucker, [s * r * 0.75, r * 0.5, (i + 0.5) * (len / n)]);
+  }
+  const tip = add(g, new THREE.TorusGeometry(0.16, 0.06, 6, 12, Math.PI * 1.4), mat, [0, 0.25, len + 0.1], [0, Math.PI / 2, 0]);
+  return { g, mat, tip };
+}
+
+// ---------- Kongre: the colossal squid of the Digital Sea (background scenery) ----------
+export function kongreLook() {
+  const g = new THREE.Group();
+  const mat = std('#2a1d4a', { emissive: '#5a2cbf', emissiveIntensity: 0.3, roughness: 0.5 });
+  add(g, new THREE.SphereGeometry(3, 24, 16), mat, [0, 4, 0], [0, 0, 0], [1, 1.9, 1]);
+  add(g, new THREE.ConeGeometry(2.6, 3, 4), mat, [0, 10, 0], [0, Math.PI / 4, 0]);
+  decal(g, [0, 3.2, 2.85], 2.2);
+  const arms = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const pts = [];
+    for (let k = 0; k <= 6; k++) pts.push(new THREE.Vector3(Math.cos(a) * (1.5 + k * 1.1), -k * 1.4, Math.sin(a) * (1.5 + k * 1.1)));
+    const t = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.5, 8), mat);
+    t.userData = { a, pts };
+    g.add(t);
+    arms.push(t);
+  }
+  return { g, arms };
+}

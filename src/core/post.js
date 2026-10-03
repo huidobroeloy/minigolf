@@ -18,7 +18,7 @@ export class Post {
   setSector(key) {
     // neon-heavy sectors get a stronger glow
     // bright sectors only bloom their emissives; neon sectors glow harder
-    const [strength, threshold] = { fortune: [0.9, 0.55], sector5: [0.7, 0.8], volcano: [0.85, 0.6], sea: [0.6, 0.75], network: [0.95, 0.5], ice: [0.35, 0.97], desert: [0.45, 0.94], forest: [0.5, 0.9], mountain: [0.5, 0.9] }[key] ?? [0.5, 0.9];
+    const [strength, threshold] = { fortune: [0.9, 0.55], sector5: [0.7, 0.8], volcano: [0.85, 0.6], sea: [0.45, 0.9], network: [0.95, 0.5], ice: [0.35, 0.97], desert: [0.45, 0.94], forest: [0.5, 0.9], mountain: [0.5, 0.9] }[key] ?? [0.5, 0.9];
     this.bloom.strength = strength;
     this.bloom.threshold = threshold;
   }

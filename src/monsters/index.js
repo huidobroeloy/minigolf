@@ -5,7 +5,7 @@ import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
 import { Gun, MineLayer, canTarget, landHit, seededRng } from './attacks.js';
-import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook } from './looks.js';
+import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook } from './looks.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
@@ -563,9 +563,141 @@ class Kolossus extends Monster {
   dispose() { super.dispose(); this.ctx.group.remove(this.wave); }
 }
 
+// ---------- Shark (Digital Sea): cruises its lane, then rams you ----------
+class Shark extends Monster {
+  constructor(spec, ctx) {
+    const L = sharkLook();
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+    super(spec, ctx, L.g, { yOff: 0.32, colliders: [[R.ColliderDesc.capsule(0.32, 0.3).setRotation(q), 0.9]] });
+    this.L = L;
+    this.rng = seededRng(ctx, spec, 'shark');
+    this.nextT = 3 + this.rng.range(0, 5);
+    this.ram = null; // { t0, from, to }
+    this.prev = super.at(0);
+  }
+  /** The path position, with a ram lunge (telegraph 0.8 s, dash 0.45 s, swim back 1.2 s) on top. */
+  at(t) {
+    const s = super.at(t);
+    const r = this.ram;
+    if (!r) return s;
+    const u = t - r.t0;
+    if (u < 0.8) return { ...s, x: s.x + Math.sin(u * 60) * 0.04, ry: r.ry, wiggle: true };
+    if (u < 1.25) { const k = (u - 0.8) / 0.45; const e = k * k; return { x: r.from.x + (r.to.x - r.from.x) * e, y: s.y, z: r.from.z + (r.to.z - r.from.z) * e, ry: r.ry, dash: true }; }
+    if (u < 2.45) { const k = (u - 1.25) / 1.2; const e = k * k * (3 - 2 * k); return { x: r.to.x + (s.x - r.to.x) * e, y: s.y, z: r.to.z + (s.z - r.to.z) * e, ry: Math.atan2(s.x - r.to.x, s.z - r.to.z) }; }
+    return s;
+  }
+  update(t) {
+    if (this.ram && t - this.ram.t0 > 2.45) this.ram = null;
+    super.update(t);
+    if (this.ram || t < this.nextT || this.slashed) return;
+    const course = this.ctx.course;
+    const enraged = t < (course.enrageUntil ?? -1);
+    this.nextT = t + this.rng.range(7, 11) * (enraged ? 0.5 : 1);
+    const ball = course.localBall;
+    if (!canTarget(course, ball, t, { allowResting: true })) return;
+    const s = super.at(t), bp = ball.pos;
+    const dx = bp.x - s.x, dz = bp.z - s.z, d = Math.hypot(dx, dz);
+    if (d > (this.spec.range ?? 5) || Math.abs(bp.y - s.y) > 1.5) return;
+    // aim a little past the ball, so it really rams through
+    const reach = Math.min(d + 0.8, (this.spec.range ?? 5) + 0.8);
+    this.ram = { t0: t, from: { x: s.x, z: s.z }, to: { x: s.x + (dx / d) * reach, z: s.z + (dz / d) * reach }, ry: Math.atan2(dx, dz), dir: [dx / d, dz / d], hit: false };
+    sfx.play('whoosh');
+  }
+  frame(t) {
+    const s = this.at(t);
+    this.model.position.set(s.x, s.y + 0.32 + Math.sin(t * 2.2) * 0.04, s.z);
+    const dx = s.x - this.prev.x, dz = s.z - this.prev.z;
+    if (s.ry !== undefined && this.ram) this.model.rotation.y = s.ry;
+    else if (Math.hypot(dx, dz) > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
+    this.prev = s;
+    this.L.tail.rotation.y = Math.sin(t * (s.dash ? 30 : s.wiggle ? 18 : 7)) * 0.45;
+    this.L.eye.scale.setScalar(s.wiggle ? 1 + Math.abs(Math.sin(t * 14)) * 0.5 : 1);
+  }
+  force(ball, t, out) {
+    const r = this.ram;
+    if (!r || r.hit || this.slashed || ball.state === 'holed') return;
+    const s = this.at(t);
+    if (!s.dash) return;
+    const p = ball.pos;
+    if (Math.hypot(p.x - s.x, p.z - s.z) > 0.75 + ball.radius || Math.abs(p.y - s.y - 0.32) > 0.8) return;
+    r.hit = true;
+    out.x += r.dir[0] * 420; out.z += r.dir[1] * 420; out.y += 90;
+    out.wake = true;
+    landHit(this.ctx.course, 'shark', t);
+  }
+}
+
+// ---------- Kongre's tentacle: rises from the deep at the side of a lane and sweeps across it ----------
+class KongreArm extends Monster {
+  constructor(spec, ctx) {
+    const len = spec.len ?? 6;
+    const L = kongreArmLook(len);
+    const g = new THREE.Group();
+    g.add(L.g);
+    super(spec, ctx, g);
+    Object.assign(this, { L, len, period: spec.period ?? 8, phase: spec.phase ?? 0 });
+    // no hard collider: a swinging kinematic arm would bat the ball across the map. It sweeps the
+    // ball along at a capped speed instead (see force).
+    // warning stripe where it is about to sweep
+    // RingGeometry runs counter-clockwise from +x; our angles are measured from +z toward +x
+    const [a0, a1] = spec.sweep ?? [0, Math.PI];
+    const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+    const warn = new THREE.Mesh(new THREE.RingGeometry(0.3, len, 24, 1, lo - Math.PI / 2, hi - lo), new THREE.MeshBasicMaterial({ color: '#b04aff', transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+    warn.rotation.x = -Math.PI / 2;
+    this.warn = warn;
+    ctx.group.add(warn);
+    this.qq = new THREE.Quaternion();
+  }
+  /** Sweep state at time t: rise (0.14 of the period), sweep (0.2), sink (0.12), hidden otherwise. */
+  pose(t) {
+    const s = super.at(t);
+    const u = ((t / this.period + this.phase) % 1 + 1) % 1;
+    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
+    let ang = a0, h = -3, warn = 0;
+    if (u < 0.14) { const k = u / 0.14; h = -3 + 3 * (1 - (1 - k) ** 3); warn = k; }
+    else if (u < 0.34) { const k = (u - 0.14) / 0.2; ang = a0 + (a1 - a0) * (k * k * (3 - 2 * k)); h = 0; warn = 1; }
+    else if (u < 0.46) { const k = (u - 0.34) / 0.12; ang = a1; h = -3 * k * k; }
+    else { ang = a1; h = -3; }
+    return { x: s.x, y: s.y + h, z: s.z, ry: ang, warn, sweeping: u >= 0.14 && u < 0.34, up: h > -2.9 };
+  }
+  at(t) { return super.at(t); }
+  update() {}
+  frame(t) {
+    const p = this.pose(t);
+    this.model.position.set(p.x, p.y, p.z);
+    this.model.rotation.y = p.ry;
+    this.model.visible = p.up && !this.slashed;
+    this.L.tip.rotation.z = Math.sin(t * 3) * 0.4;
+    this.L.mat.emissiveIntensity = p.sweeping ? 0.7 : 0.25;
+    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
+    this.warn.visible = p.warn > 0 && !p.sweeping && p.up && p.ry === a0 && !this.slashed;
+    this.warn.position.set(p.x, super.at(t).y + 0.03, p.z);
+    this.warn.material.opacity = 0.12 + 0.2 * p.warn * Math.abs(Math.sin(t * 8));
+  }
+  force(ball, t, out) {
+    const p = this.pose(t);
+    if (!p.sweeping || this.slashed || ball.state === 'holed') return;
+    const b = ball.pos;
+    const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz);
+    if (d > this.len + 0.4 || Math.abs(b.y - p.y) > 1) return;
+    // distance from the arm's line
+    const fx = Math.sin(p.ry), fz = Math.cos(p.ry);
+    const perp = dx * fz - dz * fx, along = dx * fx + dz * fz;
+    if (along < 0 || Math.abs(perp) > 0.45 + ball.radius) return;
+    // carry it along with the swing (tangentially), at most 6 u/s
+    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
+    const sgn = Math.sign(a1 - a0) || 1;
+    const sp = Math.min(6, along * 2.2);
+    const v = ball.vel;
+    out.x += (fz * sgn * sp - v.x) * 10; out.z += (-fx * sgn * sp - v.z) * 10;
+    out.wake = true;
+  }
+  dispose() { super.dispose(); this.ctx.group.remove(this.warn); }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
-  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus,
+  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
 };
 
 export function createMonster(spec, ctx) {

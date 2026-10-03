@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kongreLook } from '../monsters/looks.js';
 import { TEX } from './themes.js';
 import { Emitter } from '../fx/particles.js';
 import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
@@ -177,6 +178,16 @@ export function decorate(sector, course, group, rng) {
       const a = t * 0.05;
       skid.position.set(c.x + Math.cos(a) * R, minY + 10 + Math.sin(t * 0.4) * 1.5, c.z + Math.sin(a) * R);
       skid.rotation.y = -a;
+    });
+    // Kongre lurks in the deep, far beyond the course
+    const kong = kongreLook();
+    deco.add(kong.g);
+    kong.g.scale.setScalar(1.6);
+    const kx = c.x - size.x * 0.4 - 26, kz = course.bounds.max.z + 22;
+    anim.push((t) => {
+      kong.g.position.set(kx + Math.sin(t * 0.07) * 6, minY - 6 + Math.sin(t * 0.3) * 1.2, kz);
+      kong.g.rotation.y = Math.sin(t * 0.11) * 0.4;
+      kong.arms.forEach((a, i) => { a.rotation.y = Math.sin(t * 0.5 + i) * 0.12; a.rotation.z = Math.sin(t * 0.4 + i * 1.7) * 0.1; });
     });
     ambient = (dt) => {
       for (let i = 0; i < 3; i++) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 4, area.z + (rand() - 0.5) * area.d], vel: [(rand() - 0.5) * 0.3, 1 + rand() * 1.5, 0], color: '#bff2ff', size: 0.1 + rand() * 0.15, life: 9 });

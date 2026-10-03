@@ -1,4 +1,4 @@
-import { rect, patrol } from './helpers.js';
+import { rect, patrol, orbit } from './helpers.js';
 
 // Sector 3 — ICE: almost no friction. Snow patches are your brakes. Krabes stomp across.
 export default [
@@ -64,6 +64,57 @@ export default [
       { t: 'monster', type: 'krabe', path: patrol([-3.3, 11.5], [-0.8, 11.5], 4.2) },
       { t: 'monster', type: 'krabe', path: patrol([0.8, 6.5], [3.3, 6.5], 5.2, 0, 0.5) },
       { t: 'monster', type: 'kolossus', p: [36, -30, 11], ry: -Math.PI / 2, scale: 2.5, phase: 0.1 },
+    ],
+  },
+  {
+    id: 'ice-4', name: 'Bobsled Run', sector: 'ice', par: 4, time: 150,
+    tee: [0, 3, 0], cup: [-1.2, 0, 30],
+    hio: 'Down the bobsled tube at just the right pace: it shoots you straight at the snow ring.',
+    parts: [
+      { t: 'floor', y: 3, poly: [[-2, -1.2], [2, -1.2], [2, 4], [0.6, 4], [-0.6, 4], [-2, 4]], open: [3] },
+      { t: 'tube', pts: [[0, 3, 3.6], [0, 2.7, 7], [-3, 2, 10], [-3.2, 1.2, 13.5], [-0.6, 0.4, 16.5], [-0.6, 0, 19.2]], r: 0.5, color: '#cfefff', ring: '#ffffff' },
+      { t: 'floor', poly: [[-5, 18], [-1.4, 18], [0.2, 18], [5, 18], [5, 34], [-5, 34]], open: [1] },
+      { t: 'zone', kind: 'slow', c: [-1.2, 30], r: 2, mul: 6 },
+      { t: 'zone', kind: 'slow', rect: [-5, 32.6, 5, 34], mul: 12 },
+      { t: 'zone', kind: 'slow', rect: [2.6, 18, 5, 34], mul: 9 },
+      { t: 'cyl', p: [1.6, 0, 25], r: 0.4, h: 1.4, look: 'ice' },
+      { t: 'monster', type: 'krabe', path: patrol([-4, 24.5], [3.5, 24.5], 6) },
+      { t: 'monster', type: 'kolossus', p: [-40, -30, 20], ry: Math.PI / 2, phase: 0.45 },
+    ],
+  },
+  {
+    id: 'ice-5', name: 'Crevasse Field', sector: 'ice', par: 4, time: 150,
+    tee: [0, 0, 0], cup: [0, 0, 27],
+    hio: 'A soft, dead-straight slide between every crevasse.',
+    parts: [
+      {
+        t: 'floor', poly: rect(-5, -1.2, 5, 30),
+        holes: [{ c: [-2.4, 7], r: 1.1 }, { c: [1.8, 10.5], r: 1.2 }, { c: [-1.3, 14.5], r: 0.95 }, { c: [3, 18], r: 1.1 }, { c: [-3, 21], r: 1.2 }, { c: [1.2, 23.4], r: 0.8 }],
+      },
+      { t: 'zone', kind: 'slow', rect: [-5, 28.4, 5, 30], mul: 12 },
+      { t: 'zone', kind: 'slow', c: [-3.6, 12], r: 1.2, mul: 8 },
+      { t: 'zone', kind: 'slow', c: [3.6, 25.5], r: 1.2, mul: 8 },
+      { t: 'zone', kind: 'slow', c: [0, 27], r: 1.4, mul: 5 },
+      { t: 'monster', type: 'krabe', path: patrol([-4.2, 16.8], [4.2, 16.8], 6.5) },
+      { t: 'monster', type: 'krabe', path: patrol([4, 4], [-4, 4], 5.5, 0, 0.4) },
+      { t: 'monster', type: 'kolossus', p: [40, -30, 14], ry: -Math.PI / 2, phase: 0.8 },
+    ],
+  },
+  {
+    id: 'ice-6', name: 'Thin Ice Crossing', sector: 'ice', par: 4, time: 150,
+    tee: [0, 0, 0], cup: [0, 0, 27],
+    hio: 'Straight across the thin-ice bridge, firm enough that it never breaks under you.',
+    parts: [
+      // a wide glacier with a deep crevasse cut into the left side; the safe way round is on the right
+      { t: 'floor', poly: [[-2.5, -1.2], [7, -1.2], [7, 31], [-2.5, 31], [-2.5, 16], [2.5, 16], [2.5, 10], [-2.5, 10]], open: [4, 6] },
+      ...[10.75, 12.25, 13.75, 15.25].map((z) => ({ t: 'crumble', p: [0, 0, z], s: [1.5, 1.5], hits: 1, kindLook: 'thinice' })),
+      { t: 'zone', kind: 'slow', c: [0, 27], r: 1.8, mul: 6 },
+      { t: 'zone', kind: 'slow', rect: [-2.5, 29.6, 7, 31], mul: 12 },
+      { t: 'zone', kind: 'slow', rect: [4.6, 3, 7, 22], mul: 6 },
+      { t: 'cyl', p: [4.8, 0, 13], r: 0.5, h: 1.4, look: 'ice' },
+      { t: 'monster', type: 'krabe', path: patrol([3.2, 7], [6.5, 7], 4) },
+      { t: 'monster', type: 'krabe', path: patrol([-2, 21], [6.4, 21], 6, 0, 0.5) },
+      { t: 'monster', type: 'kolossus', p: [-40, -30, 14], ry: Math.PI / 2, phase: 0.2 },
     ],
   },
 ];

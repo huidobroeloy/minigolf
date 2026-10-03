@@ -68,4 +68,60 @@ export default [
       { t: 'monster', type: 'kankrelat', path: patrol([-2.2, 15.4], [2.2, 15.4], 3.6) },
     ],
   },
+  {
+    id: 'forest-4', name: 'Data Stream Falls', sector: 'forest', par: 4, time: 150,
+    tee: [0, 1.5, 0], cup: [2.2, 0, 23.5],
+    hio: 'Let the stream carry you down the falls, aimed a touch right, and it rolls into the basin cup.',
+    parts: [
+      { t: 'floor', y: 1.5, poly: [[-3, -1.2], [3, -1.2], [3, 10], [1.2, 10], [-1.2, 10], [-3, 10]], open: [3] },
+      // the stream down the middle of the upper meadow
+      { t: 'zone', kind: 'current', rect: [-1.2, 2.5, 1.2, 10], dir: [0, 1], speed: 4, y: 1.5 },
+      { t: 'ramp', a: [0, 10], b: [0, 14], w: 2.4, ya: 1.5, yb: 0, mat: 'wood' },
+      { t: 'floor', poly: [[-5, 14], [-1.2, 14], [1.2, 14], [5, 14], [5, 27], [-5, 27]], open: [1] },
+      tree(-1.8, 18, 0.5), tree(3.6, 17.2, 0.45), tree(-3.4, 23.6, 0.5), tree(0.2, 21, 0.4),
+      { t: 'zone', kind: 'slow', c: [-2.6, 20.4], r: 1.2, mul: 3 },
+      tree(-2.2, 5.5, 0.45, 2.2, 1.5), tree(2.3, 7.2, 0.45, 2.2, 1.5),
+      { t: 'monster', type: 'hornet', path: patrol([-3.5, 19], [3.5, 19], 8, 2.4), aim: 'ball' },
+      { t: 'monster', type: 'kankrelat', path: patrol([-4, 25.5], [4, 25.5], 5, 0, 0.3) },
+    ],
+  },
+  {
+    id: 'forest-5', name: 'Treehouse Ring', sector: 'forest', par: 3, time: 120,
+    tee: [0, 0, 2.6], cup: [0.4, 0, 15.6], yaw: 0.45,
+    hio: 'Bank round the trunk off the outer ring wall, between the roots.',
+    parts: [
+      { t: 'floor', poly: circlePoly(0, 9, 7.4, 8, Math.PI / 8) }, // straight sides: no round bank funnelling into the cup
+      { t: 'cyl', p: [0, 0, 9], r: 2.3, h: 3.2, look: 'bark' },
+      { t: 'deco', make: (THREE) => {
+        const g = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.3, 9, 16), new THREE.MeshStandardMaterial({ color: '#5a3b22', roughness: 1 }));
+        trunk.position.set(0, 7.6, 9); trunk.castShadow = true; g.add(trunk);
+        const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(6, 1), new THREE.MeshStandardMaterial({ color: '#2f8f3a', roughness: 0.9, flatShading: true }));
+        crown.position.set(0, 14, 9); crown.scale.set(1, 0.6, 1); crown.castShadow = true; g.add(crown);
+        const house = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2, 3.2), new THREE.MeshStandardMaterial({ color: '#8a5a2b', roughness: 0.9 }));
+        house.position.set(0, 10.5, 9); house.castShadow = true; g.add(house);
+        return g;
+      } },
+      { t: 'box', p: [3.6, 0.15, 7.2], s: [2.4, 0.3, 0.4], ry: 0.9, look: 'bark' },
+      { t: 'box', p: [-3.4, 0.15, 12.2], s: [2.4, 0.3, 0.4], ry: -0.8, look: 'bark' },
+      { t: 'box', p: [-2.6, 0.15, 5], s: [2, 0.3, 0.4], ry: 0.6, look: 'bark' },
+      { t: 'zone', kind: 'slow', c: [3.8, 13.2], r: 1.1, mul: 3 },
+      { t: 'monster', type: 'blok', path: orbit([0, 9], 4.6, 14, 0, 0.25) },
+    ],
+  },
+  {
+    id: 'forest-6', name: 'Kankrelat Hollow', sector: 'forest', par: 5, time: 170,
+    tee: [0, 0, 0], cup: [10, 0, 30],
+    hio: 'The hollow log at the first bend is a shortcut: come out of it fast enough to reach the clearing.',
+    parts: [
+      { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 8], [12, 8], [12, 33], [8, 33], [8, 25.3], [8, 23.7], [8, 12], [-0.5, 12], [-1.9, 12], [-2.5, 12]], open: [6, 9] },
+      tree(1.4, 5, 0.5), tree(5, 9.5, 0.45), tree(10.5, 14.5, 0.5), tree(9, 21, 0.45),
+      // the hollow log: a shortcut from the first bend straight up to the clearing
+      { t: 'tube', pts: [[-1.2, 0, 11.2], [-1.2, 0.1, 14], [1, 0.3, 19], [5.5, 0.2, 23], [8.6, 0, 24.5], [9.4, 0, 24.6]], r: 0.55, color: '#8a5a2b', ring: '#5a3b22' },
+      { t: 'zone', kind: 'slow', c: [10, 18], r: 1.1, mul: 3 },
+      { t: 'monster', type: 'kankrelat', path: patrol([3.5, 10], [7, 10], 3) },
+      { t: 'monster', type: 'kankrelat', path: patrol([8.6, 17], [11.4, 17], 2.6, 0, 0.4) },
+      { t: 'monster', type: 'hornet', path: patrol([8.5, 27], [11.5, 27], 6, 2.2), aim: 'ball' },
+    ],
+  },
 ];
