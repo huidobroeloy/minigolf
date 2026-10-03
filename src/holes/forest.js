@@ -117,7 +117,7 @@ export default [
       { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 8], [12, 8], [12, 33], [8, 33], [8, 25.3], [8, 23.7], [8, 12], [-0.5, 12], [-1.9, 12], [-2.5, 12]], open: [6, 9] },
       tree(1.4, 5, 0.5), tree(5, 9.5, 0.45), tree(10.5, 14.5, 0.5), tree(9, 21, 0.45),
       // the hollow log: a shortcut from the first bend straight up to the clearing
-      { t: 'tube', pts: [[-1.2, 0, 11.2], [-1.2, 0.1, 14], [1, 0.3, 19], [5.5, 0.2, 23], [8.6, 0, 24.5], [9.4, 0, 24.6]], r: 0.55, color: '#8a5a2b', ring: '#5a3b22' },
+      { t: 'tube', pts: [[-1.2, 0, 11.2], [-1.2, 0.1, 14], [1, 0.3, 19], [5.5, 0.2, 23], [8.4, 0, 24.5], [9.6, 0, 25.6], [10, 0, 26.8]], r: 0.55, color: '#8a5a2b', ring: '#5a3b22' },
       { t: 'zone', kind: 'slow', c: [10, 18], r: 1.1, mul: 3 },
       { t: 'monster', type: 'kankrelat', path: patrol([3.5, 10], [7, 10], 3) },
       { t: 'monster', type: 'kankrelat', path: patrol([8.6, 17], [11.4, 17], 2.6, 0, 0.4) },

@@ -62,7 +62,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     Network and Fortune Falls Casino, 6 holes each (54). `buildPlan(format)` keeps each course together, in random course order.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
-  - `registry.js` holds the 31 power-ups with their weights and catch-up luck.
+  - `registry.js` holds the 44 power-ups (including one per character) with their weights and catch-up luck.
   - `hazards.js` covers wind, tornado, volcano, tsunami and the like.
   - `effects.js` holds the per-client effects manager.
   - You can hold up to 3; a 4th is discarded. Pickups respawn, and the host's power-up setting scales how many appear.
@@ -78,10 +78,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.
 
 ## Rules the owner chose
-- **Time limit:** about 2 minutes per hole. Running out scores `max(par, strokes) + 10`.
+- **Time limit:** per hole (`time`, 120–170 s by par). Running out scores `max(par, strokes) + 10`.
+- **Ties:** never shared — countback (last 3, last hole), most aces, then a closest-to-the-pin playoff.
 - **Players:** everyone plays simultaneously, up to 8.
 - **Power-ups after holing out:** power-ups that affect others can still be used.
-- **Camera:** low chase camera.
+- **Camera:** three views cycled with C / 🎥: low chase (default), first-person POV, zoomable aerial.
 - **Characters:** Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA, one per player, picked in the lobby.
 
 ## Hole-in-one checking
