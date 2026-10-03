@@ -4,7 +4,7 @@ import { TEX } from '../course/themes.js';
 import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
-import { Gun, MineLayer, canTarget, landHit, seededRng } from './attacks.js';
+import { Gun, MineLayer, canTarget, landHit, seededRng, damageFor } from './attacks.js';
 import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook } from './looks.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
@@ -230,7 +230,7 @@ class Megatank extends Monster {
       const rolling = Math.hypot(s1.x - s0.x, s1.z - s0.z) > 0.05;
       const bp = ball.pos;
       if (rolling && Math.hypot(bp.x - s0.x, bp.z - s0.z) < this.r + ball.radius + 0.05 && t - (this.ctx.course.monsterHitAt ?? -99) > 1) {
-        landHit(this.ctx.course, 'vaporize', t);
+        landHit(this.ctx.course, 'vaporize', t, 100);
         return;
       }
     }
@@ -243,7 +243,7 @@ class Megatank extends Monster {
     const R = this.BEAM_LEN * Math.min(1, ((t - this.t0) / 0.6) * 3);
     if (Math.abs(along) < R && perp < 0.35 + ball.radius && Math.abs(p.y - (s.y + this.r * 0.75)) < 1.2) {
       this.hitDone = true;
-      landHit(this.ctx.course, 'vaporize', t);
+      landHit(this.ctx.course, 'vaporize', t, 100);
     }
   }
   dispose() { super.dispose(); this.ctx.group.remove(this.pivot); }
@@ -459,7 +459,7 @@ class Scyphozoa extends Monster {
     const p = ball.pos;
     if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 && p.y < s.y) {
       out.teleport = this.spec.grab;
-      if (t - (this.ctx.course.monsterHitAt ?? -99) > 4) landHit(this.ctx.course, 'xanafy', t);
+      if (t - (this.ctx.course.monsterHitAt ?? -99) > 4) landHit(this.ctx.course, 'xanafy', t, damageFor('scyphozoa', 'grab'));
     }
   }
 }
@@ -574,6 +574,8 @@ class Shark extends Monster {
     this.nextT = 3 + this.rng.range(0, 5);
     this.ram = null; // { t0, from, to }
     this.prev = super.at(0);
+    // between rams, Sharks fire their laser (as in the show)
+    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.8, range: 8, speed: 11, knock: 150, ready: () => !this.ram, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0.05, 0.62)) }));
   }
   /** The path position, with a ram lunge (telegraph 0.8 s, dash 0.45 s, swim back 1.2 s) on top. */
   at(t) {
@@ -623,7 +625,7 @@ class Shark extends Monster {
     r.hit = true;
     out.x += r.dir[0] * 420; out.z += r.dir[1] * 420; out.y += 90;
     out.wake = true;
-    landHit(this.ctx.course, 'shark', t);
+    landHit(this.ctx.course, 'shark', t, damageFor('shark', 'ram'));
   }
 }
 

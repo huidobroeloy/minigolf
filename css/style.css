@@ -479,3 +479,17 @@ body.xana-glitch #game { animation: xglitch 0.25s steps(2) infinite; }
 .in-player { position: absolute; bottom: 9vh; font-size: clamp(14px, 2.2vw, 22px); letter-spacing: 4px; color: #ffe9f6; text-shadow: 0 0 10px var(--hc); }
 .in-cut.xana .in-rings { background: repeating-radial-gradient(circle, rgba(255,40,40,0.6) 0 16px, rgba(120,0,0,0.25) 16px 34px); }
 .in-cut.xana .in-cmd { color: #ff5050; }
+
+/* Lyoko life points */
+.hud-lp { position: relative; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.hud-lp .lp-bar { flex: 1; width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.15); overflow: hidden; }
+.hud-lp .lp-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #2ee6ff, #7dff9a); transition: width 0.35s; }
+.hud-lp.low .lp-bar i { background: linear-gradient(90deg, #ff2a2a, #ff8a1a); animation: lplow 0.6s infinite alternate; }
+@keyframes lplow { to { opacity: 0.45; } }
+.hud-lp .lp-n { font-family: var(--font-head); font-size: 10px; color: var(--muted); min-width: 20px; }
+.hud-lp .lp-pop { position: absolute; right: -6px; top: -14px; font-style: normal; font-family: var(--font-head); font-weight: 900; font-size: 14px; opacity: 0; pointer-events: none; }
+.hud-lp .lp-pop.hit { color: #ff4a4a; } .hud-lp .lp-pop.heal { color: #7dff9a; }
+.hud-lp .lp-pop.go { animation: lppop 1s ease-out; }
+@keyframes lppop { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-18px); } }
+.hud-lp.shake { animation: lpshake 0.3s; }
+@keyframes lpshake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }

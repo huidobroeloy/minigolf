@@ -45,7 +45,8 @@ export class UI {
         <div class="hud-top">
           <div class="hud-hole"><div class="hole-no"></div><div class="hole-name"></div><div class="hole-par"></div></div>
           <div class="hud-timer"><div class="timer">2:00</div><div class="timer-bar"><i></i></div></div>
-          <div class="hud-strokes"><div class="lbl">STROKES</div><div class="val">0</div></div>
+          <div class="hud-strokes"><div class="lbl">STROKES</div><div class="val">0</div>
+            <div class="hud-lp" title="Lyoko life points: monster hits cost LP, at 0 you're devirtualized"><div class="lp-bar"><i></i></div><span class="lp-n">100</span><em class="lp-pop"></em></div></div>
         </div>
         <div class="hud-players"></div>
         <div class="hud-feed"></div>
@@ -357,6 +358,23 @@ export class UI {
     t.textContent = fmtTime(msLeft);
     t.classList.toggle('urgent', msLeft < 15000);
     this.$('.timer-bar i').style.width = `${Math.max(0, Math.min(100, (msLeft / msTotal) * 100))}%`;
+  }
+
+  /** Life points bar; `delta` > 0 shows a red "−delta" pop, < 0 a green heal. */
+  setLP(lp, delta = 0) {
+    const el = this.$('.hud-lp');
+    if (!el) return;
+    el.querySelector('.lp-bar i').style.width = `${Math.max(0, Math.min(100, lp))}%`;
+    el.querySelector('.lp-n').textContent = Math.round(lp);
+    el.classList.toggle('low', lp <= 30);
+    if (delta) {
+      const pop = el.querySelector('.lp-pop');
+      pop.textContent = delta > 0 ? `−${delta}` : `+${-delta}`;
+      pop.className = 'lp-pop ' + (delta > 0 ? 'hit' : 'heal');
+      void pop.offsetWidth;
+      pop.classList.add('go');
+      el.classList.remove('shake'); void el.offsetWidth; if (delta > 0) el.classList.add('shake');
+    }
   }
 
   setStrokes(n, par) {

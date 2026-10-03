@@ -240,7 +240,8 @@ export class EffectManager {
     c.endPossessed();
     this.applyBallMods();
     c.ui.flash();
-    c.ui.bigToast('🌟 HOPPER\'S LIGHT', 'cleansed · immune for 15 s', 'good');
+    c.healLP?.(50);
+    c.ui.bigToast('🌟 HOPPER\'S LIGHT', 'cleansed · +50 life points · immune for 15 s', 'good');
     sfx.play('hio');
   }
 

@@ -283,10 +283,12 @@ export class GameClient {
     this.course.localBall = this.ball;
     this.course.camera = this.cam.camera;
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
-    this.course.onMonsterHit = (kind) => this.onMonsterHit(kind);
+    this.course.onMonsterHit = (kind, dmg) => this.onMonsterHit(kind, dmg);
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
+    this.lp = 100; // Lyoko life points, refilled every hole
+    this.ui.setLP(100);
     this.shotInProgress = false;
     this.falling = false;
     this.spectate = null;
@@ -708,8 +710,9 @@ export class GameClient {
   }
 
   // ---------- XANA's monsters ----------
-  onMonsterHit(kind) {
+  onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
+    if (kind !== 'vaporize') this.damageLP(dmg);
     switch (kind) {
       case 'venom':
         e.pending.venom = true; e.applyBallMods();
@@ -725,6 +728,8 @@ export class GameClient {
         sfx.play('debuff');
         break;
       case 'vaporize':
+        this.lp = 0;
+        this.ui.setLP(0, 100);
         this.vaporize();
         break;
       case 'shark':
@@ -736,8 +741,28 @@ export class GameClient {
     }
   }
 
+  /** Lyoko life points: monster hits cost the show's values; at 0 you're devirtualized. */
+  damageLP(dmg) {
+    if (!this.ball || this.ball.state === 'holed' || this.falling) return;
+    const before = this.lp ?? 100;
+    this.lp = Math.max(0, before - dmg);
+    this.ui.setLP(this.lp, dmg);
+    if (this.lp <= 0) {
+      this.ui.bigToast('💥 DEVIRTUALIZED', 'your life points hit zero · +1 stroke', 'bad');
+      this.vaporize(true);
+    } else if (this.lp <= 30 && before > 30) {
+      this.ui.toast('⚠️ Life points low! One more hit and you\'re devirtualized');
+      sfx.play('beep');
+    }
+  }
+
+  healLP(n) {
+    this.lp = Math.min(100, (this.lp ?? 100) + n);
+    this.ui.setLP(this.lp, -n);
+  }
+
   /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
-  vaporize() {
+  vaporize(quiet = false) {
     const b = this.ball;
     if (!b || b.state === 'holed' || b.state === 'sinking' || this.falling) return;
     this.endTrip();
@@ -755,12 +780,14 @@ export class GameClient {
     this.addStrokes(1);
     this.stat('vaporized');
     sfx.play('splash');
-    this.ui.bigToast('☢️ VAPORIZED', 'XANA devirtualized your ball · +1 stroke', 'bad');
+    if (!quiet) this.ui.bigToast('☢️ VAPORIZED', 'XANA devirtualized your ball · +1 stroke', 'bad');
     this.sendState(true);
     setTimeout(() => {
       if (this.ball !== b || fid !== this.fallId) return;
       this.falling = false;
       b.respawnAtSafe();
+      this.lp = 100;
+      this.ui.setLP(100);
       this.cam.snapTo(b.mesh.position);
       this.virtualize(b.mesh.position);
       this.onRest();

@@ -3,15 +3,34 @@ import { RNG } from '../core/rng.js';
 import { sfx } from '../core/audio.js';
 
 // Monster attacks, shared rules (they apply to the LOCAL ball; every client runs its own):
-//  - each monster fires on its own seeded, unhurried rhythm (faster while a tower is active)
+//  - each monster fires on its own seeded rhythm, every ~4–7 s (twice as often while a tower is active)
 //  - every shot is telegraphed: the monster charges and a red ring marks where it will land
-//  - never at a ball whose player is lining up a shot, and not within 2 s of it coming to rest
+//  - never at a ball whose player is lining up a shot, and not within 2 s of it coming to rest;
+//    when it can't shoot at you (or you're out of range) it fires at the ground nearby instead,
+//    so monsters always look like they're fighting
 //  - a ball can only be hit once every 4 s
-//  - knockback only ever applies to a ball that is already rolling; resting balls only get
-//    the monster's status effect (venom, freeze, vaporize…)
+//  - a rolling ball takes the full knock, a resting one 40% of it; every hit costs Lyoko life
+//    points (the show's values, see DAMAGE) and applies the monster's status (venom, freeze…)
 
 const HIT_COOLDOWN = 4;
 const REST_GRACE = 2;
+const FIRE_SCALE = 0.55; // monsters' `every` intervals were written for a slower game
+const MIN_RANGE = 8.5;
+
+/** Life points each attack costs (from the show). 100 = devirtualized outright. */
+export const DAMAGE = {
+  kankrelat: { laser: 10 },
+  hornet: { laser: 15, charged: 20, poison: 10 },
+  blok: { laser: 20, ice: 10, firering: 80, rapid: 20 },
+  krabe: { laser: 20, charged: 40, mixed: 100 },
+  tarantula: { rapid: 15, laser: 15 },
+  creeper: { laser: 20 },
+  manta: { laser: 40, mine: 100 },
+  shark: { laser: 25, ram: 25 },
+  scyphozoa: { grab: 30 },
+  megatank: { beam: 100 },
+};
+export const damageFor = (type, kind) => DAMAGE[type]?.[kind] ?? 20;
 
 /** May a monster start an attack on this ball right now? */
 export function canTarget(course, ball, t, { allowResting = false } = {}) {
@@ -26,10 +45,10 @@ export function canTarget(course, ball, t, { allowResting = false } = {}) {
   return true;
 }
 
-/** Register a hit (cooldown + status callback). */
-export function landHit(course, kind, t) {
+/** Register a hit (cooldown + status callback + life points). */
+export function landHit(course, kind, t, dmg = 20) {
   course.monsterHitAt = t;
-  course.onMonsterHit?.(kind);
+  course.onMonsterHit?.(kind, dmg);
 }
 
 export function seededRng(ctx, spec, tag) {
@@ -59,9 +78,11 @@ export class Gun {
   constructor(monster, cfg) {
     this.m = monster;
     this.ctx = monster.ctx;
-    const base = { every: [8, 12], charge: 0.9, range: 7, speed: 9, knock: 140, burst: 1, burstGap: 0.22, status: null, allowResting: false };
+    const base = { every: [8, 12], charge: 0.9, range: 7, speed: 9, knock: 140, burst: 1, burstGap: 0.22, status: null, allowResting: true };
     this.base = { ...base, ...cfg };
-    this.modes = (cfg.modes || [{ w: 1 }]).map((m) => ({ ...this.base, ...m }));
+    this.base.every = [Math.max(3.5, this.base.every[0] * FIRE_SCALE), Math.max(5.5, this.base.every[1] * FIRE_SCALE)];
+    this.base.range = Math.max(MIN_RANGE, this.base.range);
+    this.modes = (cfg.modes || [{ w: 1 }]).map((m) => ({ ...this.base, ...m, range: Math.max(MIN_RANGE, m.range ?? this.base.range) }));
     this.cfg = this.modes[0];
     this.rng = seededRng(this.ctx, monster.spec, `gun:${this.modes.map((m) => m.kind).join('+')}`);
     this.nextT = 2.5 + this.rng.range(0, this.base.every[1]);
@@ -99,23 +120,49 @@ export class Gun {
       return;
     }
     if (t < this.nextT) return;
+    if (course.noAttacks) { this.nextT = t + 1; return; }
+    // can't shoot right now (a Creeper underground…): try again shortly, never skip the turn
+    if (this.base.ready && !this.base.ready(t)) { this.nextT = t + 0.6; return; }
+    const cfg = this.pickMode(t);
+    const from = this.base.muzzle(t);
+    let to = null, ambient = false;
+    const bp = ball?.pos;
+    const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4;
+    // a resting ball is only targeted half the time (it can't dodge); a rolling one always
+    if (inRange && canTarget(course, ball, t, { allowResting: cfg.allowResting }) && (ball.state === 'moving' || this.rng.next() < 0.5)) {
+      const lead = ball.state === 'moving' ? cfg.charge * 0.5 : 0;
+      to = new THREE.Vector3(bp.x + ball.vel.x * lead, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * lead);
+    } else {
+      // not at you (you're aiming, just stopped, out of range…): it still fights, at the
+      // ground nearby, well clear of your ball
+      to = this.ambientSpot(from, bp);
+      ambient = true;
+      if (!to) { this.nextT = t + 0.6; return; }
+    }
     const enraged = t < (course.enrageUntil ?? -1);
     this.nextT = t + this.rng.range(this.base.every[0], this.base.every[1]) * (enraged ? 0.5 : 1);
-    if (this.base.ready && !this.base.ready(t)) return;
-    const cfg = this.pickMode(t);
-    if (!canTarget(course, ball, t, { allowResting: cfg.allowResting })) return;
-    const from = this.base.muzzle(t);
-    const bp = ball.pos;
-    const lead = ball.state === 'moving' ? cfg.charge * 0.5 : 0;
-    const to = new THREE.Vector3(bp.x + ball.vel.x * lead, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * lead);
-    if (Math.hypot(to.x - from.x, to.z - from.z) > cfg.range) return;
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.6, 28), new THREE.MeshBasicMaterial({ color: PROJ_COLORS[cfg.kind] || '#ff2a2a', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
     ring.position.copy(to).add(new THREE.Vector3(0, 0.03, 0));
     this.ctx.group.add(ring);
+    if (ambient) ring.material.opacity = 0.35;
     this.charge = { t0: t, to, ring, cfg };
     this.cfg = cfg;
     this.m.onCharge?.(t, cfg);
+  }
+
+  /** A floor spot 2–5 units from the monster, at least 2.5 from the ball (null if none). */
+  ambientSpot(from, bp) {
+    const course = this.ctx.course;
+    for (let k = 0; k < 8; k++) {
+      const a = this.rng.range(0, Math.PI * 2), d = this.rng.range(2, 5);
+      const x = from.x + Math.cos(a) * d, z = from.z + Math.sin(a) * d;
+      const y = course.floorYAt?.(x, z);
+      if (y === null || y === undefined || Math.abs(y - from.y) > 4) continue;
+      if (bp && Math.hypot(x - bp.x, z - bp.z) < 2.5) continue;
+      return new THREE.Vector3(x, y + 0.02, z);
+    }
+    return null;
   }
 
   fire(t0, to, i, cfg) {
@@ -202,7 +249,7 @@ export class Gun {
     for (const pd of this.puddles) {
       if (Math.hypot(p.x - pd.x, p.z - pd.z) > pd.r || Math.abs(p.y - ball.radius - pd.y) > 0.4) continue;
       if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 5; out.z -= v.z * 5; }
-      if (!pd.stung) { pd.stung = true; landHit(this.ctx.course, 'venom', t); }
+      if (!pd.stung) { pd.stung = true; landHit(this.ctx.course, 'venom', t, damageFor(this.m.spec.type, 'poison')); }
     }
     for (const s of this.shots) {
       if (!s.landed || s.applied) continue;
@@ -211,14 +258,16 @@ export class Gun {
       const reach = (s.cfg.kind === 'firering' ? 0.9 : 0.6) + ball.radius;
       if (d > reach || Math.abs(p.y - s.to.y) > 1) continue;
       if (s.cfg.kind === 'poison') continue; // the puddle does the work
-      if (ball.state === 'moving' && s.cfg.knock) {
-        const k = s.cfg.knock;
+      if ((ball.state === 'moving' || ball.state === 'idle') && s.cfg.knock && !ball.frozen) {
+        // full knock on a rolling ball, a nudge (40%) on a resting one
+        const k = s.cfg.knock * (ball.state === 'moving' ? 1 : 0.4);
         out.x += (dx / (d || 1)) * k + (this.rng.next() - 0.5) * k * 0.2;
         out.z += (dz / (d || 1)) * k + (this.rng.next() - 0.5) * k * 0.2;
         out.y += k * 0.35;
+        out.wake = true;
       }
       // a burst only counts as one hit (the cooldown starts with the first)
-      if (s.cfg.status || t - (this.ctx.course.monsterHitAt ?? -99) > 1) landHit(this.ctx.course, s.cfg.status || this.m.spec.type, t);
+      if (s.cfg.status || t - (this.ctx.course.monsterHitAt ?? -99) > 1) landHit(this.ctx.course, s.cfg.status || this.m.spec.type, t, damageFor(this.m.spec.type, s.cfg.kind));
     }
   }
 
@@ -287,7 +336,7 @@ export class MineLayer {
       mn.gone = true;
       for (let i = 0; i < 30; i++) this.ctx.particles?.spawn?.({ pos: [mn.x, mn.y + 0.2, mn.z], vel: [(Math.random() - 0.5) * 5, Math.random() * 4, (Math.random() - 0.5) * 5], color: i % 2 ? '#ff2a2a' : '#ffb36a', size: 0.2, life: 0.7, gravity: 6 });
       sfx.play('rumble');
-      landHit(this.ctx.course, 'vaporize', t);
+      landHit(this.ctx.course, 'vaporize', t, 100);
     }
   }
   dispose() { for (const mn of this.mines) this.ctx.group.remove(mn.g); }
