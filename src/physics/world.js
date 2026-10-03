@@ -31,6 +31,7 @@ export const SURFACES = {
   basalt: { decel: 2.4 },
   seabed: { decel: 2.7 },
   netgrid: { decel: 1.9 },
+  felt: { decel: 3.0 }, // casino table
   carpet: { decel: 3.0 },
 };
 

@@ -333,6 +333,17 @@ export function surfaceMaterial(mat) {
   else if (mat === 'wood') {
     const t = TEX.wood(); t.repeat.set(0.5, 0.5);
     m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 });
+  } else if (mat === 'felt') {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#0f6b3a'; g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '0,40,20' : '60,160,90'},${Math.random() * 0.25})`; g.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5); }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(0.4, 0.4);
+    t.colorSpace = THREE.SRGBColorSpace;
+    m = new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
   } else if (mat === 'carpet') {
     m = new THREE.MeshStandardMaterial({ color: '#9b1d3a', roughness: 1 });
   } else m = new THREE.MeshStandardMaterial({ color: '#888', roughness: 0.8 });

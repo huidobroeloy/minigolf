@@ -333,6 +333,40 @@ export function buildCourse(def, physics, scene) {
       expand(bx, by, bz, r + 0.5);
     },
 
+    /**
+     * Bowl: a ring of floor sloping from radius r1 (height y1, the rim) down to radius r0 (y0),
+     * like a roulette wheel. The flat middle is a separate floor (use circlePoly).
+     */
+    bowl(p) {
+      const [cx, cz] = p.c, r0 = p.r0, r1 = p.r1, y0 = p.y0 ?? 0, y1 = p.y1, th = 0.6, n = p.seg ?? 56;
+      const ring = [[r0, y0], [r1, y1], [r1, y1 - th], [r0, y0 - th]]; // cross-section: inner top, outer top, outer bottom, inner bottom
+      const pos = [], idx = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        for (const [r, y] of ring) pos.push(cx + Math.cos(a) * r, y, cz + Math.sin(a) * r);
+      }
+      for (let i = 0; i < n; i++) {
+        const a0 = i * 4, b0 = ((i + 1) % n) * 4;
+        for (let k = 0; k < 4; k++) {
+          const k2 = (k + 1) % 4;
+          idx.push(a0 + k, b0 + k2, a0 + k2, a0 + k, b0 + k, b0 + k2); // wound so the top faces up
+        }
+      }
+      physics.addTrimesh(new Float32Array(pos), new Uint32Array(idx), { kind: 'floor', mat: p.mat || mats.theme.floorMat });
+      // visual: the same ring, with radial numbered-wheel colours
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const m = addMesh(geo, p.look ? lookMaterial(p.look, mats) : new THREE.MeshStandardMaterial({ color: '#5a1020', roughness: 0.5, side: THREE.DoubleSide }), { cast: false });
+      m.castShadow = false;
+      // gold rim
+      const rim = addMesh(new THREE.TorusGeometry(r1, 0.12, 8, n), lookMaterial('gold', mats));
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(cx, y1 + 0.05, cz);
+      expand(cx, y1, cz, r1 + 0.5);
+    },
+
     /** See-through tube the ball rolls inside, following a smooth path through `pts` ([x,y,z]). */
     tube(p) {
       const r = p.r ?? 0.5;
@@ -807,10 +841,27 @@ export function lookMaterial(look, mats) {
     case 'stone': { const t = TEX.stone(); t.repeat.set(0.5, 0.5); m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); break; }
     case 'holo': m = new THREE.MeshStandardMaterial({ color: '#18f0ff', emissive: '#18f0ff', emissiveIntensity: 1.2, transparent: true, opacity: 0.7, roughness: 0.2 }); break;
     case 'snow': m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }); break;
+    case 'dice': m = [1, 6, 2, 5, 3, 4].map((n) => new THREE.MeshStandardMaterial({ map: diceFace(n), roughness: 0.3 })); break;
+    case 'gold': m = new THREE.MeshStandardMaterial({ color: '#ffcf4a', metalness: 0.8, roughness: 0.25, emissive: '#6a4a00', emissiveIntensity: 0.3 }); break;
+    case 'chip': m = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.5, emissive: '#3a0008', emissiveIntensity: 0.3 }); break;
     default: m = new THREE.MeshStandardMaterial({ color: look, roughness: 0.6 });
   }
   lookCache.set(look, m);
   return m;
+}
+
+function diceFace(n) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f7f3ea'; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = '#d8cfbf'; g.lineWidth = 8; g.strokeRect(4, 4, 120, 120);
+  const P = { 1: [[64, 64]], 2: [[34, 34], [94, 94]], 3: [[30, 30], [64, 64], [98, 98]], 4: [[34, 34], [94, 34], [34, 94], [94, 94]], 5: [[32, 32], [96, 32], [64, 64], [32, 96], [96, 96]], 6: [[34, 28], [94, 28], [34, 64], [94, 64], [34, 100], [94, 100]] }[n];
+  g.fillStyle = n === 1 ? '#c8102e' : '#141414';
+  for (const [x, y] of P) { g.beginPath(); g.arc(x, y, n === 1 ? 16 : 12, 0, Math.PI * 2); g.fill(); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function arrowTexture(color) {
