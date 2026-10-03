@@ -80,6 +80,28 @@ export class HostRoom {
   // ---------- connections ----------
   addClient(id, send) { this.links.set(id, send); }
 
+  // ---------- the host's soundtrack, streamed to friends ----------
+  /** The host loaded (or changed) its own music: keep the chunks and send them to everyone. */
+  setTracks(msgs) {
+    this.tracks = msgs;
+    this.trackGen = (this.trackGen || 0) + 1;
+    for (const id of this.links.keys()) if (id !== 'host' && id !== 'solo') this.streamTracks(id);
+  }
+
+  /** Paced so the music never crowds out the game's own messages (about 2 MB/s). */
+  streamTracks(id) {
+    const msgs = this.tracks;
+    if (!msgs?.length) return;
+    const gen = this.trackGen;
+    let i = 0;
+    const pump = () => {
+      if (gen !== this.trackGen || !this.links.has(id) || this.disposed) return;
+      for (let k = 0; k < 8 && i < msgs.length; k++) this.sendTo(id, msgs[i++]);
+      if (i < msgs.length) setTimeout(pump, 45);
+    };
+    setTimeout(pump, 500);
+  }
+
   removeClient(id) {
     this.links.delete(id);
     const p = this.players.get(id);
@@ -242,6 +264,7 @@ export class HostRoom {
     this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
     this.broadcastLobby();
+    if (id !== 'host' && id !== 'solo') this.streamTracks(id);
     if (this.phase === 'hole') this.sendTo(id, this.holeMessage());
     if (this.phase === 'between') this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
   }
@@ -257,6 +280,7 @@ export class HostRoom {
     for (const pk of this.pickups || []) if (pk.taken === oldId) pk.taken = id;
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color: old.color });
     this.broadcastLobby();
+    if (id !== 'host' && id !== 'solo') this.streamTracks(id);
     this.broadcast({ t: 'rejoined', name: old.name }, id);
     if (this.phase === 'hole') {
       this.sendTo(id, this.holeMessage());
@@ -431,6 +455,7 @@ export class HostRoom {
   }
 
   dispose() {
+    this.disposed = true;
     clearInterval(this.timer);
     clearTimeout(this.introTimer);
     this.links.clear();

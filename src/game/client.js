@@ -11,10 +11,13 @@ import { POWERUPS } from '../powerups/registry.js';
 import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
+import { soundtrack } from '../core/soundtrack.js';
 import { makeLabel } from '../fx/models.js';
 import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
 import { Finale } from './finale.js';
+import { XanaFinale } from './xanaFinale.js';
+import { characterByColor } from './characters.js';
 import { emojiTexture } from '../fx/particles.js';
 
 export const EMOTES = ['😂', '😡', '👏', '💀'];
@@ -96,6 +99,9 @@ export class GameClient {
   // ---------- network ----------
   onMessage(m) {
     switch (m.t) {
+      case 'track':
+        soundtrack.receive(m);
+        break;
       case 'welcome':
         this.myId = m.you;
         this.code = m.code;
@@ -204,15 +210,17 @@ export class GameClient {
         this.ui.hideHud();
         this.ui.setScreen('');
         const winners = m.winnerId ? m.standings.filter((p) => p.id === m.winnerId) : m.standings.slice(0, 1);
+        // XANA won: the catastrophic ending instead of the tower being saved
+        const xanaWins = characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
           this.finale = null;
           this.app.showBackdrop();
-          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost, tiebreak: m.tiebreak });
+          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost, tiebreak: m.tiebreak, xana: xanaWins });
         };
         this.app.hideBackdrop();
-        music.play('forest');
-        music.duck(true);
-        this.finale = new Finale(this.app, winners, () => { music.duck(false); music.play('menu'); show(); });
+        music.play(xanaWins ? 'xana' : 'finale');
+        const F = xanaWins ? XanaFinale : Finale;
+        this.finale = new F(this.app, winners, () => { music.play('menu'); show(); });
         break;
       }
     }
@@ -710,6 +718,10 @@ export class GameClient {
       case 'vaporize':
         this.vaporize();
         break;
+      case 'shark':
+        this.ui.toast('🦈 Rammed by a Shark!');
+        sfx.play('wall', 4);
+        break;
       default:
         sfx.play('wall', 3);
     }
@@ -734,7 +746,7 @@ export class GameClient {
     this.addStrokes(1);
     this.stat('vaporized');
     sfx.play('splash');
-    this.ui.bigToast('☢️ VAPORIZED', 'the Megatank got you · +1 stroke', 'bad');
+    this.ui.bigToast('☢️ VAPORIZED', 'XANA devirtualized your ball · +1 stroke', 'bad');
     this.sendState(true);
     setTimeout(() => {
       if (this.ball !== b || fid !== this.fallId) return;

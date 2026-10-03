@@ -5,6 +5,7 @@ import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
 import { portrait, portraitBig } from './portraits.js';
 import { ballOrb } from './orb.js';
+import { soundtrack, SLOTS } from '../core/soundtrack.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -169,8 +170,45 @@ export class UI {
       <div class="set-row"><label>💥 Sound FX</label><input id="setSfx" type="range" min="0" max="1" step="0.05" value="${p.sfx ?? 0.6}" /></div>
       <div class="set-row"><label>🔇 Mute everything</label><button class="btn tog ${p.muted ? 'off' : ''}" id="setMute">${p.muted ? 'MUTED' : 'SOUND ON'}</button></div>
       <div class="set-row"><label>🖥️ Graphics</label><select id="setQuality"><option value="high" ${p.quality !== 'low' ? 'selected' : ''}>High (glow + shadows)</option><option value="low" ${p.quality === 'low' ? 'selected' : ''}>Low (faster)</option></select></div>
+      <div class="set-row"><label>🎬 Intro on start</label><button class="btn tog ${p.intro === false ? 'off' : ''}" id="setIntro">${p.intro === false ? 'OFF' : 'ON'}</button></div>
+      <h3 class="st-h">🎧 Soundtrack</h3>
+      <div class="st-note">Load your own music (audio or video files). It stays in this browser, and when you host, your friends hear it too.</div>
+      <div class="st-slots"></div>
       <div class="row"><button class="btn primary" id="setClose">Done</button></div>
     </div>`, 'settings-ov');
+    const slotsEl = o.querySelector('.st-slots');
+    const renderSlots = () => {
+      if (!slotsEl.isConnected) { off(); return; }
+      slotsEl.innerHTML = SLOTS.map((sl) => {
+        const tr = soundtrack.track(sl.key);
+        const prog = soundtrack.progress(sl.key);
+        const status = prog !== null ? `receiving from host… ${Math.round(prog * 100)}%`
+          : tr ? `${tr.fromHost ? 'from host: ' : ''}${tr.name}` : 'built-in synth';
+        return `<div class="st-slot" data-k="${sl.key}">
+          <span class="st-ic">${sl.icon}</span><span class="st-l">${sl.label}</span>
+          <span class="st-s ${tr ? 'on' : ''}" title="${esc(status)}">${esc(status)}</span>
+          <label class="btn st-load">Load<input type="file" accept="audio/*,video/*" hidden /></label>
+          ${soundtrack.local.has(sl.key) ? '<button class="btn st-clear" title="Back to the built-in music">✕</button>' : ''}
+        </div>`;
+      }).join('');
+    };
+    const off = soundtrack.onChange(renderSlots);
+    renderSlots();
+    slotsEl.addEventListener('change', (e) => {
+      const f = e.target.files?.[0];
+      const k = e.target.closest('.st-slot')?.dataset.k;
+      if (f && k) soundtrack.set(k, f);
+    });
+    slotsEl.addEventListener('click', (e) => {
+      if (!e.target.closest('.st-clear')) return;
+      soundtrack.clear(e.target.closest('.st-slot').dataset.k);
+    });
+    o.querySelector('#setIntro').onclick = (e) => {
+      const on = this.prefs.intro === false;
+      this.prefs.intro = on;
+      savePrefs(this.prefs);
+      e.target.textContent = on ? 'ON' : 'OFF'; e.target.classList.toggle('off', !on);
+    };
     o.querySelector('#setMusic').oninput = (e) => this.h.musicVol?.(Number(e.target.value));
     o.querySelector('#setSfx').oninput = (e) => this.h.sfxVol?.(Number(e.target.value));
     o.querySelector('#setMusicMute').onclick = (e) => {
@@ -597,7 +635,7 @@ export class UI {
     spin();
   }
 
-  showScoreboard({ players, plan, holeNo, results, myId, final, isHost, tiebreak }) {
+  showScoreboard({ players, plan, holeNo, results, myId, final, isHost, tiebreak, xana }) {
     this.hideHud();
     const pars = plan.map((i) => HOLES[i].par);
     // the final order comes from the host (it already applied the tiebreaks)
@@ -617,8 +655,8 @@ export class UI {
       return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 10 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
     };
     const s = this.setScreen(`
-      <div class="panel scoreboard">
-        <h1>${final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
+      <div class="panel scoreboard${xana ? ' xana-board' : ''}">
+        <h1>${xana ? '👁️ XANA WINS · LYOKO HAS FALLEN' : final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
         <div class="joke">${esc(JOKES[Math.floor(Math.random() * JOKES.length)])}</div>
         ${final && tiebreak ? `<div class="tiebreak">⚔️ TIEBREAK · ${esc(tiebreak)}</div>` : ''}
         ${final ? podium(sorted) + awards(players) : ''}

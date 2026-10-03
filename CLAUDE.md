@@ -11,7 +11,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `src/ui/portraits.js` pixel art
   - `src/core/music.js` sequencer
 
-  Never add show images, logos or the Lyoko theme.
+  Never add show images, logos or the Lyoko theme. The owner's own music (show audio included) is loaded by them in
+  Settings → Soundtrack: it lives in their browser's IndexedDB and streams host → guests at runtime. It never goes in the repo.
+  Reference clips and screenshots live in the gitignored `.local/` folder.
 - **No build step.** Plain ES modules with an importmap in `index.html`. Dependencies come from jsDelivr:
   - Three.js 0.186.1
   - Rapier3d-compat 0.21.0
@@ -45,12 +47,20 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Ground snap is skipped while `launchTimer` is running.
   - The cup is a drawn disc, not a hole in the geometry. Capture is in `Ball.postStep`, which loops over `course.cups`.
 - **Holes** (`src/holes/<sector>.js`):
-  - Hole data is a list of parts: floor, ramp, wall, box, cyl, bumper, mover, zone, crumble, teleport, monster, deco.
+  - Hole data is a list of parts: floor, ramp, wall, box, cyl, bumper, mover, zone, crumble, teleport, warp, tube, bowl, monster, deco.
+  - **Floor walls have tall invisible colliders** (about 1.2 above the visual). Any floor edge a ball arrives at through the
+    air (jumps, launchers, bubble lifts), or that a tube or ramp passes through, must be listed in `open`.
+  - Movers, crumbles and ramps are separate parts. Raise everything standing on a raised floor with its `y`.
   - `src/course/builder.js` turns the data into meshes and colliders.
   - Motion helpers are in `holes/helpers.js`: patrol, orbit, spin, elevator, shuttle, loop, kicker.
-  - Zones: conveyor, boost (`align` option), vent (geyser launch), wind, slow. Add `hidden: true` for no visual.
+  - Zones: conveyor (clamps speed to the belt), boost (`align` option), vent (geyser launch; keeps the ball's own speed with a
+    minimum), wind, slow, current (pushes along its flow only), bubble (steady lift, `push` near the top), lava (a fall).
+    Add `hidden: true` for no visual.
+  - Parts: `warp` (exit speed is max(entry, `speed`)), `tube` (glass duct), `bowl` (cone ring). `def.water` gives floaty air.
   - Extra finishing cups: `cups: [[x,y,z],…]`. Use `course.nearestCup(p)` and `ball.sinkCup` instead of `course.cup` when the cup that was hit matters.
-  - Sectors: Desert, Forest, Ice (with the Kolossus in the background), Mountain, Sector 5 and Fortune Falls, 3 holes each. Fortune pits roll a random +0…+5 penalty.
+  - Courses (`COURSES` in `holes/index.js`): Desert, Forest, Ice, Mountain, Sector 5, Volcano Replika, Digital Sea,
+    Network and Fortune Falls Casino, 6 holes each (54). `buildPlan(format)` keeps each course together, in random course order.
+  - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
   - `registry.js` holds the 31 power-ups with their weights and catch-up luck.
   - `hazards.js` covers wind, tornado, volcano, tsunami and the like.
@@ -59,7 +69,12 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Game client** (`src/game/client.js`): aiming, the power drag, aerial targeting, celebrations, the camera and the HUD hooks.
 - **Other `src/game` files:**
   - `characters.js`: the 8 characters (ball textures and colours).
-  - `finale.js`: the winner animation, where Aelita reaches the tower.
+  - `finale.js`: the winner animation, where Aelita reaches the tower. `xanaFinale.js`: the catastrophe when XANA wins.
+  - `intro.js`: the click-to-start intro cinematic (pref `intro`).
+- **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
+  Never let a monster fire at a ball whose owner is aiming.
+- **Music** (`src/core/music.js` + `soundtrack.js`): a slot (intro, menu, levels, finale, xana) with a loaded file plays it;
+  otherwise the procedural style plays.
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.
 
 ## Rules the owner chose
@@ -70,6 +85,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Characters:** Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA, one per player, picked in the lobby.
 
 ## Hole-in-one checking
+Common ways a hole gets too many aces (more than ~1.5%): a deterministic funnel (bubble lift, boost or launcher whose
+output doesn't depend on the shot) pointing at the cup; a wall or pillar just behind the cup bouncing overshoots back in;
+a round bank around the cup. Fix with an off-line cup, a lava strip or sinkhole behind the cup, or straight walls.
+
 Run `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })`. That is 2196 simulated shots, about 2–5 minutes per hole.
 
 Last full run: every hole has an ace.

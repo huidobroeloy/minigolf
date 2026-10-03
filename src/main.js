@@ -5,6 +5,8 @@ import { Input } from './core/input.js';
 import { UI, savePrefs } from './ui/ui.js';
 import { sfx } from './core/audio.js';
 import { music } from './core/music.js';
+import { soundtrack } from './core/soundtrack.js';
+import { Intro } from './game/intro.js';
 import { HostRoom } from './net/room.js';
 import { LocalLink, hostPeer, joinPeer, makeCode } from './net/transport.js';
 import { GameClient } from './game/client.js';
@@ -45,7 +47,8 @@ class App {
       quality: (q) => { this.renderer.setQuality(q); this.ui.prefs.quality = q; savePrefs(this.ui.prefs); },
     });
     window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
-    document.getElementById('boot').remove();
+    // the host shares its own soundtrack with the room
+    soundtrack.onChange(() => { clearTimeout(this.shareT); this.shareT = setTimeout(() => this.shareTracks(), 400); });
 
     const holeParam = this.params.get('hole');
     const session = this.loadSession();
@@ -56,8 +59,9 @@ class App {
       const i = Math.max(0, Math.min(HOLES.length - 1, Number(holeParam) - 1));
       this.solo('hole:' + i, { name: this.ui.prefs.name || 'Tester', color: this.ui.prefs.color });
     } else {
-      this.showMenu();
+      this.clickToStart();
     }
+    if (holeParam || session) document.getElementById('boot')?.remove();
 
     this.last = performance.now();
     this.fps = 0;
@@ -74,8 +78,37 @@ class App {
     }
   }
 
+  /** The boot screen waits for a click (that also unlocks audio), then the intro or the menu. */
+  clickToStart() {
+    const boot = document.getElementById('boot');
+    boot.classList.add('ready');
+    boot.querySelector('.boot-msg').textContent = 'CLICK TO START';
+    const eye = document.createElement('div');
+    eye.className = 'boot-eye';
+    boot.prepend(eye);
+    const go = () => {
+      removeEventListener('keydown', go);
+      boot.removeEventListener('pointerdown', go);
+      sfx.unlock();
+      boot.classList.add('out');
+      setTimeout(() => boot.remove(), 400);
+      if (this.ui.prefs.intro === false) return this.showMenu();
+      this.intro = new Intro(this, () => { this.intro = null; this.showMenu(); });
+    };
+    boot.addEventListener('pointerdown', go);
+    addEventListener('keydown', go);
+  }
+
+  async shareTracks() {
+    if (!this.room || this.room.solo) return;
+    await soundtrack.ready;
+    this.room?.setTracks(await soundtrack.chunks());
+  }
+
   frame(dt) {
-    if (this.client?.finale) {
+    if (this.intro) {
+      this.intro.frame(dt);
+    } else if (this.client?.finale) {
       this.client.finale.frame(dt);
     } else if (this.client && this.client.course) {
       this.client.frame(dt);
@@ -86,9 +119,9 @@ class App {
   }
 
   // ---------- menu backdrop: a slowly orbiting random hole ----------
-  showBackdrop() {
+  showBackdrop(pool = HOLES) {
     if (this.backdrop) return;
-    const def = HOLES[Math.floor(Math.random() * HOLES.length)];
+    const def = pool[Math.floor(Math.random() * pool.length)];
     const physics = new Physics();
     const course = buildCourse(def, physics, this.renderer.scene);
     this.renderer.applyTheme(def.sector, course);
@@ -133,6 +166,7 @@ class App {
       try {
         this.peer = await hostPeer(room, code);
         this.room = room;
+        this.shareTracks();
         this.link = new LocalLink(room, 'host');
         this.startClient(this.link, me, { isHost: true });
         return;

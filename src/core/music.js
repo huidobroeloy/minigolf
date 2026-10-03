@@ -1,7 +1,9 @@
 import { sfx } from './audio.js';
+import { soundtrack, slotFor } from './soundtrack.js';
 
 // Procedural sector music: a tiny step sequencer (pad chords, arpeggio, bass, soft drums).
 // Every sector gets its own scale, tempo and voices. No samples, nothing copyrighted.
+// If you loaded your own track for a slot in Settings (see soundtrack.js), that plays instead.
 
 const SCALES = {
   phrygianDom: [0, 1, 4, 5, 7, 8, 10],
@@ -22,6 +24,9 @@ const STYLES = {
   volcano:  { bpm: 96,  root: 43, scale: 'phrygianDom', prog: [0, 1, 4, 1], pad: 'sawtooth', arp: 'square',   arpEvery: 2, bass: 'drone',  drums: 'boom',  bright: 1200 },
   sea:      { bpm: 70,  root: 50, scale: 'lydian',      prog: [0, 4, 5, 3], pad: 'sine',     arp: 'bell',     arpEvery: 2, bass: 'whole',  drums: 'none',  bright: 1500 },
   network:  { bpm: 124, root: 57, scale: 'dorian',      prog: [0, 3, 5, 4], pad: 'triangle', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 3200 },
+  intro:    { bpm: 132, root: 52, scale: 'minor',       prog: [0, 5, 3, 6], pad: 'sawtooth', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 3400 },
+  finale:   { bpm: 104, root: 55, scale: 'lydian',      prog: [0, 4, 5, 3], pad: 'triangle', arp: 'bell',     arpEvery: 1, bass: 'walk',   drums: 'soft',  bright: 2600 },
+  xana:     { bpm: 62,  root: 38, scale: 'phrygian',    prog: [0, 1, 0, 6], pad: 'sawtooth', arp: 'triangle', arpEvery: 4, bass: 'drone',  drums: 'boom',  bright: 700 },
 };
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
@@ -41,6 +46,12 @@ class Music {
       this.out = ctx.createGain();
       this.out.gain.value = this.volume * 0.35;
       this.out.connect(sfx.musicBus || sfx.master);
+      // your own tracks are mastered loud already: their own gain on the same bus
+      this.fileOut = ctx.createGain();
+      this.fileOut.gain.value = this.volume * 0.9;
+      this.fileOut.connect(sfx.musicBus || sfx.master);
+      soundtrack.outNode = this.fileOut;
+      soundtrack.onChange(() => this.refresh());
     }
     return true;
   }
@@ -48,6 +59,18 @@ class Music {
   setVolume(v) {
     this.volume = v;
     if (this.out) this.out.gain.setTargetAtTime(v * 0.35 * this.duckK, sfx.ctx.currentTime, 0.1);
+    if (this.fileOut) this.fileOut.gain.setTargetAtTime(v * 0.9 * this.duckK, sfx.ctx.currentTime, 0.1);
+  }
+
+  /** Re-pick what plays now (a track was loaded, cleared or arrived from the host). */
+  refresh() {
+    const want = this.want;
+    if (!want) return;
+    const slot = slotFor(want), tr = soundtrack.track(slot);
+    if (tr ? soundtrack.slot === slot && soundtrack.blob === tr.blob : !!this.timer) return; // nothing changed
+    if (this.timer) this.stop(true);
+    this.key = null;
+    this.play(want);
   }
 
   duck(on) {
@@ -59,6 +82,15 @@ class Music {
   play(key) {
     this.want = key;
     if (!this.ensure()) return;
+    const slot = slotFor(key);
+    soundtrack.wantSlot = slot;
+    if (soundtrack.has(slot)) {
+      if (this.timer) this.stop(true);
+      this.key = key;
+      soundtrack.play(slot);
+      return;
+    }
+    soundtrack.stop();
     if (this.key === key && this.timer) return;
     this.stop(true);
     const st = STYLES[key] || STYLES.menu;
