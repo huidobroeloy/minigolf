@@ -71,7 +71,7 @@ export default [
     hio: 'A secret: the warp pipe in the first corner pops you out below the summit. Hit it hard enough to roll all the way up.',
     parts: [
       { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 10], [-2.5, 10]], open: [2] },
-      { t: 'warp', a: [-1.7, 0, 8.6], b: [-4.5, 2.5, 25.4], dir: [0, 1], speed: 1.5 },
+      { t: 'warp', a: [-1.7, 0, 8.6], b: [-4.5, 2.5, 25.4], dir: [0, 1], speed: 1.5, r: 0.38 },
       { t: 'ramp', a: [0, 10], b: [0, 18], w: 5, ya: 0, yb: 2.5 },
       { t: 'monster', type: 'boulder', path: rolling(-1.2, 17.5, 10.4, 2.5, 0, 5.5, 0), size: 0.6 },
       { t: 'monster', type: 'boulder', path: rolling(1.2, 17.5, 10.4, 2.5, 0, 5.5, 0.5), size: 0.6 },

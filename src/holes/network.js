@@ -92,7 +92,8 @@ export default [
     parts: [
       // first highway, then a bend to the right
       { t: 'floor', poly: [[-2, -1.2], [2, -1.2], [2, 8], [9, 8], [9, 13], [8.6, 13], [7.4, 13], [-2, 13]], open: [5] },
-      { t: 'warp', a: [-1.2, 0, 12.2], b: [0, 1, 23.6], dir: [0, 1], speed: 1.5, r: 0.4 },
+      { t: 'warp', a: [-1.2, 0, 12.2], b: [0, 1, 23.6], dir: [0, 1], speed: 1.5, r: 0.35 },
+      { t: 'zone', kind: 'slow', rect: [-1.3, 24.6, 1.3, 27.6], y: 1, mul: 4 }, // corrupted data: sticky
       // holographic bridge up to the Hub
       { t: 'tube', pts: [[8, 0, 12.5], [8, 0.3, 16], [6, 1, 19.5], [3.6, 1, 21.6], [2.2, 1, 23.6]], r: 0.6, color: '#7ac8ff' },
       // the Hub: a round platform with a ring of data pillars round the cup
