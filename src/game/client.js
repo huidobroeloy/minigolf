@@ -374,6 +374,8 @@ export class GameClient {
     else if (type === 'bumper') { sfx.play('bumper'); data.bumper.hitT = this.simTime + 0.25; }
     else if (type === 'stick') sfx.play('stick');
     else if (type === 'vent') sfx.play('whoosh');
+    else if (type === 'warp') { sfx.play('teleport'); this.cam.snapTo(this.ball.mesh.position); }
+    else if (type === 'lava') this.ui.toast('🌋 Into the lava!');
     else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
     else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false, this.ball?.sinkCup); }
     else if (type === 'rest') this.onRest();
@@ -398,10 +400,18 @@ export class GameClient {
 
   onHoled() {
     if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    // Fortune cups add or take strokes (never below 1)
+    const mod = this.ball.sinkCup?.mod;
+    this.rawStrokes = this.strokes;
+    if (mod) {
+      this.strokes = Math.max(1, this.strokes + mod);
+      this.ui.setStrokes(this.strokes, this.def.par);
+      this.ui.bigToast(mod < 0 ? `🍀 ${mod} STROKE${mod < -1 ? 'S' : ''}` : `💸 +${mod} STROKE${mod > 1 ? 'S' : ''}`, `the cup says ${mod > 0 ? '+' : ''}${mod}`, mod < 0 ? 'good' : 'bad');
+    }
     const name = scoreName(this.strokes, this.def.par);
     this.ui.stamp(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
-    if (this.strokes === 1) this.aceFireworks();
-    if (this.strokes === 1) { sfx.play('hio'); this.stat('hio'); }
+    if (this.rawStrokes === 1) this.aceFireworks();
+    if (this.rawStrokes === 1) { sfx.play('hio'); this.stat('hio'); }
     if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
     this.endTrip(true);
     if (this.playoff) this.sendPlayoff(true);

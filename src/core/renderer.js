@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { THEMES, TEX } from '../course/themes.js';
 import { Post } from './post.js';
 
-const SEA_COLORS = { fortune: ['#2a0650', '#b04dff'], sector5: ['#071a5c', '#6f8dff'], default: ['#062a7a', '#3fa0ff'] };
+const SEA_COLORS = { fortune: ['#2a0650', '#b04dff'], sector5: ['#071a5c', '#6f8dff'], volcano: ['#3a0a04', '#ff5a14'], sea: ['#02123a', '#2fc6ff'], network: ['#020414', '#3fa9ff'], default: ['#062a7a', '#3fa0ff'] };
 
 export class Renderer {
   constructor(canvas, quality = 'high') {

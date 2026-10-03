@@ -19,6 +19,9 @@ const STYLES = {
   mountain: { bpm: 74,  root: 45, scale: 'minor',       prog: [0, 5, 6, 4], pad: 'sawtooth', arp: 'triangle', arpEvery: 4, bass: 'drone',  drums: 'boom',  bright: 1000 },
   sector5:  { bpm: 112, root: 57, scale: 'minor',       prog: [0, 5, 2, 6], pad: 'sawtooth', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 2200 },
   fortune:  { bpm: 118, root: 52, scale: 'phrygian',    prog: [0, 6, 5, 1], pad: 'square',   arp: 'sawtooth', arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 2800 },
+  volcano:  { bpm: 96,  root: 43, scale: 'phrygianDom', prog: [0, 1, 4, 1], pad: 'sawtooth', arp: 'square',   arpEvery: 2, bass: 'drone',  drums: 'boom',  bright: 1200 },
+  sea:      { bpm: 70,  root: 50, scale: 'lydian',      prog: [0, 4, 5, 3], pad: 'sine',     arp: 'bell',     arpEvery: 2, bass: 'whole',  drums: 'none',  bright: 1500 },
+  network:  { bpm: 124, root: 57, scale: 'dorian',      prog: [0, 3, 5, 4], pad: 'triangle', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 3200 },
 };
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);

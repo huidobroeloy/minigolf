@@ -35,10 +35,12 @@ export function buildCourse(def, physics, scene) {
     monsters: [],
     crumbles: [],
     teleports: [],
+    warps: [],
     animators: [],
     killY: -8,
   };
-  course.cups = [course.cup, ...(def.cups || []).map((c) => ({ x: c[0], y: c[1], z: c[2], extra: true }))];
+  course.cup.mod = def.cupMod ?? null;
+  course.cups = [course.cup, ...(def.cups || []).map((c) => ({ x: c[0], y: c[1], z: c[2], mod: c[3] ?? null, extra: true }))];
   /** The cup closest to a point (for holes with several). */
   course.nearestCup = (pt) => {
     if (!pt || course.cups.length === 1) return course.cup;
@@ -296,6 +298,98 @@ export function buildCourse(def, physics, scene) {
       expand(x, y, z, Math.max(w, d) / 2);
     },
 
+    /**
+     * Warp pipe: roll over mouth `a` and you shoot out of mouth `b`, heading `dir` ([x,z]) at
+     * least `speed` fast. Mouth a is flush with the floor; mouth b is a pipe end facing `dir`.
+     */
+    warp(p) {
+      const [ax, ay, az] = p.a, [bx, by, bz] = p.b;
+      const r = p.r ?? 0.5;
+      const col = p.color || mats.theme.flag;
+      const pipeMat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.35, metalness: 0.3 });
+      const dark = new THREE.MeshBasicMaterial({ color: '#02040a' });
+      // mouth a: a rim on the floor and a dark hole
+      const rimA = addMesh(new THREE.TorusGeometry(r + 0.06, 0.09, 8, 28), pipeMat, { cast: false });
+      rimA.rotation.x = Math.PI / 2; rimA.position.set(ax, ay + 0.04, az);
+      const holeA = addMesh(new THREE.CircleGeometry(r, 28), dark, { cast: false });
+      holeA.rotation.x = -Math.PI / 2; holeA.position.set(ax, ay + 0.012, az);
+      const chev = makeChevrons(col, 0.4);
+      chev.position.set(ax, ay + 0.5, az);
+      chev.rotation.x = Math.PI; // pointing down into the pipe
+      group.add(chev);
+      // mouth b: a short pipe lying along dir, open end facing out
+      const d = p.dir || [0, 1];
+      const dl = Math.hypot(d[0], d[1]) || 1;
+      const ux = d[0] / dl, uz = d[1] / dl;
+      const pipeB = addMesh(new THREE.CylinderGeometry(r + 0.08, r + 0.08, 1.2, 24, 1, true), pipeMat);
+      pipeB.position.set(bx - ux * 0.7, by + r + 0.05, bz - uz * 0.7);
+      pipeB.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(ux, 0, uz));
+      const rimB = addMesh(new THREE.TorusGeometry(r + 0.1, 0.08, 8, 28), pipeMat);
+      rimB.position.set(bx - ux * 0.1, by + r + 0.05, bz - uz * 0.1);
+      rimB.quaternion.copy(pipeB.quaternion).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+      course.warps.push({ ax, ay, az, r, to: [bx, by, bz], dir: [ux, uz], speed: p.speed ?? 6, pipeB, rimA });
+      course.animators.push((t) => { chev.userData.animate(t); pipeMat.emissiveIntensity = 0.3 + 0.15 * Math.sin(t * 4); });
+      expand(ax, ay, az, r + 0.5);
+      expand(bx, by, bz, r + 0.5);
+    },
+
+    /** See-through tube the ball rolls inside, following a smooth path through `pts` ([x,y,z]). */
+    tube(p) {
+      const r = p.r ?? 0.5;
+      const curve = new THREE.CatmullRomCurve3(p.pts.map((q) => new THREE.Vector3(q[0], q[1] + r, q[2])), false, 'centripetal');
+      const segs = Math.max(16, Math.round(curve.getLength() * 6));
+      const geo = new THREE.TubeGeometry(curve, segs, r, 16, false);
+      // collider: a square duct made of four continuous closed slabs that follow the path
+      // (floor, two walls, roof). Each slab is one trimesh solid, just like a normal floor.
+      const N = Math.max(6, Math.round(curve.getLength() / 0.3));
+      const frames = [];
+      for (let i = 0; i <= N; i++) {
+        const u = i / N;
+        const c = curve.getPointAt(u), d = curve.getTangentAt(u);
+        const right = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize();
+        const up = new THREE.Vector3().crossVectors(right, d).normalize();
+        frames.push({ c, right, up });
+      }
+      const half = r * 0.82;
+      // a slab: cross-section rectangle centred at (ox, oy) in the frame, size (w × h)
+      const slab = (ox, oy, w, h, kind) => {
+        const pos = [], idx = [];
+        for (const f of frames) {
+          for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const q = f.c.clone().addScaledVector(f.right, ox + sx * w / 2).addScaledVector(f.up, oy + sy * h / 2);
+            pos.push(q.x, q.y, q.z);
+          }
+        }
+        for (let i = 0; i < N; i++) {
+          const a = i * 4, b = (i + 1) * 4;
+          for (let k = 0; k < 4; k++) {
+            const k2 = (k + 1) % 4;
+            idx.push(a + k, b + k, b + k2, a + k, b + k2, a + k2);
+          }
+        }
+        const e = N * 4;
+        idx.push(0, 2, 1, 0, 3, 2, e, e + 1, e + 2, e, e + 2, e + 3); // end caps
+        physics.addTrimesh(new Float32Array(pos), new Uint32Array(idx), { kind, mat: p.mat || 'glass' }); // slick glass inside
+      };
+      slab(0, -r - 0.08, half * 2 + 0.3, 0.16, 'floor'); // top flush with the path, so you roll straight in
+      slab(half + 0.08, -0.05, 0.16, r * 2 + 0.1, 'wall');
+      slab(-half - 0.08, -0.05, 0.16, r * 2 + 0.1, 'wall');
+      if (p.roof !== false) slab(0, half + 0.12, half * 2 + 0.3, 0.16, 'wall');
+      const glass = new THREE.MeshPhysicalMaterial({ color: p.color || '#bfefff', transparent: true, opacity: 0.22, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false });
+      const m = addMesh(geo, glass, { cast: false, receive: false });
+      m.renderOrder = 2;
+      // glowing rings along it so its path reads at a glance
+      const ringMat = new THREE.MeshBasicMaterial({ color: p.ring || mats.theme.flag });
+      const L = curve.getLength();
+      for (let s = 0.6; s < L; s += 1.6) {
+        const u = s / L;
+        const ring = addMesh(new THREE.TorusGeometry(r + 0.03, 0.03, 6, 24), ringMat, { cast: false });
+        ring.position.copy(curve.getPointAt(u));
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), curve.getTangentAt(u));
+      }
+      for (const q of p.pts) expand(q[0], q[1], q[2], r + 0.3);
+    },
+
     teleport(p) {
       const [x, y, z] = p.p;
       const pad = addMesh(new THREE.CylinderGeometry(p.r ?? 0.55, p.r ?? 0.55, 0.06, 32), new THREE.MeshStandardMaterial({
@@ -335,10 +429,33 @@ export function buildCourse(def, physics, scene) {
       geo.rotateX(-Math.PI / 2);
       geo.translate(z.c[0], y, z.c[1]);
     } else return null;
-    const colors = { conveyor: '#ffb800', vent: '#9ff0ff', boost: '#00ff88', slow: '#6b3d1f', magma: '#ff4a00', sand: '#d9a35f', ice: '#cbefff' };
+    const colors = { conveyor: '#ffb800', vent: '#9ff0ff', boost: '#00ff88', slow: '#6b3d1f', magma: '#ff4a00', sand: '#d9a35f', ice: '#cbefff', current: '#6fe7ff', bubble: '#bff2ff' };
     let mat;
-    if (z.kind === 'conveyor' || z.kind === 'boost') {
-      const tex = arrowTexture(colors[z.kind]);
+    if (z.kind === 'lava') {
+      mat = new THREE.MeshBasicMaterial({ color: '#ff4a0a' });
+      const m = new THREE.Mesh(geo, mat);
+      group.add(m);
+      course.animators.push((t) => { mat.color.setHSL(0.04 + Math.sin(t * 1.7 + 1) * 0.015, 1, 0.48 + Math.sin(t * 2.3) * 0.06); });
+      return m;
+    }
+    if (z.kind === 'bubble') {
+      const cx = z.c[0], cz = z.c[1], h = z.height ?? 4;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(z.r, z.r, h, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#bff2ff', transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+      col.position.set(cx, y + h / 2, cz);
+      group.add(col);
+      const chev = makeChevrons(mats.theme.flag, z.r * 0.8);
+      chev.position.set(cx, y + 0.3, cz);
+      group.add(chev);
+      const bubbles = [];
+      const bm = new THREE.MeshBasicMaterial({ color: '#e8fbff', transparent: true, opacity: 0.7 });
+      for (let i = 0; i < 14; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.06 + (i % 3) * 0.03, 6, 4), bm); group.add(b); bubbles.push({ b, a: i * 2.4, o: i / 14 }); }
+      course.animators.push((t) => {
+        chev.userData.animate(t, course.camera);
+        for (const q of bubbles) { const u = (t * 0.35 + q.o) % 1; q.b.position.set(cx + Math.cos(q.a + t) * z.r * 0.6, y + u * h, cz + Math.sin(q.a + t) * z.r * 0.6); }
+      });
+    }
+    if (z.kind === 'conveyor' || z.kind === 'boost' || z.kind === 'current') {
+      const tex = arrowTexture(colors[z.kind] || '#6fe7ff');
       tex.repeat.set(Math.max(1, Math.round((z.rect ? Math.abs(z.rect[2] - z.rect[0]) : 2) / 1)), Math.max(1, Math.round((z.rect ? Math.abs(z.rect[3] - z.rect[1]) : 2) / 1)));
       mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, depthWrite: false });
       const dir = z.dir;
@@ -347,7 +464,7 @@ export function buildCourse(def, physics, scene) {
       tex.rotation = -ang + Math.PI;
       z.tex = tex;
     } else {
-      const slowBySector = { desert: '#b9874a', forest: '#5b3a1e', ice: '#ffffff', mountain: '#4a3f38', sector5: '#3d6cff', fortune: '#ff2bd6' };
+      const slowBySector = { desert: '#b9874a', forest: '#5b3a1e', ice: '#ffffff', mountain: '#4a3f38', sector5: '#3d6cff', fortune: '#ff2bd6', volcano: '#5a2414', sea: '#2a8fd6', network: '#3fa9ff' };
       const col = z.kind === 'slow' ? (z.color || slowBySector[def.sector] || colors.slow) : (colors[z.kind] || '#fff');
       const op = z.kind === 'vent' ? 0.35 : z.kind === 'slow' && def.sector === 'ice' ? 0.85 : 0.5;
       mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false });
@@ -505,14 +622,50 @@ export function buildCourse(def, physics, scene) {
       } else if (z.kind === 'wind') {
         out.x += z.dir[0] * (z.force ?? 4); out.z += z.dir[1] * (z.force ?? 4);
         if (ball.state === 'moving') out.wake = true;
+      } else if (z.kind === 'current') {
+        // a water current carries the ball along, on the floor or floating
+        if (p.y < zy - 0.2 || p.y > zy + (z.height ?? 2.5)) continue;
+        const sp = z.speed ?? 3;
+        out.x += (z.dir[0] * sp - v.x) * 1.2 + z.dir[0] * 1.5;
+        out.z += (z.dir[1] * sp - v.z) * 1.2 + z.dir[1] * 1.5;
+        out.wake = true;
+      } else if (z.kind === 'bubble') {
+        // a rising column of bubbles lifts the ball up and out the top
+        if (p.y < zy - 0.2 || p.y > zy + (z.height ?? 4)) continue;
+        out.y += GRAVITY * (z.lift ?? 1.6);
+        const dx = z.c[0] - p.x, dz = z.c[1] - p.z;
+        out.x += dx * 2; out.z += dz * 2;
+        if (z.push) { out.x += z.push[0] * 3; out.z += z.push[1] * 3; }
+        out.wake = true;
       }
     }
+    if (def.water && !ball.grounded) { out.y += GRAVITY * 0.35; out.x -= v.x * 0.25; out.z -= v.z * 0.25; }
     if (!ball.mods.monsterProof) for (const m of course.monsters) m.force?.(ball, course.time ?? 0, out);
     return out;
   };
 
-  /** Belts, boosts and launchers aren't somewhere to respawn. */
-  course.unsafeAt = (p) => course.zones.some((z) => (z.kind === 'conveyor' || z.kind === 'boost' || z.kind === 'vent') && z.contains(p));
+  /** Belts, boosts, launchers, currents and lava aren't somewhere to respawn. */
+  course.unsafeAt = (p) => course.zones.some((z) => ['conveyor', 'boost', 'vent', 'current', 'bubble', 'lava'].includes(z.kind) && z.contains(p));
+
+  /** Is the ball touching lava? */
+  course.lavaAt = (p, ball) => {
+    if (ball?.mods.ghost || ball?.fly || ball?.glideT > 0) return false;
+    for (const z of course.zones) if (z.kind === 'lava' && z.contains(p) && p.y - ball.radius - (z.y ?? 0) < 0.12) return true;
+    return false;
+  };
+
+  /** Warp pipes: entering a mouth returns where (and how fast) the ball comes out. */
+  course.warpAt = (p, ball) => {
+    if ((ball.warpCool ?? 0) > 0 || ball.fly) return null;
+    for (const w of course.warps) {
+      if (Math.hypot(p.x - w.ax, p.z - w.az) < w.r * 0.85 && Math.abs(p.y - ball.radius - w.ay) < 0.35) {
+        const v = ball.vel;
+        const sp = Math.max(Math.hypot(v.x, v.z), w.speed);
+        return { to: [w.to[0] + w.dir[0] * 0.2, w.to[1] + ball.radius + 0.05, w.to[2] + w.dir[1] * 0.2], vel: { x: w.dir[0] * sp, y: 0.5, z: w.dir[1] * sp } };
+      }
+    }
+    return null;
+  };
 
   course.zoneDecel = (ball) => {
     const p = ball.pos;
@@ -678,8 +831,33 @@ function makeCup(course, group, mats) {
   makeCupAt(course, group, mats, course.cup);
 }
 
+/** A floating "+2" / "−1" sign over a Fortune cup. */
+function modLabel(mod) {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 96;
+  const g = c.getContext('2d');
+  const txt = mod === 0 ? '±0' : mod > 0 ? `+${mod}` : `−${-mod}`;
+  const col = mod < 0 ? '#3dff8a' : mod > 0 ? '#ff3b4e' : '#ffe600';
+  g.font = 'italic 900 64px Orbitron, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = col; g.shadowBlur = 18;
+  g.lineWidth = 8; g.strokeStyle = '#000'; g.strokeText(txt, 64, 50);
+  g.fillStyle = col; g.fillText(txt, 64, 50);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(1.1, 0.82, 1);
+  return s;
+}
+
 function makeCupAt(course, group, mats, cup) {
   const { x, y, z } = cup;
+  if (cup.mod !== null && cup.mod !== undefined) {
+    const lbl = modLabel(cup.mod);
+    lbl.position.set(x, y + 1.6, z);
+    group.add(lbl);
+    course.animators.push((t) => { lbl.position.y = y + 1.6 + Math.sin(t * 2.5 + x) * 0.08; });
+  }
   const hole = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshBasicMaterial({ color: '#050505' }));
   hole.rotation.x = -Math.PI / 2;
   hole.position.set(x, y + 0.006, z);
@@ -689,8 +867,9 @@ function makeCupAt(course, group, mats, cup) {
   rim.position.set(x, y + 0.007, z);
   group.add(rim);
   // glow ring so it's visible from far
+  const ringCol = cup.mod === null || cup.mod === undefined ? mats.theme.flag : cup.mod < 0 ? '#3dff8a' : cup.mod > 0 ? '#ff3b4e' : '#ffe600';
   const glow = new THREE.Mesh(new THREE.RingGeometry(CUP_R + 0.1, CUP_R + 0.2, 40), new THREE.MeshBasicMaterial({
-    color: mats.theme.flag, transparent: true, opacity: 0.6, depthWrite: false,
+    color: ringCol, transparent: true, opacity: 0.6, depthWrite: false,
   }));
   glow.rotation.x = -Math.PI / 2;
   glow.position.set(x, y + 0.008, z);

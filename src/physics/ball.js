@@ -43,6 +43,7 @@ export class Ball {
     this.restTimer = 0;
     this.launchTimer = 0;
     this.ventCool = 0;
+    this.warpCool = 0;
     this.lastSafe = new THREE.Vector3();
     this.pinned = false; // held still by forces (conveyor into a wall, slope against a post…)
     this.pinRef = new THREE.Vector3();
@@ -213,6 +214,19 @@ export class Ball {
       this.onEvent('vent', {});
       return;
     }
+    if (this.warpCool > 0) this.warpCool -= dt;
+    const warp = env.course?.warpAt?.(this.body.translation(), this);
+    if (warp) {
+      this.body.setTranslation({ x: warp.to[0], y: warp.to[1], z: warp.to[2] }, true);
+      this.body.setLinvel(warp.vel, true);
+      this.state = 'moving';
+      this.restTimer = 0;
+      this.pinned = false;
+      this.warpCool = 0.6;
+      this.launchTimer = 0.15;
+      this.onEvent('warp', { to: warp.to });
+      return;
+    }
     if (acc.teleport) {
       const tp = acc.teleport;
       acc.teleport = null;
@@ -356,6 +370,7 @@ export class Ball {
     // falling / out of bounds
     const course = env.course;
     if (course) {
+      if (course.lavaAt?.(p, this)) { this.onEvent('lava', {}); env.onFall?.(this); return; }
       const pit = this.glideT > 0 || this.fly ? null : course.pitAt?.(p, this);
       if (pit) { env.onPit?.(this, pit); return; }
       if (p.y < course.killY) { env.onFall?.(this); return; }

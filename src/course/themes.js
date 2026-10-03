@@ -93,6 +93,52 @@ export const TEX = {
     g.strokeStyle = '#18f0ff'; g.shadowColor = '#18f0ff'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(s / 2, 0); g.lineTo(s / 2, s); g.moveTo(0, s / 2); g.lineTo(s, s / 2); g.stroke();
   }),
+  basalt: () => canvasTexture('basalt', 256, (g, s, rng) => {
+    speckle(g, s, rng, '#2b2526', ['#3a3233', '#1d191a', '#463c3a', '#262021'], 2200, 1, 4, 0.6);
+    // glowing lava cracks
+    g.shadowBlur = 8; g.shadowColor = '#ff5a14';
+    for (let i = 0; i < 9; i++) {
+      g.strokeStyle = rng.pick(['#ff6a1a', '#ff3d0a', '#ffb02a']);
+      g.lineWidth = rng.range(1, 2.6);
+      g.beginPath();
+      let x = rng.range(0, s), y = rng.range(0, s);
+      g.moveTo(x, y);
+      for (let k = 0; k < 5; k++) { x += rng.range(-34, 34); y += rng.range(-34, 34); g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.shadowBlur = 0;
+  }),
+  seabed: () => canvasTexture('seabed', 256, (g, s, rng) => {
+    const grd = g.createLinearGradient(0, 0, s, s);
+    grd.addColorStop(0, '#0f4f86'); grd.addColorStop(1, '#0a3768');
+    g.fillStyle = grd; g.fillRect(0, 0, s, s);
+    // caustic light ripples
+    g.strokeStyle = 'rgba(160,230,255,0.35)';
+    for (let i = 0; i < 22; i++) {
+      g.lineWidth = rng.range(1, 3);
+      g.beginPath();
+      const cx = rng.range(0, s), cy = rng.range(0, s), r = rng.range(10, 34);
+      for (let a = 0; a <= Math.PI * 2 + 0.01; a += 0.4) g.lineTo(cx + Math.cos(a) * r * (0.8 + 0.3 * Math.sin(a * 3)), cy + Math.sin(a) * r * (0.8 + 0.3 * Math.cos(a * 2)));
+      g.stroke();
+    }
+    g.strokeStyle = 'rgba(111,231,255,0.5)'; g.lineWidth = 2;
+    g.strokeRect(1, 1, s - 2, s - 2);
+  }),
+  netgrid: () => canvasTexture('netgrid', 256, (g, s) => {
+    g.fillStyle = '#05081c'; g.fillRect(0, 0, s, s);
+    g.shadowBlur = 8; g.shadowColor = '#3fa9ff';
+    g.strokeStyle = '#3fa9ff'; g.lineWidth = 1.6;
+    // hexagon tiling
+    const R = 32, h = R * Math.sqrt(3);
+    for (let row = -1; row < 6; row++) for (let col = -1; col < 6; col++) {
+      const cx = col * R * 1.5, cy = row * h + (col % 2 ? h / 2 : 0);
+      g.beginPath();
+      for (let k = 0; k <= 6; k++) { const a = (k / 6) * Math.PI * 2; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }
+      g.stroke();
+    }
+    g.shadowBlur = 0;
+    g.fillStyle = 'rgba(63,169,255,0.12)'; g.fillRect(0, 0, s, s);
+  }),
   wood: () => canvasTexture('wood', 128, (g, s, rng) => {
     g.fillStyle = '#7a4b27'; g.fillRect(0, 0, s, s);
     for (let i = 0; i < 40; i++) {
@@ -207,6 +253,30 @@ export const THEMES = {
     wallTex: null, wallColor: '#f4f7ff', wallTrim: '#3d6cff', wallEmissive: '#1a3cff',
     sideColor: '#c6d3ff', particles: 'cubes', flag: '#3d6cff',
   },
+  volcano: {
+    name: 'Volcano Replika',
+    sky: ['#1a0604', '#a8361a'], fog: '#5a1a0c', fogDensity: 0.016,
+    sun: { color: '#ffb48a', intensity: 1.8, dir: [0.3, 1, -0.2] }, hemi: ['#ffb08a', '#2a0a06', 0.9],
+    floorMat: 'basalt', floorTex: 'basalt', floorColor: '#ffffff',
+    wallTex: 'stone', wallColor: '#4a3a36', wallTrim: '#ff4a14', wallEmissive: '#ff3a0a',
+    sideColor: '#1d1615', particles: 'ash', flag: '#ff6a1a',
+  },
+  sea: {
+    name: 'Digital Sea',
+    sky: ['#010a24', '#0a3a7a'], fog: '#052a5c', fogDensity: 0.03,
+    sun: { color: '#bfe8ff', intensity: 1.5, dir: [0, 1, 0.2] }, hemi: ['#8fd8ff', '#03122e', 1.1],
+    floorMat: 'seabed', floorTex: 'seabed', floorColor: '#ffffff',
+    wallTex: null, wallColor: '#0d3f73', wallTrim: '#6fe7ff', wallEmissive: '#3fc6ff', wallGlass: true,
+    sideColor: '#072546', particles: 'bubbles', flag: '#6fe7ff', underwater: true,
+  },
+  network: {
+    name: 'The Network',
+    sky: ['#000308', '#071a3e'], fog: '#030a1f', fogDensity: 0.018,
+    sun: { color: '#cfe4ff', intensity: 1.4, dir: [0.2, 1, 0.3] }, hemi: ['#9fc8ff', '#02040c', 1.1],
+    floorMat: 'netgrid', floorTex: 'netgrid', floorColor: '#ffffff',
+    wallTex: null, wallColor: '#0b1636', wallTrim: '#3fa9ff', wallEmissive: '#3fa9ff',
+    sideColor: '#060c20', particles: 'data', flag: '#3fa9ff',
+  },
   fortune: {
     name: 'Cyberpunk Fortune Falls',
     sky: ['#05010f', '#3a0d5e'], fog: '#1a0630', fogDensity: 0.02,
@@ -229,6 +299,8 @@ export function themeMaterials(themeKey) {
     : new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.9, metalness: 0 });
   if (themeKey === 'fortune') { floor.emissive = new THREE.Color('#ffffff'); floor.emissiveMap = floorMap; floor.emissiveIntensity = 0.55; }
   if (themeKey === 'sector5') { floor.roughness = 0.4; }
+  if (themeKey === 'volcano' || themeKey === 'network') { floor.emissive = new THREE.Color('#ffffff'); floor.emissiveMap = floorMap; floor.emissiveIntensity = themeKey === 'volcano' ? 0.5 : 0.6; }
+  if (themeKey === 'sea') { floor.roughness = 0.5; }
 
   const side = new THREE.MeshStandardMaterial({ color: th.sideColor, roughness: 0.9 });
   let wall;
@@ -255,7 +327,7 @@ export function themeMaterials(themeKey) {
 export function surfaceMaterial(mat) {
   const key = 'surf:' + mat;
   if (matCache.has(key)) return matCache.get(key);
-  const byMat = { sand: 'desert', grass: 'forest', ice: 'ice', rock: 'mountain', s5: 'sector5', neon: 'fortune', glass: 'fortune' };
+  const byMat = { sand: 'desert', grass: 'forest', ice: 'ice', rock: 'mountain', s5: 'sector5', neon: 'fortune', glass: 'fortune', basalt: 'volcano', seabed: 'sea', netgrid: 'network' };
   let m;
   if (byMat[mat]) m = themeMaterials(byMat[mat]).floor;
   else if (mat === 'wood') {

@@ -144,6 +144,61 @@ export function decorate(sector, course, group, rng) {
     ambient = (dt) => {
       if (rand() < 0.4) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 3, area.z + (rand() - 0.5) * area.d], vel: [0, 1.2, 0], color: '#7fa6ff', size: 0.18, life: 8 });
     };
+  } else if (sector === 'volcano') {
+    // basalt spires rising out of a lava lake, ash drifting up
+    const rockMat = new THREE.MeshStandardMaterial({ map: TEX.basalt(), roughness: 1, flatShading: true, emissive: '#ffffff', emissiveMap: TEX.basalt(), emissiveIntensity: 0.25 });
+    for (const p of ringPoints(course, rng, 12, 6, 26)) {
+      const h = rng.range(8, 24), r = rng.range(1.4, 3.6);
+      const m = add(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.35, r, h, 6), rockMat));
+      m.position.set(p.x, minY - 12 + h / 2, p.z);
+      m.rotation.y = rng.range(0, 3);
+    }
+    const lava = add(new THREE.Mesh(new THREE.CircleGeometry(Math.max(size.x, size.z) * 1.2 + 30, 48), new THREE.MeshBasicMaterial({ color: '#ff4a0a' })));
+    lava.rotation.x = -Math.PI / 2;
+    lava.position.set(c.x, minY - 9, c.z);
+    anim.push((t) => { lava.material.color.setHSL(0.04 + Math.sin(t * 0.7) * 0.01, 1, 0.45 + Math.sin(t * 1.3) * 0.05); });
+    ambient = (dt) => {
+      for (let i = 0; i < 2; i++) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 6, area.z + (rand() - 0.5) * area.d], vel: [(rand() - 0.5) * 0.5, 1.2 + rand(), 0], color: rand() < 0.3 ? '#ffb02a' : '#5a4a46', size: 0.12 + rand() * 0.12, life: 8 });
+    };
+  } else if (sector === 'sea') {
+    // the Digital Sea: data-coral columns, rising bubbles, the Skidbladnir cruising past
+    const coral = std('#1d6fb8', { emissive: '#3fc6ff', emissiveIntensity: 0.35, roughness: 0.4 });
+    for (const p of ringPoints(course, rng, 16, 5, 24)) {
+      const h = rng.range(4, 16);
+      for (let k = 0; k < 3; k++) {
+        const m = add(new THREE.Mesh(new THREE.BoxGeometry(0.5, h * (1 - k * 0.25), 0.5), coral));
+        m.position.set(p.x + rng.range(-1, 1), minY - 4 + h / 2, p.z + rng.range(-1, 1));
+      }
+    }
+    const skid = makeSkid();
+    deco.add(skid);
+    const R = Math.max(size.x, size.z) * 0.8 + 18;
+    anim.push((t) => {
+      const a = t * 0.05;
+      skid.position.set(c.x + Math.cos(a) * R, minY + 10 + Math.sin(t * 0.4) * 1.5, c.z + Math.sin(a) * R);
+      skid.rotation.y = -a;
+    });
+    ambient = (dt) => {
+      for (let i = 0; i < 3; i++) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 4, area.z + (rand() - 0.5) * area.d], vel: [(rand() - 0.5) * 0.3, 1 + rand() * 1.5, 0], color: '#bff2ff', size: 0.1 + rand() * 0.15, life: 9 });
+    };
+  } else if (sector === 'network') {
+    // the Network: floating data blocks, light streams racing past, the Hub sphere far off
+    const blockMat = std('#0b1636', { emissive: '#3fa9ff', emissiveIntensity: 0.3, roughness: 0.3 });
+    for (const p of ringPoints(course, rng, 18, 4, 26)) {
+      const s = rng.range(1, 4);
+      const m = add(new THREE.Mesh(new THREE.BoxGeometry(s, s * rng.range(0.3, 2), s), blockMat));
+      m.position.set(p.x, minY + rng.range(-8, 8), p.z);
+      const edges = add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: '#3fa9ff' })));
+      edges.position.copy(m.position);
+      const spd = rng.range(0.2, 0.7), ph = rng.range(0, 6);
+      anim.push((t) => { m.position.y += Math.sin(t * spd + ph) * 0.004; edges.position.copy(m.position); });
+    }
+    const hub = add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ color: '#3fa9ff', wireframe: true, transparent: true, opacity: 0.35 })));
+    hub.position.set(c.x, minY + 18, course.bounds.max.z + 40);
+    anim.push((t) => { hub.rotation.y = t * 0.08; });
+    ambient = (dt) => {
+      if (rand() < 0.8) em.spawn({ pos: [area.x - area.w / 2, minY + rand() * 10 - 3, area.z + (rand() - 0.5) * area.d], vel: [18 + rand() * 10, 0, 0], color: rand() < 0.5 ? '#3fa9ff' : '#ffffff', size: 0.1, life: area.w / 18 });
+    };
   } else if (sector === 'fortune') {
     const tex = neonWindows();
     const neonColors = ['#ff2bd6', '#18f0ff', '#ffe600', '#7a5cff'];
@@ -166,7 +221,7 @@ export function decorate(sector, course, group, rng) {
   }
 
   // Lyoko towers on floating platforms around the course (one may be XANA-activated)
-  const towerColor = { fortune: '#ff7ae8' }[sector] || '#ffffff';
+  const towerColor = { fortune: '#ff7ae8', volcano: '#ff8a4a', network: '#9fd8ff' }[sector] || '#ffffff';
   const platMat = new THREE.MeshStandardMaterial({ color: '#c9ccd6', roughness: 0.8 });
   const towers = [];
   ringPoints(course, rng, 2, 8, 20).forEach((p, i) => {
@@ -208,4 +263,33 @@ function fortuneSign() {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+/** The Skidbladnir, roughly: a sleek white submarine with a cockpit dome and glowing engines. */
+function makeSkid() {
+  const g = new THREE.Group();
+  const hull = new THREE.MeshStandardMaterial({ color: '#e8eef6', roughness: 0.3, metalness: 0.2 });
+  const trim = new THREE.MeshStandardMaterial({ color: '#5a6a86', roughness: 0.4 });
+  const glow = new THREE.MeshBasicMaterial({ color: '#6fe7ff' });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 14), hull);
+  body.scale.set(1.4, 0.9, 3.2);
+  g.add(body);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: '#8fd8ff', transparent: true, opacity: 0.6, roughness: 0.05 }));
+  dome.position.set(0, 0.7, 1.4);
+  g.add(dome);
+  for (const s of [-1, 1]) {
+    const pod = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.6, 6, 12), trim);
+    pod.rotation.x = Math.PI / 2;
+    pod.position.set(s * 1.6, -0.2, -0.4);
+    g.add(pod);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 1.4), hull);
+    fin.position.set(s * 1.1, 0, -1.6);
+    g.add(fin);
+    const engine = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), glow);
+    engine.position.set(s * 1.6, -0.2, -1.62);
+    engine.rotation.y = Math.PI;
+    g.add(engine);
+  }
+  g.scale.setScalar(1.6);
+  return g;
 }

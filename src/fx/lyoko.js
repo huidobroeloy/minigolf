@@ -41,7 +41,7 @@ function wispTexture() {
 //   aura: '#ffffff' neutral · '#ff2a2a' activated by XANA · '#2aff6a' Aelita
 // ---------------------------------------------------------------------------
 export const TOWER_BODY = {
-  desert: '#d8b27e', forest: '#d8d6c6', ice: '#cfe4f4', mountain: '#cbbfb2', sector5: '#e6ecff', fortune: '#d9c6f2',
+  desert: '#d8b27e', forest: '#d8d6c6', ice: '#cfe4f4', mountain: '#cbbfb2', sector5: '#e6ecff', fortune: '#d9c6f2', volcano: '#5a4a46', sea: '#bfe6ff', network: '#d6e6ff',
 };
 
 export function makeTower(aura = '#ffffff', h = 14, body = '#d8d6c6', { r = 0.85, wisps = 70, wispSize = 0.75, shadows = true, roots = true } = {}) {
