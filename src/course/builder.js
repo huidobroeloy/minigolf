@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { makeJumpPad, makeChevrons } from '../fx/jumppad.js';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
-import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly } from './geometry.js';
-import { CUP_R } from '../physics/ball.js';
-import { GRAVITY } from '../physics/world.js';
+import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly, circlePoly } from './geometry.js';
+import { CUP_R, CUP_DEPTH } from '../physics/ball.js';
+import { GRAVITY, FIXED_DT } from '../physics/world.js';
 import { createMonster } from '../monsters/index.js';
 import { decorate } from './deco.js';
 import { RNG } from '../core/rng.js';
@@ -570,7 +570,30 @@ export function buildCourse(def, physics, scene) {
     return sprite;
   }
 
-  for (const part of def.parts) {
+  // Real cups: each cup that sits fully inside a flat floor gets a hole cut in that floor (the
+  // extruded hole's side faces become the cup's liner) and a solid bottom. The ball then drops in,
+  // rattles or lips out under the same physics as everything else. Cups anywhere else (sloped
+  // trays, bowls) keep the old capture rule in Ball.cupWants.
+  const parts = def.parts.slice();
+  for (const cup of course.cups) {
+    const ring = circlePoly(cup.x, cup.z, CUP_R, 28);
+    const clear = circlePoly(cup.x, cup.z, CUP_R + 0.12, 16);
+    cup.physical = false;
+    parts.forEach((p, i) => {
+      if (p.t !== 'floor' || Math.abs((p.y ?? 0) - cup.y) > 0.05) return;
+      if (!clear.every(([x, z]) => pointInPoly(x, z, p.poly))) return;
+      const blocked = (p.holes || []).some((h) => (h.c ? Math.hypot(h.c[0] - cup.x, h.c[1] - cup.z) < h.r + CUP_R + 0.1 : h.poly.some(([x, z]) => Math.hypot(x - cup.x, z - cup.z) < CUP_R + 0.1)));
+      if (blocked) return;
+      parts[i] = { ...p, holes: [...(p.holes || []), { poly: ring, cup: true }] };
+      cup.physical = true;
+    });
+    if (cup.physical) {
+      // the bottom of the cup (slightly wider than the hole so nothing slips past the liner)
+      physics.addCylinder(0.06, CUP_R + 0.04, { kind: 'floor', mat: 'default' }, { pos: [cup.x, cup.y - CUP_DEPTH - 0.06, cup.z] });
+    }
+  }
+
+  for (const part of parts) {
     const b = builders[part.t];
     if (!b) { console.warn('Unknown part', part.t); continue; }
     b(part);
@@ -644,7 +667,9 @@ export function buildCourse(def, physics, scene) {
         if (!ball.grounded) continue;
         const along = v.x * z.dir[0] + v.z * z.dir[1];
         const sp = z.speed ?? 12;
-        if (along < sp) { out.x += z.dir[0] * 60; out.z += z.dir[1] * 60; out.wake = true; }
+        // a booster brings the ball up to speed almost at once: a weak push could be balanced by
+        // gravity at the pad's edge on a ramp, leaving the ball hovering there forever
+        if (along < sp) { const a = (sp - along) / FIXED_DT; out.x += z.dir[0] * a; out.z += z.dir[1] * a; out.wake = true; }
         if (z.align) { // rails: bleed off sideways speed
           const px = -z.dir[1], pz = z.dir[0];
           const perp = v.x * px + v.z * pz;
@@ -958,10 +983,23 @@ function makeCupAt(course, group, mats, cup) {
     group.add(lbl);
     course.animators.push((t) => { lbl.position.y = y + 1.6 + Math.sin(t * 2.5 + x) * 0.08; });
   }
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshBasicMaterial({ color: '#050505' }));
-  hole.rotation.x = -Math.PI / 2;
-  hole.position.set(x, y + 0.006, z);
-  group.add(hole);
+  if (cup.physical) {
+    const liner = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R - 0.004, CUP_R - 0.004, CUP_DEPTH, 32, 1, true),
+      new THREE.MeshStandardMaterial({ color: '#e9eef2', roughness: 0.6, side: THREE.BackSide }));
+    liner.position.set(x, y - CUP_DEPTH / 2, z);
+    liner.receiveShadow = true;
+    group.add(liner);
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.9 }));
+    bottom.rotation.x = -Math.PI / 2;
+    bottom.position.set(x, y - CUP_DEPTH + 0.002, z);
+    bottom.receiveShadow = true;
+    group.add(bottom);
+  } else {
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshBasicMaterial({ color: '#050505' }));
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.set(x, y + 0.006, z);
+    group.add(hole);
+  }
   const rim = new THREE.Mesh(new THREE.RingGeometry(CUP_R, CUP_R + 0.06, 32), new THREE.MeshStandardMaterial({ color: '#f5f5f5' }));
   rim.rotation.x = -Math.PI / 2;
   rim.position.set(x, y + 0.007, z);

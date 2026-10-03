@@ -5,6 +5,7 @@ import { applyCharacter } from '../game/characters.js';
 export const BALL_R = 0.18;
 export const MAX_SHOT_SPEED = 17;
 export const CUP_R = 0.36;
+export const CUP_DEPTH = 0.42; // real cups (see buildCourse): how deep the hole is
 
 export const BALL_NORMAL = cg(GROUP.BALL, GROUP.FLOOR | GROUP.WALL | GROUP.OBST | GROUP.MONSTER);
 export const BALL_GHOST = cg(GROUP.BALL, GROUP.FLOOR | GROUP.GHOSTFLOOR);
@@ -168,6 +169,10 @@ export class Ball {
     this.restTimer = 0;
     this.pinned = false;
     this.pinT = 0;
+    // the shot itself isn't a wall impact: without this, a ball stuck to a sticky wall would
+    // re-stick the moment it's hit away from it
+    this.prevVel.set(v.x + pv.x, v.y + pv.y, v.z + pv.z);
+    this.stickGrace = 0.25;
   }
 
   platformVel() {
@@ -258,7 +263,14 @@ export class Ball {
       const tx = rx - n.x * dn, ty = ry - n.y * dn, tz = rz - n.z * dn;
       const s = Math.hypot(tx, ty, tz);
       const surf = SURFACES[this.groundMeta?.mat] || SURFACES.default;
-      const decel = (surf.decel + 0.015 * s * s) * this.mods.decelMul * (env.decelMul ?? 1) * (env.zoneDecel?.(this) ?? 1);
+      let decel = (surf.decel + 0.015 * s * s) * this.mods.decelMul * (env.decelMul ?? 1) * (env.zoneDecel?.(this) ?? 1);
+      // on a slope steeper than the surface can hold, the ball must roll down decisively instead
+      // of creeping (a creeping ball used to be frozen mid-ramp by the stuck detector)
+      const slopeAcc = GRAVITY * Math.sqrt(Math.max(0, 1 - n.y * n.y));
+      if (slopeAcc >= decel && slopeAcc > 0.3) {
+        const downhill = tx * n.x * n.y + tz * n.z * n.y - ty * (1 - n.y * n.y); // velocity · gravity's slope component
+        if (s < 1 || downhill > 0) decel = Math.min(decel, 0.5 * slopeAcc);
+      }
       const ns = Math.max(0, s - decel * dt);
       const k = s > 1e-6 ? ns / s : 0;
       rx = tx * k + n.x * dn; ry = ty * k + n.y * dn; rz = tz * k + n.z * dn;
@@ -318,9 +330,12 @@ export class Ball {
     // wall impact detection (velocity flip in the horizontal plane)
     const dvx = v.x - this.prevVel.x, dvz = v.z - this.prevVel.z;
     const dvh = Math.hypot(dvx, dvz);
+    if (this.stickGrace > 0) this.stickGrace -= dt;
     if (dvh > 1.2 && this.state === 'moving') {
       const sticky = this.mods.sticky || env.stickyWalls;
-      if (sticky && this.touchingWall()) {
+      // the wall pushed back along dv: how hard was the ball coming into it?
+      const into = -(this.prevVel.x * dvx + this.prevVel.z * dvz) / dvh;
+      if (sticky && !(this.stickGrace > 0) && into > 1 && this.touchingWall()) {
         this.body.setLinvel({ x: 0, y: Math.min(v.y, 0), z: 0 }, true);
         v = this.body.linvel();
         this.onEvent('stick', { pos: p });
@@ -363,9 +378,33 @@ export class Ball {
 
     // cup
     const cups = env.course?.cups || (env.course?.cup ? [env.course.cup] : []);
+    let inCup = false;
     for (const cup of cups) {
-      if (this.cupWants(cup, p, v, dt)) { this.startSink(cup); return; }
+      if (!cup.physical) {
+        if (this.cupWants(cup, p, v, dt)) { this.startSink(cup); return; }
+        continue;
+      }
+      const dx = p.x - cup.x, dz = p.z - cup.z, d = Math.hypot(dx, dz);
+      if (this.mods.magnet && d < CUP_R + 0.8 && d > 0.02 && Math.abs(p.y - this.radius - cup.y) < 0.3 && Math.hypot(v.x, v.z) < 9) {
+        // Magnet: steer the ball onto the hole
+        const k = 22 * dt;
+        this.body.setLinvel({ x: v.x - (dx / d) * k - v.x * 4 * dt, y: v.y, z: v.z - (dz / d) * k - v.z * 4 * dt }, true);
+      }
+      // the lip: a real cup's edge is rounded, so a slow ball over (or right at) the rim is
+      // tipped inward rather than skating across a knife edge
+      const sp = Math.hypot(v.x, v.z);
+      if (d < CUP_R + 0.07 && d > 0.02 && sp < 3 && Math.abs(p.y - this.radius - cup.y) < 0.12 && this.radius < CUP_R * 0.92) {
+        const k = 10 * (1 - sp / 3) * dt;
+        this.body.setLinvel({ x: v.x - (dx / d) * k, y: v.y, z: v.z - (dz / d) * k }, true);
+      }
+      if (d < CUP_R && p.y < cup.y + this.radius * 0.4) {
+        inCup = true;
+        if (!this.cupDropped) { this.cupDropped = true; this.onEvent('sinkStart', {}); }
+        this.cupT = (this.cupT || 0) + dt;
+        if (this.cupT > 0.12) { this.holeOut(cup, env); return; }
+      }
     }
+    if (!inCup) { this.cupT = 0; this.cupDropped = false; }
 
     // falling / out of bounds
     const course = env.course;
@@ -383,7 +422,8 @@ export class Ball {
       const surf = SURFACES[this.groundMeta?.mat] || SURFACES.default;
       const ny = this.groundNormal.y;
       const slopeAcc = GRAVITY * Math.sqrt(Math.max(0, 1 - ny * ny));
-      const canRest = this.grounded && slopeAcc < surf.decel * this.mods.decelMul * (env.decelMul ?? 1) * 0.9 + 0.05;
+      // rests only where the surface really holds it (the same limit preStep uses to make it roll)
+      const canRest = this.grounded && slopeAcc < surf.decel * this.mods.decelMul * (env.decelMul ?? 1);
       if (canRest && rs < 0.16) {
         this.restTimer += dt;
         if (this.restTimer > 0.25) {
@@ -399,7 +439,7 @@ export class Ball {
       // ball isn't going anywhere. Call it at rest so the player can shoot.
       if (this.state === 'moving') {
         if (this.pinRef.distanceToSquared(_v.set(p.x, p.y, p.z)) > 0.1 * 0.1) { this.pinRef.copy(_v); this.pinT = 0; }
-        else if ((this.pinT += dt) > 1.0 && this.launchTimer <= 0 && !this.groundMeta?.mover) {
+        else if ((this.pinT += dt) > 1.0 && this.launchTimer <= 0 && !this.groundMeta?.mover && (this.pinT > 2.5 || this.groundNormal.y > 0.995 || this.touchingWall())) {
           this.state = 'idle';
           this.pinned = true;
           this.restTimer = 0;
@@ -453,6 +493,17 @@ export class Ball {
     return touching;
   }
 
+  /** A real cup: the ball is down in it. It stays visible, settling at the bottom. */
+  holeOut(cup, env) {
+    this.state = 'holed';
+    this.sinkCup = cup;
+    this.holedT = 0;
+    this.physicalHole = true;
+    this.cupT = 0;
+    this.cupDropped = false;
+    env.onHole?.(this);
+  }
+
   startSink(cup) {
     this.state = 'sinking';
     this.sinkT = 0;
@@ -492,6 +543,14 @@ export class Ball {
   }
 
   syncMesh(dt) {
+    if (this.state === 'holed' && this.physicalHole && this.body.isEnabled()) {
+      // rattle down to the bottom of the real cup, then rest there
+      this.holedT += dt;
+      const hp = this.body.translation();
+      this.mesh.position.set(hp.x, hp.y, hp.z);
+      if (this.holedT > 0.7) { this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setEnabled(false); }
+      return;
+    }
     if (this.state === 'sinking' || this.state === 'holed') return;
     const p = this.body.translation();
     const v = this.body.linvel();

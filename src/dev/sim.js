@@ -118,3 +118,60 @@ export async function searchAllHIO(indices = HOLES.map((_, i) => i), log = conso
   }
   return out;
 }
+
+/**
+ * Ramp check: drop balls (resting, nudged up, nudged down) at points along every ramp of every
+ * hole and flag any that end up stopped on a slope with nothing holding them, or hovering in
+ * place for 10 s without ever coming to rest (e.g. a booster balanced against gravity).
+ */
+export async function rampTest(holes = HOLES) {
+  const flags = [];
+  let n = 0;
+  for (const def of holes) {
+    const ramps = def.parts.filter((p) => p.t === 'ramp');
+    if (!ramps.length) continue;
+    const physics = new Physics();
+    const scene = new THREE.Scene();
+    const course = buildCourse(def, physics, scene);
+    course.noAttacks = true;
+    const out = { x: 0, y: 0, z: 0, wake: false };
+    const env = {
+      course, decelMul: 1, bumpers: course.bumpers, zoneDecel: (b) => course.zoneDecel(b),
+      forces(b) { out.x = out.y = out.z = 0; out.wake = false; out.launch = null; out.teleport = null; course.zoneForces(b, out); return out; },
+      onHole() {}, onFall() {}, onPit() {},
+    };
+    let t = 0;
+    course.update(t, FIXED_DT);
+    physics.step();
+    for (const r of ramps) {
+      const [ax, az] = r.a, [bx, bz] = r.b;
+      const L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = r.w ?? 3;
+      for (const u of [0.15, 0.5, 0.85]) for (const off of [0, 0.3]) for (const kick of [0, 1, -1]) {
+        const ball = new Ball(physics, scene, '#fff');
+        const x = ax + (bx - ax) * u - uz * off * w / 2, z = az + (bz - az) * u + ux * off * w / 2;
+        ball.place(new THREE.Vector3(x, r.ya + (r.yb - r.ya) * u + BALL_R + 0.05, z));
+        ball.state = 'moving';
+        if (kick) ball.shoot(new THREE.Vector3(ux * kick, 0, uz * kick), 0.08);
+        let steps = 0;
+        const start = ball.pos;
+        let lastMove = 0, ref = new THREE.Vector3(start.x, start.y, start.z);
+        while (ball.state === 'moving' && steps < 1200) {
+          course.update(t, FIXED_DT); ball.preStep(FIXED_DT, env); physics.step(); ball.postStep(FIXED_DT, env);
+          t += FIXED_DT; steps++;
+          const p = ball.pos;
+          if (ref.distanceTo(p) > 0.5) { ref.set(p.x, p.y, p.z); lastMove = steps; }
+        }
+        n++;
+        const p = ball.pos, where = `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
+        const tag = `${def.id} ramp@${r.a} u=${u} off=${off} kick=${kick}`;
+        if (ball.state === 'idle' && ball.groundNormal.y < 0.99 && !ball.touchingWall() && !ball.groundMeta?.mover) flags.push(`${tag}: stopped on a slope at ${where}`);
+        else if (ball.state === 'moving' && steps - lastMove > 600) flags.push(`${tag}: hovering at ${where}`);
+        ball.dispose();
+      }
+      await yieldNow();
+    }
+    course.dispose();
+    physics.dispose();
+  }
+  return { tested: n, flags };
+}

@@ -13,7 +13,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 
   Never add show images, logos or the Lyoko theme. The owner's own music (show audio included) is loaded by them in
   Settings → Soundtrack: it lives in their browser's IndexedDB and streams host → guests at runtime. It never goes in the repo.
-  Reference clips and screenshots live in the gitignored `.local/` folder.
+  Reference material lives in the gitignored `.local/` folder (never commit it):
+  - `.local/lyoko-intro.mp4`: the opening (style reference for the intro).
+  - `.local/monsters.mp4`: every monster moving, shooting and its abilities.
+  - `.local/refs/*.webp|jpg|gif`: named monster screenshots and renders (blok, creeper, hornet, kankrelat, krabe, tarantula,
+    manta, megatank closed/open/beam, scyphozoa). `.local/refs/earlier/`: the first batch of screenshots.
 - **No build step.** Plain ES modules with an importmap in `index.html`. Dependencies come from jsDelivr:
   - Three.js 0.186.1
   - Rapier3d-compat 0.21.0
