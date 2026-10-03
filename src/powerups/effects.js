@@ -165,6 +165,7 @@ export class EffectManager {
 
   applyTargeted(fx, fromName, label) {
     const c = this.client;
+    c.ui.comms?.say('targeted', { power: label });
     const active = c.ball && c.ball.state !== 'holed' && c.ball.state !== 'sinking';
     switch (fx.pu) {
       case 'zany': case 'leash': case 'stun': case 'gas':

@@ -6,6 +6,7 @@ import { CHARACTERS, characterByColor, characterCss } from '../game/characters.j
 import { portrait, portraitBig } from './portraits.js';
 import { ballOrb } from './orb.js';
 import { soundtrack, SLOTS } from '../core/soundtrack.js';
+import { Comms } from './comms.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -78,6 +79,7 @@ export class UI {
       <div id="finale" class="hidden"><div class="ft"></div><div class="fs"></div></div>
       <div id="codepanel" class="hidden"><div class="cp-head">TOWER INTERFACE</div><div class="cp-body"></div></div>
     `;
+    this.comms = new Comms(root);
     this.$ = (s) => root.querySelector(s);
     this.$('.target-cancel').addEventListener('click', () => this.h.cancelTarget?.());
     this.$('.unstick').addEventListener('click', () => this.h.unstick?.());

@@ -284,6 +284,7 @@ export class GameClient {
     this.course.camera = this.cam.camera;
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
     this.course.onMonsterHit = (kind, dmg) => this.onMonsterHit(kind, dmg);
+    this.course.onMegatank = () => this.ui.comms.say('megatank', {}, { force: true });
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
@@ -307,6 +308,13 @@ export class GameClient {
     this.env = this.makeEnv();
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
     this.ui.showHud({ holeNo: m.holeNo, total: m.total, name: def.name, par: def.par, sectorName: SECTOR_NAMES[def.sector] });
+    {
+      const prev = this.plan?.[m.holeNo - 1] !== undefined ? HOLES[this.plan[m.holeNo - 1]] : null;
+      setTimeout(() => {
+        if (!prev || prev.sector !== def.sector) this.ui.comms.say('courseStart', { sector: SECTOR_NAMES[def.sector] }, { force: true });
+        else if (Math.random() < 0.35) this.ui.comms.say('holeStart');
+      }, 2600);
+    }
     this.ui.renderInventory(this.inventory);
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
@@ -391,7 +399,7 @@ export class GameClient {
     else if (type === 'stick') sfx.play('stick');
     else if (type === 'vent') sfx.play('whoosh');
     else if (type === 'warp') { sfx.play('teleport'); this.cam.snapTo(this.ball.mesh.position); }
-    else if (type === 'lava') this.ui.toast('🌋 Into the lava!');
+    else if (type === 'lava') { this.ui.toast('🌋 Into the lava!'); this.lavaFall = true; this.ui.comms.say('lava'); }
     else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
     else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false, this.ball?.sinkCup); }
     else if (type === 'rest') this.onRest();
@@ -428,6 +436,9 @@ export class GameClient {
     this.ui.stamp(name, `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`, this.strokes <= this.def.par ? 'good' : '');
     if (this.rawStrokes === 1) this.aceFireworks();
     if (this.rawStrokes === 1) { sfx.play('hio'); this.stat('hio'); }
+    if (this.rawStrokes === 1) this.ui.comms.say('ace', {}, { force: true });
+    else if (this.strokes < this.def.par) this.ui.comms.say('birdie', {}, { force: true });
+    else if (this.strokes >= this.def.par + 2) this.ui.comms.say('bogey');
     if (this.strokes < this.def.par || this.strokes === 1) this.confetti(this.strokes === 1 ? 160 : 70);
     this.endTrip(true);
     if (this.playoff) this.sendPlayoff(true);
@@ -531,6 +542,8 @@ export class GameClient {
   onFall() {
     if (this.falling) return;
     if (this.mainLostDuringTrip()) return;
+    if (!this.lavaFall) this.ui.comms.say('fall');
+    this.lavaFall = false;
     this.falling = true;
     const fid = ++this.fallId;
     this.stat('falls');
@@ -712,6 +725,7 @@ export class GameClient {
   // ---------- XANA's monsters ----------
   onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
+    if (['venom', 'freeze', 'xanafy', 'shark'].includes(kind)) this.ui.comms.say(kind);
     if (kind !== 'vaporize') this.damageLP(dmg);
     switch (kind) {
       case 'venom':
@@ -752,8 +766,9 @@ export class GameClient {
       this.vaporize(true);
     } else if (this.lp <= 30 && before > 30) {
       this.ui.toast('⚠️ Life points low! One more hit and you\'re devirtualized');
+      this.ui.comms.say('lowLP', {}, { force: true });
       sfx.play('beep');
-    }
+    } else this.ui.comms.say('hit', { lp: this.lp });
   }
 
   healLP(n) {
@@ -764,6 +779,7 @@ export class GameClient {
   /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
   vaporize(quiet = false) {
     const b = this.ball;
+    if (b && b.state !== 'holed') this.ui.comms.say('vaporized', {}, { force: true });
     if (!b || b.state === 'holed' || b.state === 'sinking' || this.falling) return;
     this.endTrip();
     const fid = ++this.fallId;
@@ -1289,7 +1305,25 @@ export class GameClient {
   }
 
   // ---------- per-frame ----------
+  /** Jérémie warns you when a monster is right next to your ball. */
+  watchMonsters(dt) {
+    this.monsterCheckT = (this.monsterCheckT ?? 0) - dt;
+    if (this.monsterCheckT > 0 || !this.ball || this.ball.state === 'holed' || !this.course) return;
+    this.monsterCheckT = 1;
+    const p = this.ball.pos;
+    let best = null, bd = 4.5;
+    for (const m of this.course.monsters) {
+      if (!m.guns?.length && m.spec.type !== 'megatank') continue;
+      const q = m.model?.position;
+      if (!q || m.slashed) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d < bd && Math.abs(q.y - p.y) < 4) { bd = d; best = m; }
+    }
+    if (best) this.ui.comms.say('monsterNear', { monster: best.spec.type[0].toUpperCase() + best.spec.type.slice(1) });
+  }
+
   frame(dt) {
+    this.watchMonsters(dt);
     if (this.phase !== 'hole' || !this.course) return;
     const ts = this.effects.timeScale();
     // keyboard camera

@@ -188,6 +188,7 @@ class Megatank extends Monster {
     this.aim = Math.atan2(bp.x - s.x, bp.z - s.z);
     this.origin = { x: s.x, y: s.y, z: s.z }; // the beam's line is fixed the moment it starts charging
     this.mode = 'charge';
+    course.onMegatank?.();
     this.t0 = t;
   }
   frame(t) {
