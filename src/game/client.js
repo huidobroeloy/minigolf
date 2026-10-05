@@ -7,7 +7,7 @@ import { ChaseCam, VIEWS, VIEW_INFO } from '../camera/chaseCam.js';
 import { Ghosts } from './ghosts.js';
 import { Pickups } from './pickups.js';
 import { EffectManager } from '../powerups/effects.js';
-import { POWERUPS } from '../powerups/registry.js';
+import { POWERUPS, SPECIALS } from '../powerups/registry.js';
 import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
@@ -17,6 +17,7 @@ import { Targeting } from './targeting.js';
 import { Scanner } from './scanner.js';
 import { Finale } from './finale.js';
 import { TowerTrip } from '../fx/towerCup.js';
+import { Weather } from '../fx/weather.js';
 import { stats, trailParticle } from './stats.js';
 import { XanaFinale } from './xanaFinale.js';
 import { characterByColor } from './characters.js';
@@ -74,6 +75,7 @@ export class GameClient {
       cancelTarget: () => this.cancelTargeting(),
       start: () => this.link.send({ t: 'start', intro: this.app.ui.prefs.intro !== false }),
       trail: (k) => this.link.send({ t: 'trail', trail: k }),
+      team: (team) => this.link.send({ t: 'team', team }),
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
@@ -166,7 +168,9 @@ export class GameClient {
         else this.ui.toast(`${this.nameOf(m.from)} had nothing to steal`);
         break;
       case 'refund':
-        this.addPowerup(m.pu, 'refund');
+        // a refunded special move goes back to the ★ slot, not the inventory
+        if (m.special && this.special?.id === m.pu && this.special.used) { this.special.used = false; this.renderInventory(); }
+        else this.addPowerup(m.pu, 'refund');
         this.ui.toast(m.reason);
         break;
       case 'holed': {
@@ -221,14 +225,16 @@ export class GameClient {
         this.ui.setScreen('');
         const winners = m.winnerId ? m.standings.filter((p) => p.id === m.winnerId) : m.standings.slice(0, 1);
         stats.add('matches');
-        if (winners[0]?.id === this.myId) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
+        // in Teams every member of the winning side gets the win
+        const won = m.teams ? !!m.teams[0]?.members.includes(this.myId) : winners[0]?.id === this.myId;
+        if (won) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
         if ((m.plan?.length ?? 0) >= 54) stats.add('worldcups');
         // XANA won: the catastrophic ending instead of the tower being saved
-        const xanaWins = characterByColor(winners[0]?.color)?.id === 'xana';
+        const xanaWins = m.teams ? m.teams[0]?.team === 'xana' : characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
           this.finale = null;
           this.app.showBackdrop();
-          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost, tiebreak: m.tiebreak, xana: xanaWins });
+          this.ui.showScoreboard({ players: m.standings, plan: m.plan, holeNo: m.plan.length - 1, myId: this.myId, final: true, isHost: this.isHost, tiebreak: m.tiebreak, xana: xanaWins, teams: m.teams });
         };
         this.app.hideBackdrop();
         music.play(xanaWins ? 'xana' : 'finale');
@@ -249,6 +255,8 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    this.weather?.dispose();
+    this.weather = null;
     for (const c of this.celebrations || []) this.scene.remove(c.g);
     this.celebrations = [];
     for (const em of this.emotes) this.scene.remove(em.s);
@@ -293,6 +301,11 @@ export class GameClient {
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
     this.course.onMonsterHit = (kind, dmg) => this.onMonsterHit(kind, dmg);
     this.course.onMegatank = () => this.ui.comms.say('megatank', {}, { force: true });
+    this.course.onBoss = (ev, n, of) => {
+      if (ev === 'hit') this.ui.toast(`🦶 Ankle hit ${n}/${of}`);
+      if (ev === 'stun') { this.ui.bigToast('🗿 KOLOSSUS STUNNED', `the gate to the core is open for ${n} s · go!`, 'good'); this.cam.shake = Math.max(this.cam.shake, 1.2); }
+      if (ev === 'recover') this.ui.toast('🗿 The Kolossus is back up · the gate is sealed');
+    };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
@@ -312,6 +325,8 @@ export class GameClient {
     this.cam.snapTo(this.ball.mesh.position);
     this.cam.setOverhead(this.course);
     this.effects.reset(this.course, this.physics, this.scene);
+    this.weather?.dispose();
+    this.weather = new Weather(this.scene, this.course, def.sector, m.seed ?? 1, this.scene.fog);
     this.pickups = new Pickups(this.course, m.seed, m.pickupCount, m.taken, m.cats);
     this.env = this.makeEnv();
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
@@ -323,11 +338,21 @@ export class GameClient {
         else if (Math.random() < 0.35) this.ui.comms.say('holeStart');
       }, 2600);
     }
-    this.ui.renderInventory(this.inventory);
+    // your character's special move: one free use per hole
+    const sp = SPECIALS[characterByColor(this.me.color)?.id];
+    this.special = sp && !this.playoff ? { id: sp, used: false } : null;
+    this.renderInventory();
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
     this.ui.setStatus([]);
-    if (this.playoff) {
+    if (this.players.get(this.myId)?.out && !this.playoff) {
+      // eliminated: watch the others
+      this.special = null;
+      this.renderInventory();
+      this.ball.state = 'holed'; this.ball.mesh.visible = false; this.ball.body.setEnabled(false);
+      this.ui.banner('💥 DEVIRTUALIZED', 'You were eliminated · spectating (Tab to switch players)');
+      setTimeout(() => { if (this.phase === 'hole' && !this.spectate) this.cycleSpectate(); }, 3500);
+    } else if (this.playoff) {
       const shooting = this.playoff.shooters.includes(this.myId);
       this.ui.banner('SUDDEN DEATH', shooting ? `One shot · closest to the pin wins · ${def.name}` : `Tiebreak: ${this.playoff.shooters.map((id) => this.nameOf(id)).join(' vs ')}`);
       if (!shooting) { this.ball.state = 'holed'; this.ball.mesh.visible = false; this.ball.body.setEnabled(false); }
@@ -376,6 +401,7 @@ export class GameClient {
         out.x = out.y = out.z = 0; out.wake = false; out.teleport = null; out.launch = null;
         self.course.zoneForces(ball, out);
         self.effects.forces(ball, out, self.simTime);
+        self.weather?.force(ball, out, self.simTime);
         return out;
       },
       get decelMul() { return self.effects.decelMul(self.simTime); },
@@ -398,6 +424,11 @@ export class GameClient {
     this.teardownHole();
     this.app.showBackdrop();
     this.ui.showScoreboard({ players: m.players, plan: m.plan, holeNo: m.holeNo, results: m.results, myId: this.myId, final: false, isHost: this.isHost });
+    if (m.eliminated) {
+      const e = m.eliminated, mine = e.id === this.myId;
+      setTimeout(() => this.ui.bigToast(mine ? '💥 YOU ARE DEVIRTUALIZED' : `💥 ${e.name} DEVIRTUALIZED`, mine ? 'worst score on that course · you can watch the rest' : `${e.left} warrior${e.left === 1 ? '' : 's'} left`, mine ? 'bad' : 'good'), 1200);
+      sfx.play('buzzer');
+    }
     // shot of the hole: the best score (an ace beats everything)
     const done = (m.results || []).filter((r) => !r.timeout && r.score > 0);
     if (done.length >= 2) {
@@ -667,6 +698,7 @@ export class GameClient {
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
     if (opts.glide) this.ball.startGlide(2.5);
     if (opts.fly) this.ball.startFly(8);
+    if (opts.hover) this.ball.startGlide(3.5); // Overboard: hovers like the wings, a little longer
     if (opts.triplicate) this.spawnClones(yaw, power * opts.powerMul, opts.chip);
     this.shotInProgress = true;
     sfx.play('putt', power);
@@ -1014,6 +1046,22 @@ export class GameClient {
   }
 
   // ---------- power-ups ----------
+  renderInventory() { this.ui.renderInventory(this.inventory, this.special); }
+
+  /** What's in a slot: 0–2 are the inventory, 'S' is the special move (until it's used). */
+  slotItem(i) {
+    if (i === 'S') return this.special && !this.special.used ? this.special.id : null;
+    return this.inventory[i];
+  }
+
+  consumeSlot(i) {
+    if (i === 'S') { this.special.used = true; this.renderInventory(); sfx.play('use'); stats.add('specials'); return; }
+    this.inventory.splice(i, 1);
+    this.renderInventory();
+    sfx.play('use');
+    stats.add('powerups');
+  }
+
   addPowerup(id, source) {
     if (this.inventory.length >= MAX_INV) {
       this.ui.toast(`Inventory full — ${POWERUPS[id].icon} ${POWERUPS[id].name} discarded`);
@@ -1021,26 +1069,27 @@ export class GameClient {
       return;
     }
     this.inventory.push(id);
-    this.ui.renderInventory(this.inventory);
+    this.renderInventory();
     this.ui.flashSlot(this.inventory.length - 1);
     if (source === 'pickup') { sfx.play('pickup'); this.ui.toast(`${POWERUPS[id].icon} ${POWERUPS[id].name}`); }
   }
 
   discardSlot(i) {
-    if (!this.inventory[i]) return;
+    if (i === 'S' || !this.inventory[i]) return;
     const id = this.inventory.splice(i, 1)[0];
-    this.ui.renderInventory(this.inventory);
+    this.renderInventory();
     this.ui.toast(`Discarded ${POWERUPS[id].name}`);
     sfx.play('discard');
   }
 
   useSlot(i) {
-    const id = this.inventory[i];
+    if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this hole');
+    const id = this.slotItem(i);
     if (!id || this.phase !== 'hole') return;
     if (this.effects.locked) return this.ui.toast('You can\'t skip this ad 📺');
     const def = POWERUPS[id];
     const myActive = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking';
-    const consume = () => { this.inventory.splice(i, 1); this.ui.renderInventory(this.inventory); sfx.play('use'); stats.add('powerups'); };
+    const consume = () => this.consumeSlot(i);
     if ((def.kind === 'self' || def.kind === 'aura' || def.needSelf) && !myActive) return this.ui.toast('Your ball is already in the cup');
     if (id === 'returnpast' && !this.preShot) return this.ui.toast('Nothing to undo yet — take a shot first');
     if (id === 'firewall' && this.effects.shield) return this.ui.toast('Your Firewall is already up');
@@ -1049,15 +1098,15 @@ export class GameClient {
       if (!targets.length) return this.ui.toast('No valid targets');
       this.cancelAim();
       this.ui.pickTarget(`${def.icon} ${def.name} — choose a player`, targets, (tid) => {
-        if (!tid || this.inventory[i] !== id) return;
+        if (!tid || this.slotItem(i) !== id) return;
         consume();
-        this.link.send({ t: 'use', pu: id, target: tid });
+        this.link.send({ t: 'use', pu: id, target: tid, special: i === 'S' });
       });
       return;
     }
     if (def.aim) { this.cancelAim(); this.startTargeting(id, i); return; }
     consume();
-    this.link.send({ t: 'use', pu: id, params: {} });
+    this.link.send({ t: 'use', pu: id, params: {}, special: i === 'S' });
   }
 
   // ---------- aerial targeting ----------
@@ -1074,11 +1123,9 @@ export class GameClient {
       const p = this.ball.pos, q = params.pos;
       if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.6) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
     }
-    if (this.inventory[t.slot] === t.id) {
-      this.inventory.splice(t.slot, 1);
-      this.ui.renderInventory(this.inventory);
-      sfx.play('use');
-      this.link.send({ t: 'use', pu: t.id, params });
+    if (this.slotItem(t.slot) === t.id) {
+      this.consumeSlot(t.slot);
+      this.link.send({ t: 'use', pu: t.id, params, special: t.slot === 'S' });
     }
     this.cancelTargeting();
   }
@@ -1256,7 +1303,7 @@ export class GameClient {
       return this.ui.toggleSettings();
     }
     if (this.phase !== 'hole') return;
-    const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
+    const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2, Digit4: 'S', Numpad4: 'S' }[e.code];
     if (digit !== undefined) return e.shiftKey ? this.discardSlot(digit) : this.useSlot(digit);
     if (e.code === 'KeyC') return this.cycleView();
     const emo = { Digit7: 0, Digit8: 1, Digit9: 2, Digit0: 3 }[e.code];
@@ -1398,6 +1445,7 @@ export class GameClient {
     if ((this.ball.state === 'moving') && Math.hypot(bv.x, bv.y, bv.z) > 2.5) this.trail(this.ball.mesh.position, this.me.color, this.ball.radius, this.app.ui.prefs.trail);
     this.course.frame(this.simTime, dt);
     this.effects.frame(this.simTime, dt);
+    this.weather?.frame(this.simTime, dt, this.ball.mesh.position);
     this.pickups.frame(this.simTime);
     this.ghosts.update(dt);
     this.updateCamera(dt);
@@ -1434,7 +1482,7 @@ export class GameClient {
     if (this.sendTimer >= SEND_INTERVAL) { this.sendTimer = 0; this.sendState(); }
     if (this.playersDirty) { this.playersDirty = false; this.renderPlayers(); }
     this.chipTimer = (this.chipTimer || 0) + dt;
-    if (this.chipTimer > 0.25) { this.chipTimer = 0; this.ui.setChips(this.effects.chips(this.simTime)); }
+    if (this.chipTimer > 0.25) { this.chipTimer = 0; this.ui.setChips([...this.effects.chips(this.simTime), ...(this.weather?.chips(this.simTime) || [])]); }
   }
 
   step(dt) {
@@ -1518,9 +1566,9 @@ export class GameClient {
       let total = 0, par = 0;
       sc.forEach((s, i) => { if (s !== null && s !== undefined) { total += s; par += HOLES[plan[i]]?.par ?? 0; } });
       return { ...p, total, toPar: total - par };
-    }).sort((a, b) => a.toPar - b.toPar || a.total - b.total);
+    }).sort((a, b) => (a.out ? 1 : 0) - (b.out ? 1 : 0) || a.toPar - b.toPar || a.total - b.total);
     let rank = 0, prev = null;
-    list.forEach((p, i) => { if (p.toPar !== prev) { rank = i + 1; prev = p.toPar; } p.rank = rank; });
+    list.forEach((p, i) => { if (p.toPar !== prev) { rank = i + 1; prev = p.toPar; } p.rank = p.out ? '💥' : rank; });
     this.ui.renderPlayers(list, this.myId);
   }
 

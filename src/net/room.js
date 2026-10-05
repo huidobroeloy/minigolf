@@ -4,7 +4,7 @@ import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
 import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
-import { CHARACTER_COLORS } from '../game/characters.js';
+import { CHARACTER_COLORS, characterByColor } from '../game/characters.js';
 
 export const COLORS = CHARACTER_COLORS; // one per character: Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA
 export const MAX_PLAYERS = 8;
@@ -72,7 +72,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal' };
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', mode: 'ffa' }; // mode: ffa | teams | elim
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -121,7 +121,7 @@ export class HostRoom {
 
   playerList() {
     return [...this.players.values()].map((p) => ({
-      id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default',
+      id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
       scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {},
     }));
   }
@@ -139,6 +139,13 @@ export class HostRoom {
       case 'settings':
         if (p?.host && this.phase === 'lobby') { Object.assign(this.settings, msg.settings); this.broadcastLobby(); }
         return;
+      case 'team':
+        // Teams mode: Lyoko Warriors or XANA's side (whoever plays XANA is always on XANA's side)
+        if (!p || (this.phase !== 'lobby' && this.phase !== 'final') || !['lyoko', 'xana'].includes(msg.team)) return;
+        if (characterByColor(p.color)?.id === 'xana') return;
+        p.team = msg.team; p.teamPicked = true;
+        this.broadcastLobby();
+        return;
       case 'trail':
         if (p && typeof msg.trail === 'string') { p.trail = msg.trail.slice(0, 16); this.broadcastLobby(); }
         return;
@@ -147,7 +154,10 @@ export class HostRoom {
         if (!p || (this.phase !== 'lobby' && this.phase !== 'final')) return;
         if (!COLORS.includes(msg.color)) return;
         const used = [...this.players.values()].some((q) => q.id !== id && q.color === msg.color);
-        if (!used) p.color = msg.color;
+        if (!used) {
+          if (characterByColor(p.color)?.id === 'xana' && characterByColor(msg.color)?.id !== 'xana') { p.team = null; p.teamPicked = false; }
+          p.color = msg.color;
+        }
         this.broadcastLobby();
         return;
       }
@@ -188,7 +198,7 @@ export class HostRoom {
         p.strokes = msg.strokes;
         p.scores[this.holeNo] = msg.strokes;
         this.broadcast({ t: 'holed', id, strokes: msg.strokes, hio: msg.strokes === 1 });
-        if (this.activePlayers().every((q) => q.holed)) this.allHoledAt = performance.now();
+        if (this.playing().every((q) => q.holed)) this.allHoledAt = performance.now();
         return;
       case 'claim': {
         if (!p || this.phase !== 'hole') return;
@@ -202,7 +212,7 @@ export class HostRoom {
       }
       case 'use': {
         if (!p) return;
-        if (this.phase !== 'hole') { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Too late — the hole is over' }); return; }
+        if (this.phase !== 'hole') { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Too late — the hole is over' }); return; }
         const def = POWERUPS[msg.pu];
         if (!def) return;
         const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, seed: randomSeed(), at: this.elapsed() };
@@ -211,7 +221,7 @@ export class HostRoom {
           const now = performance.now();
           if (tgt) tgt.hits = (tgt.hits || []).filter((h) => now - h < HOSTILE_WINDOW_MS);
           if (tgt && msg.pu !== 'steal' && (now < (tgt.protectedUntil || 0) || tgt.hits.length >= 2)) {
-            this.sendTo(id, { t: 'refund', pu: msg.pu, reason: `${tgt.name} was just hit — protected for a moment` });
+            this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: `${tgt.name} was just hit — protected for a moment` });
             return;
           }
           if (tgt) { tgt.protectedUntil = now + PROTECT_MS; tgt.hits.push(now); this.stat(tgt.id, 'targeted'); }
@@ -224,12 +234,12 @@ export class HostRoom {
           const clear = msg.pu === 'blackhole' ? 3.2 : 1.2;
           const near = (q) => q && Math.hypot(q[0] - x, q[2] - z) < clear;
           const blocked = near(tee) || [...this.players.values()].some((q) => !q.holed && near(q.pos));
-          if (blocked) { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Too close to a ball or the tee — place it somewhere else' }); return; }
+          if (blocked) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Too close to a ball or the tee — place it somewhere else' }); return; }
         }
         this.stat(id, 'used');
         if (msg.pu === 'switch') {
           const tgt = this.players.get(msg.target);
-          if (!tgt || tgt.holed || p.holed || !tgt.pos || !p.pos) { this.sendTo(id, { t: 'refund', pu: msg.pu, reason: 'Switch failed: target unavailable' }); return; }
+          if (!tgt || tgt.holed || p.holed || !tgt.pos || !p.pos) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Switch failed: target unavailable' }); return; }
           fx.params = { a: p.pos, b: tgt.pos };
         }
         this.broadcast(fx);
@@ -330,9 +340,13 @@ export class HostRoom {
     this.playoff = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
+    this.endEarly = false;
+    this.matchMode = this.mode;
+    if (this.matchMode === 'teams') this.assignTeams();
+    else for (const p of this.players.values()) p.team = null;
     // the intro (transfer, scanner, virtualization) before hole 1; single-hole practice skips it
     const players = this.playerList();
     const playIntro = intro && !String(this.settings.course).startsWith('hole:');
@@ -344,6 +358,65 @@ export class HostRoom {
   }
 
   activePlayers() { return [...this.players.values()].filter((p) => p.connected); }
+
+  /** Connected and not eliminated. */
+  playing() { return this.activePlayers().filter((p) => !p.out); }
+
+  get mode() {
+    const m = this.settings.mode || 'ffa';
+    if (this.solo) return 'ffa';
+    if (m === 'elim' && this.players.size < 3) return 'ffa';
+    if (m === 'teams' && this.players.size < 2) return 'ffa';
+    return m;
+  }
+
+  /** Teams mode: XANA's player joins XANA's side; everyone who didn't choose evens the teams out. */
+  assignTeams() {
+    const list = [...this.players.values()];
+    for (const p of list) {
+      if (characterByColor(p.color)?.id === 'xana') { p.team = 'xana'; p.teamPicked = true; }
+      else if (!p.teamPicked) p.team = null;
+    }
+    const count = (t) => list.filter((p) => p.team === t).length;
+    for (const p of list) if (!p.team) p.team = count('lyoko') <= count('xana') ? 'lyoko' : 'xana';
+    // nobody on one side: move someone who didn't choose
+    for (const [empty, full] of [['xana', 'lyoko'], ['lyoko', 'xana']]) {
+      if (count(empty) === 0 && list.length >= 2) {
+        const mover = list.find((p) => p.team === full && !p.teamPicked) || list.find((p) => p.team === full && characterByColor(p.color)?.id !== 'xana');
+        if (mover) mover.team = empty;
+      }
+    }
+  }
+
+  /** Teams ranked by the average total of their members (lower is better). */
+  teamResults() {
+    const teams = ['lyoko', 'xana'].map((team) => {
+      const members = this.playerList().filter((p) => p.team === team);
+      const avg = members.length ? members.reduce((a, p) => a + p.total, 0) / members.length : Infinity;
+      return { team, avg: Number.isFinite(avg) ? +avg.toFixed(1) : null, members: members.map((p) => p.id), best: Math.min(...members.map((p) => p.total)) };
+    }).filter((t) => t.members.length);
+    teams.sort((a, b) => (a.avg ?? 1e9) - (b.avg ?? 1e9) || a.best - b.best);
+    return teams;
+  }
+
+  /** Elimination: after each course, the worst player on that course is devirtualized. */
+  eliminate() {
+    const sector = HOLES[this.plan[this.holeNo]].sector;
+    const nextSector = this.plan[this.holeNo + 1] !== undefined ? HOLES[this.plan[this.holeNo + 1]].sector : null;
+    if (nextSector === sector) return null; // the course isn't over yet
+    const idx = [];
+    for (let i = this.holeNo; i >= 0 && HOLES[this.plan[i]].sector === sector; i--) idx.push(i);
+    const alive = this.playerList().filter((p) => !p.out && p.connected);
+    if (alive.length < 2) return null;
+    // the course subtotal is the score; the usual tiebreaks (countback, aces) pick between equals
+    const sub = alive.map((p) => ({ ...p, total: idx.reduce((a, i) => a + (p.scores[i] ?? 0), 0), scores: idx.slice().reverse().map((i) => p.scores[i]) }));
+    const { ordered } = rankStandings(sub);
+    const loser = this.players.get(ordered[ordered.length - 1].id);
+    loser.out = true;
+    loser.outAt = this.holeNo;
+    this.stat(loser.id, 'eliminated');
+    return { id: loser.id, name: loser.name, course: sector, left: alive.length - 1 };
+  }
 
   elapsed() { return performance.now() - this.holeStart; }
 
@@ -361,7 +434,7 @@ export class HostRoom {
 
   nextHole() {
     this.holeNo++;
-    if (this.holeNo >= this.plan.length) return this.finish();
+    if (this.holeNo >= this.plan.length || this.endEarly) return this.finish();
     const def = HOLES[this.plan[this.holeNo]];
     this.phase = 'hole';
     this.holeSeed = randomSeed();
@@ -386,7 +459,7 @@ export class HostRoom {
     // the swarm goes after the leader (best total among players still playing)
     let pos = null;
     if (kind === 'swarm') {
-      const live = this.activePlayers().filter((q) => !q.holed && q.pos).sort((a, b) => a.scores.reduce((s, v) => s + (v ?? 0), 0) - b.scores.reduce((s, v) => s + (v ?? 0), 0));
+      const live = this.playing().filter((q) => !q.holed && q.pos).sort((a, b) => a.scores.reduce((s, v) => s + (v ?? 0), 0) - b.scores.reduce((s, v) => s + (v ?? 0), 0));
       pos = live[0]?.pos ? [live[0].pos[0], live[0].pos[1] - 0.18, live[0].pos[2]] : null;
       if (!pos) kind = 'rage';
     }
@@ -398,6 +471,7 @@ export class HostRoom {
     const def = HOLES[this.plan[this.holeNo]];
     const results = [];
     for (const p of this.players.values()) {
+      if (p.out) { results.push({ id: p.id, score: null, out: true }); continue; } // eliminated: no score
       if (!p.holed) {
         this.stat(p.id, 'timeouts');
         p.scores[this.holeNo] = timeoutScore(def.par, p.strokes);
@@ -407,7 +481,9 @@ export class HostRoom {
     this.phase = 'between';
     this.betweenStart = performance.now();
     this.lastResults = results;
-    this.broadcast({ t: 'holeEnd', results, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
+    const eliminated = this.matchMode === 'elim' ? this.eliminate() : null;
+    if (eliminated && this.playing().length <= 1) this.endEarly = true;
+    this.broadcast({ t: 'holeEnd', results, players: this.playerList(), holeNo: this.holeNo, plan: this.plan, eliminated, mode: this.matchMode });
   }
 
   respawnPickups() {
@@ -425,16 +501,33 @@ export class HostRoom {
     }
   }
 
+  /** Standings for the mode: in Elimination the survivors come first, then the rest by how long they lasted. */
+  standings() {
+    const list = this.playerList();
+    if (this.matchMode !== 'elim') return rankStandings(list);
+    const alive = list.filter((p) => !p.out);
+    const r = rankStandings(alive);
+    const out = list.filter((p) => p.out).sort((a, b) => (this.players.get(b.id).outAt ?? -1) - (this.players.get(a.id).outAt ?? -1));
+    return { ...r, ordered: [...r.ordered, ...out] };
+  }
+
   finish() {
-    const { ordered, rule, tiedIds } = rankStandings(this.playerList());
+    if (this.matchMode === 'teams') {
+      // the winning side's best player gets the finale; no playoff between teams
+      const teams = this.teamResults();
+      const { ordered, rule } = rankStandings(this.playerList());
+      const winner = ordered.find((p) => p.team === teams[0]?.team) || ordered[0];
+      return this.finalize(ordered, winner?.id, rule, teams);
+    }
+    const { ordered, rule, tiedIds } = this.standings();
     if (tiedIds.length > 1 && !this.solo) return this.startPlayoff(tiedIds);
     this.finalize(ordered, ordered[0]?.id, rule);
   }
 
-  finalize(ordered, winnerId, rule) {
+  finalize(ordered, winnerId, rule, teams = null) {
     this.phase = 'final';
     this.playoff = null;
-    this.finalMsg = { t: 'final', standings: ordered, plan: this.plan, winnerId, tiebreak: rule };
+    this.finalMsg = { t: 'final', standings: ordered, plan: this.plan, winnerId, tiebreak: rule, teams, mode: this.matchMode };
     this.broadcast(this.finalMsg);
     this.broadcastLobby();
   }
@@ -460,7 +553,7 @@ export class HostRoom {
     const best = Math.min(...po.shooters.map(dist));
     const still = po.shooters.filter((id) => dist(id) === best);
     if (still.length > 1 && po.round < 4) return this.startPlayoff(still); // dead heat: go again
-    const { ordered } = rankStandings(this.playerList());
+    const { ordered } = this.standings();
     const winnerId = still[0];
     const rest = ordered.filter((p) => p.id !== winnerId);
     const winner = ordered.find((p) => p.id === winnerId);
@@ -477,7 +570,7 @@ export class HostRoom {
       if (this.xanaAt !== null && this.xanaAt !== undefined && this.elapsed() >= this.xanaAt && !this.allHoledAt) this.xanaAttack();
       if (this.elapsed() >= this.duration) this.endHole();
       else if (this.allHoledAt && performance.now() - this.allHoledAt > ALL_HOLED_GRACE_MS) this.endHole();
-      else if (this.activePlayers().length === 0) this.endHole();
+      else if (this.playing().length === 0) this.endHole();
     } else if (this.phase === 'between') {
       if (performance.now() - this.betweenStart > BETWEEN_HOLES_MS) this.nextHole();
     }

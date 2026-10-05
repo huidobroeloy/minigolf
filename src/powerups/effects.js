@@ -11,11 +11,12 @@ import { makeLeashLady, makeLeashLine, makeBlackHole, makeSpawnBumper } from '..
 import { CATEGORY_COLORS } from './registry.js';
 import { createMonster } from '../monsters/index.js';
 import { loop } from '../holes/helpers.js';
+import { makeVehicle } from '../fx/vehicles.js';
 
 const BH_CORE = 0.45, BH_MAX_BOUNCES = 3, BH_LIFE = 20;
 
 const NEXT_SHOT = ['steady', 'magnet', 'ghost', 'chip', 'aelita', 'funsize', 'supersize', 'sticky', 'zany', 'leash', 'triplicate', 'scanner', 'possession',
-  'stun', 'gas', 'sprint', 'wings', 'overwing', 'venom', 'xanafied'];
+  'stun', 'gas', 'sprint', 'wings', 'overwing', 'overbike', 'overboard', 'venom', 'xanafied'];
 // statuses that monsters give (not power-ups)
 const STATUS_ICONS = { venom: '🟢', xanafied: '🔴' };
 // effects Hopper's Light washes off
@@ -78,6 +79,7 @@ export class EffectManager {
     this.immuneUntil = 0;
     this.slashed = [];
     this.removeLady();
+    this.setVehicle(null);
     if (this.group) { this.scene.remove(this.group); this.group = null; }
     this.particles?.dispose(); this.hearts?.dispose();
     this.particles = this.hearts = null;
@@ -202,7 +204,7 @@ export class EffectManager {
         if (inv.length) {
           const i = Math.floor(Math.random() * inv.length);
           stolen = inv.splice(i, 1)[0];
-          c.ui.renderInventory(inv);
+          c.renderInventory();
         }
         c.link.send({ t: 'give', to: fx.from, pu: stolen });
         c.ui.bigToast('🦝 Robbed!', stolen ? `${fromName} stole your ${POWERUPS[stolen].name}` : `${fromName} found nothing to steal`, 'bad');
@@ -323,6 +325,7 @@ export class EffectManager {
         const pt = this.course.randomFloorPoint(rng);
         if (!pt) continue;
         const slick = i % 2 === 0, r = 1.1 + rng.next() * 0.6;
+        if ((this.course.cups || [this.course.cup]).some((cp) => cp && Math.hypot(cp.x - pt.x, cp.z - pt.z) < r + 1)) continue; // never over a cup
         const zone = { kind: 'slow', mul: slick ? 0.15 : 4, contains: (p) => Math.hypot(p.x - pt.x, p.z - pt.z) <= r, glitch: true };
         const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 6), new THREE.MeshBasicMaterial({ color: slick ? '#7ff6ff' : '#ff2a6a', transparent: true, opacity: 0.45, depthWrite: false }));
         mesh.rotation.x = -Math.PI / 2;
@@ -417,7 +420,7 @@ export class EffectManager {
     this.active = { ...this.pending };
     this.pending = {};
     const a = this.active;
-    const res = { chip: !!a.chip, powerMul: (a.leash ? 0.5 : 1) * (a.venom ? 0.75 : 1), steady: !!a.steady, triplicate: !!a.triplicate, glide: !!a.wings, fly: !!a.overwing, stun: !!a.stun };
+    const res = { chip: !!a.chip, powerMul: (a.leash ? 0.5 : 1) * (a.venom ? 0.75 : 1), steady: !!a.steady, triplicate: !!a.triplicate, glide: !!a.wings, fly: !!a.overwing, hover: !!a.overboard, stun: !!a.stun };
     if (a.leash) {
       const p = this.client.ball.pos;
       this.leash = { anchor: new THREE.Vector3(p.x, p.y, p.z), len: 3.2 };
@@ -436,8 +439,10 @@ export class EffectManager {
     const ball = this.client.ball;
     if (!ball) return;
     const e = { ...this.active, ...this.pending };
-    ball.mods.speedMul = (e.zany ? 2.4 : 1) * (e.sprint ? 1.6 : 1);
-    if (ball.mods.monsterProof !== !!e.sprint) ball.setMonsterProof(!!e.sprint);
+    ball.mods.speedMul = (e.zany ? 2.4 : 1) * (e.sprint ? 1.6 : 1) * (e.overbike ? 1.4 : 1) * (e.overboard ? 1.15 : 1);
+    const proof = !!(e.sprint || e.overbike);
+    if (ball.mods.monsterProof !== proof) ball.setMonsterProof(proof);
+    this.setVehicle(e.overwing ? 'overwing' : e.overbike ? 'overbike' : e.overboard ? 'overboard' : null);
     ball.mods.decelMul = (e.zany ? 0.55 : 1) * (e.sticky ? 1.5 : 1);
     ball.mods.sticky = !!e.sticky;
     ball.mods.magnet = !!e.magnet;
@@ -450,6 +455,21 @@ export class EffectManager {
     this.client.ui.setStatus(Object.keys(e).filter((k) => e[k] && NEXT_SHOT.includes(k)).map((k) => STATUS_ICONS[k] || POWERUPS[k].icon));
     if (e.leash && !this.lady) this.spawnLady();
     if (!e.leash && this.lady) this.removeLady();
+  }
+
+  /** The vehicle your ball is riding (pending or during the shot), or none. */
+  setVehicle(kind) {
+    if ((this.vehicle?.kind ?? null) === kind) return;
+    if (this.vehicle) {
+      const m = this.vehicle.mesh;
+      m.parent?.remove(m);
+      m.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    }
+    this.vehicle = null;
+    if (!kind || !this.group) return;
+    const mesh = makeVehicle(kind);
+    this.group.add(mesh);
+    this.vehicle = { kind, mesh, yaw: this.client.cam?.yaw ?? 0 };
   }
 
   timeScale() { return this.has('aelita') ? 0.35 : 1; }
@@ -575,6 +595,23 @@ export class EffectManager {
       const age = t - c.start, left = c.until - t;
       c.mesh.scale.y = Math.min(1, Math.max(0.01, age * 2.5));
       c.mat.opacity = left < 2 ? 0.85 * (0.5 + 0.5 * Math.sin(t * 20)) : 0.85;
+    }
+    if (this.vehicle && this.client.ball) {
+      // ride under the ball, facing where it's rolling (or where you're aiming while it waits)
+      const ball = this.client.ball, v = this.vehicle, m = v.mesh;
+      const vel = ball.vel, sp = Math.hypot(vel.x, vel.z);
+      const want = sp > 0.4 ? Math.atan2(vel.x, vel.z) : (this.client.cam?.yaw ?? v.yaw);
+      let d = want - v.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      v.yaw += d * Math.min(1, dt * 10);
+      m.visible = ball.mesh.visible && ball.state !== 'holed' && ball.state !== 'sinking';
+      m.position.copy(ball.mesh.position);
+      m.rotation.set(0, v.yaw, 0);
+      m.scale.setScalar(ball.radius * 1.35);
+      const wheel = m.getObjectByName('wheel');
+      if (wheel) wheel.rotation.x += sp * dt * 4;
+      const gl = m.getObjectByName('glow');
+      if (gl) gl.material.opacity = 0.5 + 0.3 * Math.sin(t * 12);
+      if (v.kind === 'overboard') m.position.y += (0.5 + 0.5 * Math.sin(t * 5)) * ball.radius * 0.08;
     }
     if (this.shieldMesh && this.client.ball) {
       this.shieldMesh.position.copy(this.client.ball.mesh.position);

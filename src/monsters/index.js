@@ -564,6 +564,169 @@ class Kolossus extends Monster {
   dispose() { super.dispose(); this.ctx.group.remove(this.wave); }
 }
 
+// ---------- Kolossus boss (Sector 5 Core): fist slams, a glowing ankle and the gate to the core ----------
+// spec: { p: feet [x,y,z], ry, ankle: [x,y,z], gate: { a: [x,z], b: [x,z], y }, zone: [x0,z0,x1,z1], every }
+// Everything except the stun is a function of the shared clock. The stun is your own: hit the ankle
+// three times with your ball and the giant kneels, the gate drops for 15 s (on your screen).
+const BOSS_HITS = 3, BOSS_STUN = 15, SLAM_TELL = 2, SLAM_R = 1.5;
+class KolossusBoss extends Monster {
+  constructor(spec, ctx) {
+    const g = makeKolossus();
+    g.scale.setScalar(spec.scale ?? 0.6);
+    super(spec, ctx, g);
+    const s = this.at(0), sc = spec.scale ?? 0.6, ry = spec.ry || 0;
+    // the feet are solid
+    this.body = kinematic(ctx.physics, { x: s.x, y: s.y, z: s.z });
+    this.q.setFromAxisAngle(UP, ry);
+    this.body.setRotation(this.q, true);
+    for (const side of [-1, 1]) collider(ctx.physics, this.body, R.ColliderDesc.cuboid(1.6 * sc, 0.8 * sc + 0.4, 2.1 * sc).setTranslation(3.4 * sc * side, 0.4, 0.5 * sc), 0.5);
+    // the ankle: a glowing weak point you can hit
+    const [axw, ayw, azw] = spec.ankle;
+    this.ankle = { x: axw, y: ayw + 0.45, z: azw, r: 0.45 };
+    this.ankleBody = kinematic(ctx.physics, this.ankle);
+    collider(ctx.physics, this.ankleBody, R.ColliderDesc.ball(this.ankle.r), 0.9);
+    this.ankleMat = new THREE.MeshStandardMaterial({ color: '#ff9a20', emissive: '#ff6a10', emissiveIntensity: 1.6, roughness: 0.4 });
+    this.ankleMesh = new THREE.Mesh(new THREE.SphereGeometry(this.ankle.r, 20, 14), this.ankleMat);
+    this.ankleMesh.position.set(this.ankle.x, this.ankle.y, this.ankle.z);
+    ctx.group.add(this.ankleMesh);
+    this.ankleRing = new THREE.Mesh(new THREE.TorusGeometry(this.ankle.r + 0.15, 0.04, 6, 32), new THREE.MeshBasicMaterial({ color: '#ffd04a', transparent: true, opacity: 0.8 }));
+    this.ankleRing.position.copy(this.ankleMesh.position);
+    ctx.group.add(this.ankleRing);
+    // the gate: a red energy wall with a solid collider
+    const G = spec.gate, gx = (G.a[0] + G.b[0]) / 2, gz = (G.a[1] + G.b[1]) / 2, gl = Math.hypot(G.b[0] - G.a[0], G.b[1] - G.a[1]);
+    this.gateY = G.y ?? 0;
+    this.gate = { x: gx, z: gz, len: gl, ang: Math.atan2(G.b[0] - G.a[0], G.b[1] - G.a[1]), drop: 0 };
+    this.gateBody = kinematic(ctx.physics, { x: gx, y: this.gateY + 0.6, z: gz });
+    const gq = new THREE.Quaternion().setFromAxisAngle(UP, this.gate.ang + Math.PI / 2);
+    this.gateBody.setRotation(gq, true);
+    // an obstacle, not a monster: Super Sprint and the Overbike ignore monsters, but not the gate
+    const gd = R.ColliderDesc.cuboid(gl / 2, 0.6, 0.15).setFriction(0).setRestitution(0.4).setCollisionGroups(ctx.physics.groupFor('obst'));
+    const gc = ctx.physics.world.createCollider(gd, this.gateBody);
+    ctx.physics.meta.set(gc.handle, { kind: 'obst', collider: gc, body: this.gateBody });
+    this.gateMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.gateMesh = new THREE.Mesh(new THREE.PlaneGeometry(gl, 1.2, 8, 3), this.gateMat);
+    this.gateMesh.quaternion.copy(gq);
+    this.gateMesh.position.set(gx, this.gateY + 0.6, gz);
+    ctx.group.add(this.gateMesh);
+    const eyeP = eye(ctx.group, [gx, this.gateY + 0.65, gz], 0.9);
+    eyeP.quaternion.copy(gq);
+    this.gateEye = eyeP;
+    // slams: a target ring that tightens, then a fist from the sky
+    this.tellMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
+    this.tell = new THREE.Mesh(new THREE.RingGeometry(SLAM_R - 0.12, SLAM_R, 40), this.tellMat);
+    this.tell.rotation.x = -Math.PI / 2;
+    this.tell.visible = false;
+    ctx.group.add(this.tell);
+    this.fist = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1, 0), g.userData.mats[0]);
+    this.fist.visible = false;
+    ctx.group.add(this.fist);
+    this.every = spec.every ?? 7;
+    this.hits = 0;
+    this.hitT = -9;
+    this.stunUntil = -1;
+    this.lastSlam = -1;
+    this.base = s;
+  }
+  stunned(t) { return t < this.stunUntil; }
+  gateOpen(t) { return this.stunned(t) || t < (this.holdUntil ?? -1); }
+  /** The n-th slam: where and when (the same on every screen). */
+  slam(n) {
+    // asked for every frame and every physics step: keep the last few
+    const cache = (this.slams ||= new Map());
+    if (cache.has(n)) return cache.get(n);
+    const rng = new RNG(`${this.ctx.course?.def?.id ?? 'boss'}:slam:${n}`);
+    const [x0, z0, x1, z1] = this.spec.zone;
+    const sl = { x: x0 + rng.next() * (x1 - x0), z: z0 + rng.next() * (z1 - z0), at: (n + 1) * this.every };
+    cache.set(n, sl);
+    if (cache.size > 4) cache.delete(cache.keys().next().value);
+    return sl;
+  }
+  frame(t) {
+    const st = this.stunned(t);
+    this.place(this.model, this.base);
+    this.model.visible = !this.ctx.course.tactical; // don't block the aerial view
+    // kneels while stunned, otherwise winds up for the next slam
+    const n = Math.floor(t / this.every), u = (t - n * this.every) / this.every;
+    const k = st ? 1 : u > 1 - SLAM_TELL / this.every ? THREE.MathUtils.lerp(0.77, 0, (u - (1 - SLAM_TELL / this.every)) / (SLAM_TELL / this.every)) : u < 0.06 ? 1 : 0.77;
+    this.model.userData.slam(k);
+    this.model.userData.breathe(t);
+    this.model.position.y = this.base.y - (st ? 1.2 : 0) + Math.sin(t * 0.8) * 0.08;
+    this.model.rotation.z = st ? 0.12 : 0;
+    // ankle glow: brighter with each hit; dark while stunned
+    this.ankleMat.emissiveIntensity = st ? 0.3 : 1.2 + this.hits * 0.8 + 0.4 * Math.sin(t * 6);
+    this.ankleRing.rotation.x = t * 2; this.ankleRing.rotation.y = t * 1.3;
+    this.ankleRing.visible = !st;
+    // gate
+    const want = this.gateOpen(t) ? 1 : 0;
+    this.gate.drop += (want - this.gate.drop) * 0.15;
+    this.gateMesh.position.y = this.gateY + 0.6 - this.gate.drop * 1.5;
+    this.gateEye.position.y = this.gateY + 0.65 - this.gate.drop * 1.5;
+    this.gateMat.opacity = 0.35 + 0.2 * Math.sin(t * 8) - this.gate.drop * 0.3;
+    // slam telegraph and fist
+    const sl = this.slam(n);
+    const left = sl.at - t;
+    this.tell.visible = !st && left < SLAM_TELL && left > 0;
+    if (this.tell.visible) {
+      this.tell.position.set(sl.x, this.gateY + 0.03, sl.z);
+      this.tell.scale.setScalar(1 + left * 0.6);
+      this.tellMat.opacity = 0.5 + 0.4 * Math.abs(Math.sin(t * (8 + (SLAM_TELL - left) * 8)));
+    }
+    this.fist.visible = !st && left < 0.45 && left > -0.6;
+    if (this.fist.visible) {
+      const fall = Math.max(0, left) / 0.45;
+      this.fist.position.set(sl.x, this.gateY + 1.0 + fall * fall * 14, sl.z);
+      this.fist.rotation.set(t, t * 0.7, 0);
+    }
+  }
+  update(t) {
+    const st = this.stunned(t);
+    // gate collider follows the drop (but never rises into a ball sitting under it)
+    const ball = this.ctx.course.localBall;
+    const under = ball && Math.hypot(ball.pos.x - this.gate.x, ball.pos.z - this.gate.z) < this.gate.len / 2 + 0.4 && Math.abs((ball.pos.x - this.gate.x) * Math.cos(this.gate.ang) - (ball.pos.z - this.gate.z) * Math.sin(this.gate.ang)) < 0.5;
+    if (!st && this.gate.drop > 0.5 && under) this.holdUntil = t + 0.5; // hold it open a moment
+    const gy = this.gateY + 0.6 - (this.gateOpen(t) ? 1.5 : 0);
+    this.gateBody.setNextKinematicTranslation({ x: this.gate.x, y: gy, z: this.gate.z });
+    // the ankle: count hard hits from your own ball (the speed just before contact: it may have bounced already)
+    const sp = ball ? Math.hypot(ball.vel.x, ball.vel.z) : 0, impact = Math.max(sp, this.prevSp ?? 0);
+    this.prevSp = sp;
+    if (ball && ball.state === 'moving' && !st) {
+      const p = ball.pos, d = Math.hypot(p.x - this.ankle.x, p.y - this.ankle.y, p.z - this.ankle.z);
+      if (d < this.ankle.r + ball.radius + 0.08 && impact > 1.2 && t - this.hitT > 0.6) {
+        this.hitT = t;
+        this.hits++;
+        sfx.play('bumper');
+        this.ctx.course.onShake?.(0.5);
+        if (this.hits >= BOSS_HITS) {
+          this.hits = 0;
+          this.stunUntil = t + BOSS_STUN;
+          sfx.play('rumble');
+          this.ctx.course.onBoss?.('stun', BOSS_STUN);
+        } else this.ctx.course.onBoss?.('hit', this.hits, BOSS_HITS);
+      }
+    }
+    if (this.wasStunned && !this.stunned(t)) this.ctx.course.onBoss?.('recover');
+    this.wasStunned = this.stunned(t);
+    // slam impact
+    const n = Math.floor(t / this.every);
+    const sl = this.slam(n - 1);
+    if (n - 1 !== this.lastSlam && t - sl.at < 0.3 && t >= sl.at) {
+      this.lastSlam = n - 1;
+      if (!st && t > 1) {
+        sfx.play('rumble');
+        this.ctx.course.onShake?.(1.0);
+        if (ball && canTarget(this.ctx.course, ball, t, { allowResting: true }) && Math.hypot(ball.pos.x - sl.x, ball.pos.z - sl.z) < SLAM_R) {
+          landHit(this.ctx.course, 'vaporize', t, 100);
+        }
+      }
+    }
+  }
+  dispose() {
+    super.dispose();
+    for (const o of [this.ankleMesh, this.ankleRing, this.gateMesh, this.gateEye, this.tell, this.fist]) this.ctx.group.remove(o);
+    for (const b of [this.ankleBody, this.gateBody]) this.ctx.physics.removeBody(b);
+  }
+}
+
 // ---------- Shark (Digital Sea): cruises its lane, then rams you ----------
 class Shark extends Monster {
   constructor(spec, ctx) {
@@ -701,6 +864,7 @@ class KongreArm extends Monster {
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
+  kolossusBoss: KolossusBoss,
 };
 
 export function createMonster(spec, ctx) {

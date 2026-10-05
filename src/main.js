@@ -76,7 +76,7 @@ class App {
     requestAnimationFrame(loop);
     window.__app = this;
     if (this.debug) {
-      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__probeWarp = m.probeWarp; window.__holes = HOLES; });
+      import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__probeWarp = m.probeWarp; window.__tuneWarp = m.tuneWarp; window.__warpEntries = m.warpEntries; window.__holes = HOLES; });
     }
   }
 

@@ -1,6 +1,6 @@
 import { POWERUPS, POWERUP_IDS } from '../powerups/registry.js';
 import { COLORS } from '../net/room.js';
-import { HOLES, SECTORS, COURSES, formatOptions } from '../holes/index.js';
+import { HOLES, SECTORS, COURSES, SECTOR_NAMES, formatOptions } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
 import { CHARACTERS, characterByColor, characterCss } from '../game/characters.js';
 import { portrait, portraitBig } from './portraits.js';
@@ -97,8 +97,9 @@ export class UI {
     this.$('.hud-inventory').addEventListener('click', (e) => {
       const slot = e.target.closest('.slot');
       if (!slot || slot.classList.contains('empty')) return;
-      if (e.target.closest('.discard')) this.h.discard?.(Number(slot.dataset.i));
-      else this.h.use?.(Number(slot.dataset.i));
+      const i = slot.dataset.i === 'S' ? 'S' : Number(slot.dataset.i);
+      if (e.target.closest('.discard')) this.h.discard?.(i);
+      else this.h.use?.(i);
     });
   }
 
@@ -278,7 +279,7 @@ export class UI {
         </div>
         <div class="cs-host"></div>
         <div class="players-list">
-          ${lobby.players.map((p) => { const ch = characterByColor(p.color); return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
+          ${lobby.players.map((p) => { const ch = characterByColor(p.color); const tm = st.mode === 'teams' ? (ch?.id === 'xana' || p.team === 'xana' ? ' 👁️' : p.team === 'lyoko' ? ' 🛡️' : ' ❔') : ''; return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${tm}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
           <div class="small">${lobby.players.length}/8 players</div>
         </div>
         <div class="settings ${isHost ? '' : 'readonly'}">
@@ -288,7 +289,16 @@ export class UI {
           <select id="timeMul" ${isHost ? '' : 'disabled'}>${[[0.75, 'Short (×0.75)'], [1, 'Normal'], [1.5, 'Relaxed (×1.5)'], [2, 'Chill (×2)']].map(([v, n]) => `<option value="${v}" ${Number(st.timeMul) === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Power-ups</label>
           <select id="puLevel" ${isHost ? '' : 'disabled'}>${[['off', 'Off'], ['few', 'Few'], ['normal', 'Normal'], ['chaos', 'Chaos 🌪️']].map(([v, n]) => `<option value="${v}" ${(st.puLevel || 'normal') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <label>Mode</label>
+          <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['elim', 'Elimination (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
+        ${st.mode === 'teams' ? `<div class="team-pick">
+          <div class="lbl">YOUR SIDE</div>
+          ${characterByColor(me?.color)?.id === 'xana' ? '<div class="small">XANA always plays for XANA’s side 👁️</div>' : `
+          <button class="btn tiny ${me?.team === 'lyoko' ? 'primary' : ''}" data-team="lyoko">🛡️ Lyoko Warriors</button>
+          <button class="btn tiny ${me?.team === 'xana' ? 'primary' : ''}" data-team="xana">👁️ XANA’s side</button>
+          <div class="small">Undecided players even out the teams when the game starts. Team score = average total.</div>`}
+        </div>` : ''}
         <div class="row">
           ${isHost ? '<button class="btn primary" id="start">Start game</button>' : '<div class="tagline">Waiting for the host to start…</div>'}
           <button class="btn" id="leave">Leave</button>
@@ -300,12 +310,14 @@ export class UI {
       onPick: (c) => { this.prefs.color = c; savePrefs(this.prefs); this.h.pick?.(c); },
     });
     s.querySelector('#copy').onclick = () => { navigator.clipboard?.writeText(url); this.toast('Invite link copied'); };
+    s.querySelectorAll('[data-team]').forEach((b) => { b.onclick = () => this.h.team?.(b.dataset.team); });
     s.querySelector('#leave').onclick = () => this.h.leave?.();
     if (isHost) {
       const send = () => this.h.settings?.({
         course: s.querySelector('#course').value,
         timeMul: Number(s.querySelector('#timeMul').value),
         puLevel: s.querySelector('#puLevel').value,
+        mode: s.querySelector('#mode').value,
       });
       s.querySelectorAll('select, input').forEach((i) => i.addEventListener('change', send));
       s.querySelector('#start').onclick = () => this.h.start?.();
@@ -422,7 +434,7 @@ export class UI {
       </div>`).join('');
   }
 
-  renderInventory(inv) {
+  renderInventory(inv, special = null) {
     const slots = [0, 1, 2].map((i) => {
       const id = inv[i];
       if (!id) return `<div class="slot empty" data-i="${i}"><kbd>${i + 1}</kbd></div>`;
@@ -430,6 +442,11 @@ export class UI {
       return `<div class="slot" data-i="${i}" title="${esc(d.name)}: ${esc(d.desc)}">
         <kbd>${i + 1}</kbd><div class="ic">${d.icon}</div><div class="nm">${esc(d.name)}</div><button class="discard" title="Discard (Shift+${i + 1})">✕</button></div>`;
     });
+    if (special) {
+      const d = POWERUPS[special.id];
+      slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per hole): ${esc(d.name)}: ${esc(d.desc)}">
+        <kbd>4 ★</kbd><div class="ic">${d.icon}</div><div class="nm">${special.used ? 'Used' : esc(d.name)}</div></div>`);
+    }
     this.$('.hud-inventory').innerHTML = slots.join('');
   }
 
@@ -625,6 +642,7 @@ export class UI {
           <tr><td>W S / ↑ ↓ · mouse wheel</td><td>Tilt · zoom</td></tr>
           <tr><td>Space (hold)</td><td>Charge power, release to putt</td></tr>
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
+          <tr><td>4 / ★</td><td>Your character’s special move (once per hole)</td></tr>
           <tr><td>C · 🎥 button</td><td>Camera: chase → first person → aerial (aerial: wheel/pinch zoom, right-drag or two fingers to look around)</td></tr>
           <tr><td>Placing power-ups</td><td>Click a spot · drag an arrow or line · right-click / Esc cancels</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
@@ -684,7 +702,7 @@ export class UI {
     spin();
   }
 
-  showScoreboard({ players, plan, holeNo, results, myId, final, isHost, tiebreak, xana }) {
+  showScoreboard({ players, plan, holeNo, results, myId, final, isHost, tiebreak, xana, teams }) {
     this.hideHud();
     const pars = plan.map((i) => HOLES[i].par);
     // the final order comes from the host (it already applied the tiebreaks)
@@ -695,7 +713,7 @@ export class UI {
     const groups = [];
     plan.forEach((hi, i) => {
       const key = HOLES[hi].sector;
-      if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, name: COURSES.find((c) => c.key === key)?.name || key, idx: [] });
+      if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, name: SECTOR_NAMES[key] || key, idx: [] });
       groups[groups.length - 1].idx.push(i);
     });
     const cell = (s, i) => {
@@ -707,7 +725,9 @@ export class UI {
       <div class="panel scoreboard${xana ? ' xana-board' : ''}">
         <h1>${xana ? '👁️ XANA WINS · LYOKO HAS FALLEN' : final ? '🏆 FINAL STANDINGS' : `HOLE ${holeNo + 1} COMPLETE`}</h1>
         <div class="joke">${esc(JOKES[Math.floor(Math.random() * JOKES.length)])}</div>
-        ${final && tiebreak ? `<div class="tiebreak">⚔️ TIEBREAK · ${esc(tiebreak)}</div>` : ''}
+        ${final && tiebreak && !teams ? `<div class="tiebreak">⚔️ TIEBREAK · ${esc(tiebreak)}</div>` : ''}
+        ${final && teams?.length ? `<div class="team-result ${teams[0].team}">${teams[0].team === 'xana' ? '👁️ XANA’S SIDE WINS' : '🛡️ THE LYOKO WARRIORS WIN'}
+          <span>${teams.map((t) => `${t.team === 'xana' ? '👁️ XANA' : '🛡️ Lyoko'} avg ${t.avg}`).join(' · ')}</span></div>` : ''}
         ${final ? podium(sorted) + awards(players) : ''}
         <div class="table-wrap"><table>
           <thead><tr class="courses"><th></th><th></th>${groups.map((g) => `<th colspan="${g.idx.length + 1}" class="cg">${esc(g.name)}</th>`).join('')}<th></th><th></th></tr>
@@ -717,7 +737,7 @@ export class UI {
             const r = resultMap.get(p.id);
             const rel = p.total - parSum;
             const subt = (g) => { const v = g.idx.map((i) => p.scores[i]).filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) : '·'; };
-            return `<tr class="${p.id === myId ? 'me' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${esc(p.name)}${r?.timeout ? ' ⏰' : ''}</td>
+            return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ' ⏰' : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
               ${groups.map((g) => g.idx.map((i) => cell(p.scores[i], i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
           }).join('')}</tbody>
         </table></div>

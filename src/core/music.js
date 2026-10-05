@@ -26,6 +26,7 @@ const STYLES = {
   network:  { bpm: 124, root: 57, scale: 'dorian',      prog: [0, 3, 5, 4], pad: 'triangle', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 3200 },
   intro:    { bpm: 132, root: 52, scale: 'minor',       prog: [0, 5, 3, 6], pad: 'sawtooth', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 3400 },
   finale:   { bpm: 104, root: 55, scale: 'lydian',      prog: [0, 4, 5, 3], pad: 'triangle', arp: 'bell',     arpEvery: 1, bass: 'walk',   drums: 'soft',  bright: 2600 },
+  core:     { bpm: 136, root: 45, scale: 'phrygian',    prog: [0, 1, 5, 6], pad: 'sawtooth', arp: 'square',   arpEvery: 1, bass: 'eighth', drums: 'synth', bright: 2000 },
   xana:     { bpm: 62,  root: 38, scale: 'phrygian',    prog: [0, 1, 0, 6], pad: 'sawtooth', arp: 'triangle', arpEvery: 4, bass: 'drone',  drums: 'boom',  bright: 700 },
 };
 

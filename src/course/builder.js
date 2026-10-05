@@ -330,7 +330,8 @@ export function buildCourse(def, physics, scene) {
       const rimB = addMesh(new THREE.TorusGeometry(r + 0.1, 0.08, 8, 28), pipeMat);
       rimB.position.set(bx - ux * 0.1, by + r + 0.05, bz - uz * 0.1);
       rimB.quaternion.copy(pipeB.quaternion).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
-      course.warps.push({ ax, ay, az, r, to: [bx, by, bz], dir: [ux, uz], speed: p.speed ?? 6, pipeB, rimA });
+      // exit speed: the entry speed × gain, but at least `speed`
+      course.warps.push({ ax, ay, az, r, to: [bx, by, bz], dir: [ux, uz], speed: p.speed ?? 6, gain: p.gain ?? 1, pipeB, rimA });
       course.animators.push((t) => { chev.userData.animate(t); pipeMat.emissiveIntensity = 0.3 + 0.15 * Math.sin(t * 4); });
       expand(ax, ay, az, r + 0.5);
       expand(bx, by, bz, r + 0.5);
@@ -738,7 +739,7 @@ export function buildCourse(def, physics, scene) {
     for (const w of course.warps) {
       if (Math.hypot(p.x - w.ax, p.z - w.az) < w.r * 0.85 && Math.abs(p.y - ball.radius - w.ay) < 0.35) {
         const v = ball.vel;
-        const sp = Math.max(Math.hypot(v.x, v.z), w.speed);
+        const sp = Math.max(Math.hypot(v.x, v.z) * w.gain, w.speed);
         return { to: [w.to[0] + w.dir[0] * 0.2, w.to[1] + ball.radius + 0.05, w.to[2] + w.dir[1] * 0.2], vel: { x: w.dir[0] * sp, y: 0.5, z: w.dir[1] * sp } };
       }
     }

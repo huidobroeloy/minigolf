@@ -1,7 +1,7 @@
 # Lyoko Minigolf
 
 A browser minigolf party game for friends, inspired by Putt Party, with jokes and power-ups.
-It's a **Lyoko World Cup**: 9 courses of 6 holes (54 in all) across Code Lyoko's sectors, the Digital Sea and the Network, and XANA monsters get in your way.
+It's a **Lyoko World Cup**: 9 courses of 6 holes (54 in all) across Code Lyoko's sectors, the Digital Sea and the Network, then a boss fight against the **Kolossus** at the Sector 5 Core. XANA's monsters shoot at you all the way.
 Everyone plays at the same time, and there's no ball-to-ball contact.
 
 **Play:** https://huidobroeloy.github.io/minigolf/
@@ -22,9 +22,14 @@ If the host leaves, the room ends.
 For friends behind strict networks, the game uses PeerJS's free relay. For more reliable relaying, add your own free TURN credentials to `src/net/ice.js`.
 
 ## Formats
-- **World Cup:** all 9 courses, 6 holes each. The courses come in a random order, and you play all 6 holes of a course before moving on.
+- **World Cup:** all 9 courses, 6 holes each, then the Kolossus finale (55 holes). The courses come in a random order, and you play all 6 holes of a course before moving on.
 - **Cup of N:** the host picks 1–9 courses, still in random order.
-- **Single course** or **single hole**, for practice.
+- **Single course** or **single hole**, for practice. The boss hole can be played on its own too.
+
+The host also picks a **mode**:
+- **Everyone for themselves** (the default).
+- **Teams · Lyoko vs XANA:** pick your side in the lobby (whoever plays XANA is always on XANA's side; undecided players even the teams out). The team with the lowest **average** total wins.
+- **Elimination** (3+ players): after each course, the worst player on that course is devirtualized and spectates. The match ends early when only one warrior is left.
 
 A title card opens each course, and the scoreboard shows a subtotal per course plus the grand total.
 
@@ -54,6 +59,7 @@ Each character can only be picked by one player per room.
 | Space (hold) | Alternative power meter |
 | C / 🎥 | Switch camera: **chase**, **first-person (POV)**, **aerial** (wheel or pinch to zoom, drag to pan) |
 | 1 2 3 | Use a power-up (Shift + number discards it) |
+| 4 / ★ slot | Your character's **special move**, once per hole |
 | Tab / 👁️ | Spectate others after you hole out |
 | 7 8 9 0 | Emotes 😂 😡 👏 💀 |
 | Esc / ⚙️ | Settings: music, sound effects, mutes, graphics, intro, your soundtrack |
@@ -67,6 +73,8 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
+- **Life points:** you start each hole with 100 LP. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
+- The cup is a real hole: slow balls drop in, fast ones lip out. Every cup sits under a XANA tower hologram, and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
 - Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 10**.
 - **Ties are broken**, never shared:
@@ -75,10 +83,10 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
   3. most aces;
   4. a sudden-death closest-to-the-pin playoff.
 - **Fortune Falls Casino:** every cup ends the hole, but each one adds or removes strokes. The number is written over the cup, for example −2 or +3. The neon pits midway add a random penalty.
-- Every hole has a hole-in-one line. On the long holes it's a secret route: a warp pipe, a launcher, a bank shot. It's hard to find.
+- Holes are long, with doglegs: a full-power shot never reaches the cup directly. Every hole still has a hole-in-one, through a **secret route**: on most holes a red warp pipe in the approach lane that drops you near the cup, at a speed that only rolls in if you hit the pipe just right (about 0.4% of shots).
 
 ## XANA's monsters
-Monsters telegraph every attack (a charge glow and a red target ring). They fire at random intervals and never at a ball whose owner is aiming. Each one has its own abilities:
+Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
 | Monster | What it does |
 |---|---|
@@ -93,10 +101,22 @@ Monsters telegraph every attack (a charge glow and a red target ring). They fire
 | Scyphozoa | Grabs your ball and XANA-fies your next shot (inverted controls) |
 | Shark | Cruises its lane, then rams you |
 | Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane |
-| Kolossus | Smashes the Digital Sea in the background |
+| Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
+
+### The Kolossus finale
+The **Sector 5 Core** hole is a boss fight. The Kolossus stands at the edge of the arena and slams its fist down every 7 s: a red ring shrinks on the floor for 2 s, then the fist lands, and a ball under it is devirtualized. A XANA gate seals the corridor to the core cup. Hit the Kolossus's **glowing ankle** three times with your ball: it kneels, and the gate drops for 15 s (on your screen; everyone has to stun it themselves).
+
+### XANA attacks
+About one hole in three, XANA attacks everyone at once for 20 s, with an alarm and a red vignette:
+- **Rage:** every monster fires twice as fast.
+- **Glitch:** patches of the floor turn to ice or sludge.
+- **Mirror:** the screen flips left to right.
+- **Swarm:** Kankrelats spawn around the leader.
 
 ## Power-ups
 You can carry up to 3. Pick them up from mini Lyoko towers; if your slots are full, the new one is discarded.
+
+**Special moves:** your character's own move is in the gold ★ slot, free once per hole: Ulrich **Super Sprint**, Odd **Laser Arrow**, Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
 The host sets the amount (**Off / Few / Normal / Chaos**). It also scales with the number of players and the size of the hole.
 
 The tower halo tells you the **category**:
@@ -126,7 +146,9 @@ Active effects show as chips with a countdown at the top of the screen.
 | ⚔️ | Super Sprint | Ulrich: next shot 60% faster, and monsters can't touch it |
 | 🌀 | Telekinesis | Yumi: nudge your resting ball up to 1.5 units, for free |
 | 👼 | Angel Wings | Aelita: your next shot glides for 2.5 s over pits, water and gaps |
-| 🛩️ | Overwing | Jérémie's vehicle: your next shot flies straight over everything for 8 units |
+| 🛩️ | Overwing | Vehicle: your ball rides Yumi's Overwing straight over everything for 8 units |
+| 🏍️ | Overbike | Vehicle: Ulrich's Overbike, 40% faster, barging straight through monsters |
+| 🛹 | Overboard | Vehicle: Odd's Overboard hovers for 3.5 s over pits, lava and water, with no friction |
 | 🌟 | Hopper's Light | Franz Hopper cleanses every bad effect on you and shields you for 15 s |
 | 🛡️ | Firewall | The next power-up aimed at you bounces back to its sender |
 | 🔱 | Triplicate | Your next shot splits into three balls, and the best one is kept |
@@ -174,17 +196,26 @@ Active effects show as chips with a countdown at the top of the screen.
 8. **The Network:** firewall gates, data highways, gravity launchers, the Skid docking bay, packet storms and the Hub.
 9. **Fortune Falls Casino:** pachinko, roulette, a slot machine, neon pinball, a dice table and cyberpunk rooftops. Every cup carries its own stroke bonus or penalty.
 
-## Intro and endings
-The game opens with a **XANA alert** on the supercomputer, then:
-1. TRANSFER… SCANNER… VIRTUALIZATION!
-2. The heroes' balls virtualize onto Lyoko.
-3. The title card.
+Plus the finale, **Sector 5 Core**, against the Kolossus.
 
-Click or press any key to skip, or turn the intro off in Settings.
+**Weather** changes with the sector, the same for everyone: sandstorm gusts in the Desert (a strong wind for 5 s), a blizzard crosswind on the Ice, fog banks rolling over the Mountain, embers and ash patches that slow your ball in the Volcano, falling leaves in the Forest, bubble streams in the Digital Sea and data storms in the Network.
+
+**Jérémie** talks you through it from the lab: monsters nearby, low life points, lava, aces, XANA attacks.
+
+## Intro and endings
+When the host starts a match, the intro plays for everyone:
+1. A **XANA alert** on the supercomputer, on the first hole's sector (and a "XANA activates a tower" beat if someone plays XANA).
+2. TRANSFER… SCANNER… VIRTUALIZATION! for each player's character, with their name.
+3. The party's balls virtualize onto the first hole, and the camera swoops to its tower.
+
+The host can skip it for everyone, or turn it off in Settings.
 
 At the end, the winner's ball escorts Aelita to the activated tower. She deactivates it, and a Return to the Past sends everyone to the podium.
 **If XANA wins**, it goes very differently. The tower's shield throws Aelita back, the Kolossus smashes the sector into the Digital Sea, and XANA escapes into the Network.
-Then the awards: Digital Sea Diver, XANA's Favourite Victim, Vaporized, Trigger Happy, Fortune's Fool, and more.
+Then the awards: Digital Sea Diver, XANA's Favourite Victim, Vaporized, Trigger Happy, Fortune's Fool, and more. Every hole also ends with a **Shot of the hole**.
+
+## Stats and achievements
+Your device keeps your stats: holes, aces, towers deactivated, devirtualizations, monsters slashed, longest putt, wins and more. **Achievements** (menu → 🏅) unlock cosmetic **ball trails** (sparkle, rainbow, data, fire, XANA), which other players see too.
 
 ## Your own soundtrack
 The built-in music is a procedural synth, made in code. Under **Settings → Soundtrack** you can load your own audio or video files into five slots:
@@ -214,7 +245,9 @@ Code map:
 - `src/monsters/`: the XANA monsters (`looks.js` models, `attacks.js` guns and mines, `index.js` behaviour).
 - `src/game/intro.js`, `finale.js`, `xanaFinale.js`: the intro and the two endings.
 - `src/core/music.js`, `soundtrack.js`: the procedural music and your own tracks.
-- `src/fx/lyoko.js`: the tower, Aelita and Kolossus models.
+- `src/fx/lyoko.js`: the tower, Aelita and Kolossus models. `towerCup.js`: the tower hologram over each cup and the trip inside. `weather.js`: the weather. `vehicles.js`: the vehicles.
+- `src/holes/extend.js`: the approach lanes that make the holes long, with their secret warps. `boss.js`: the Kolossus hole.
+- `src/game/stats.js`, `src/ui/comms.js`: achievements and trails, and Jérémie's lines.
 
 Debug options:
 - `?hole=N` jumps straight into solo practice on hole N.
@@ -223,5 +256,7 @@ Debug options:
   - **K:** put the ball near the cup.
   - **L:** log the ball's position.
   - `window.__hio(holeIndex)`: brute-forces hole-in-one shots.
+  - `window.__tuneWarp(holeIndex)`: tunes a hole's secret warp (exit spot and speed gain) to about 8 aces in the search grid.
+  - `window.__rampTest()`: flags balls that stop or hover on a ramp.
 
 Pushing to `main` redeploys GitHub Pages. Only the repository owner can push to `main`.

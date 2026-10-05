@@ -21,7 +21,9 @@ export const POWERUPS = {
   sprint:      { name: 'Super Sprint',      icon: '⚔️', kind: 'self',   tier: 2, desc: 'Ulrich: your next shot is 60% faster and monsters can’t touch it.' },
   telekinesis: { name: 'Telekinesis',       icon: '🌀', kind: 'self',   tier: 1, aim: 'point', range: 1.5, desc: 'Yumi: nudge your resting ball up to 1.5 units, for free.' },
   wings:       { name: 'Angel Wings',       icon: '👼', kind: 'self',   tier: 2, desc: 'Aelita: your next shot glides for 2.5 s, over pits, water and gaps.' },
-  overwing:    { name: 'Overwing',          icon: '🛩️', kind: 'self',   tier: 2, desc: 'Jérémie’s vehicle: your next shot flies straight over everything for 8 units, then drops.' },
+  overwing:    { name: 'Overwing',          icon: '🛩️', kind: 'self',   tier: 2, desc: 'Vehicle: your ball rides Yumi’s Overwing and flies straight over everything for 8 units, then drops.' },
+  overbike:    { name: 'Overbike',          icon: '🏍️', kind: 'self',   tier: 2, desc: 'Vehicle: your ball rides Ulrich’s Overbike: 40% faster and it barges straight through monsters.' },
+  overboard:   { name: 'Overboard',         icon: '🛹', kind: 'self',   tier: 2, desc: 'Vehicle: your ball rides Odd’s Overboard, hovering for 3.5 s over pits, lava and water with no friction.' },
   hopper:      { name: 'Hopper’s Light',   icon: '🌟', kind: 'self',   tier: 1, desc: 'Franz Hopper cleanses every bad effect on you and shields you from new ones for 15 s.' },
   firewall:    { name: 'Firewall',          icon: '🛡️', kind: 'self',   tier: 1, desc: 'Shields you until the hole ends: the next power-up aimed at you bounces back to its sender.' },
   triplicate:  { name: 'Triplicate',        icon: '🔱', kind: 'self',   tier: 2, desc: 'Next shot splits into three balls. The best one is kept.' },
@@ -61,6 +63,12 @@ export const POWERUPS = {
 
 export const POWERUP_IDS = Object.keys(POWERUPS);
 
+// Each character's special move: one free use per hole from the ★ slot.
+export const SPECIALS = {
+  ulrich: 'sprint', odd: 'arrow', yumi: 'telekinesis', aelita: 'wings',
+  william: 'zweihander', jeremie: 'scanner', franz: 'hopper', xana: 'tower',
+};
+
 export const CATEGORY_OF = (id) => {
   const k = POWERUPS[id].kind;
   return k === 'self' || k === 'aura' ? 'self' : k === 'others' || k === 'one' ? 'sabotage' : 'chaos';
@@ -70,10 +78,11 @@ export const CATEGORY_COLORS = { self: '#3da5ff', sabotage: '#ff3b4e', chaos: '#
 
 // Relative spawn weights (rarer = more chaotic).
 export const WEIGHTS = {
-  steady: 10, magnet: 6, ghost: 6, chip: 8, returnpast: 6, firewall: 7, triplicate: 5, scanner: 7, unlovaball: 6,
+  steady: 10, magnet: 6, ghost: 6, chip: 8, returnpast: 6, firewall: 7, triplicate: 5, scanner: 4, unlovaball: 6,
   aelita: 6, funsize: 7, supersize: 6, sticky: 7, zany: 7, steal: 6, switch: 4, leash: 6, ad: 5, possession: 4, devirtualize: 2,
-  gas: 6, freeze: 5, stun: 6, guardian: 4, sprint: 6, telekinesis: 7, wings: 5, overwing: 4, hopper: 5,
-  energyfield: 6, arrow: 5, zweihander: 5, tower: 3,
+  // the character moves are rarer as pickups: everyone already gets their own once per hole
+  gas: 6, freeze: 5, stun: 6, guardian: 4, sprint: 3, telekinesis: 4, wings: 3, overwing: 3, overbike: 3, overboard: 3, hopper: 3,
+  energyfield: 6, arrow: 3, zweihander: 3, tower: 2,
   bumper: 7, blackhole: 5, swarm: 5, creativity: 6, stickywalls: 4, wind: 6, tornado: 4, volcano: 4, icerink: 4, tsunami: 3, montapollos: 3,
 };
 

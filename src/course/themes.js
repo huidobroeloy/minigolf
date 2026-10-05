@@ -277,6 +277,14 @@ export const THEMES = {
     wallTex: null, wallColor: '#0b1636', wallTrim: '#3fa9ff', wallEmissive: '#3fa9ff',
     sideColor: '#060c20', particles: 'data', flag: '#3fa9ff',
   },
+  core: {
+    name: 'Sector 5 · Core',
+    sky: ['#12020a', '#4a0a1e'], fog: '#26061a', fogDensity: 0.016,
+    sun: { color: '#ffd8e0', intensity: 1.8, dir: [0.2, 1, 0.3] }, hemi: ['#ffd0dc', '#1a0410', 1.1],
+    floorMat: 's5', floorTex: 's5', floorColor: '#ffe6ea',
+    wallTex: null, wallColor: '#f7eef2', wallTrim: '#ff2a3a', wallEmissive: '#ff1a3a',
+    sideColor: '#d8c6cc', particles: 'cubes', flag: '#ff2a2a',
+  },
   fortune: {
     name: 'Cyberpunk Fortune Falls',
     sky: ['#05010f', '#3a0d5e'], fog: '#1a0630', fogDensity: 0.02,
