@@ -38,6 +38,7 @@ export function canTarget(course, ball, t, { allowResting = false } = {}) {
   if (ball.state !== 'idle' && ball.state !== 'moving') return false;
   if (ball.mods?.monsterProof || ball.frozen) return false;
   if (t - (course.monsterHitAt ?? -99) < HIT_COOLDOWN) return false;
+  if (t < (course.calmUntil ?? -1)) return false; // you activated the tower: XANA's monsters spare you
   if (ball.state === 'idle') {
     if (!allowResting || course.aiming) return false;
     if (t - (course.restAt ?? -99) < REST_GRACE) return false;

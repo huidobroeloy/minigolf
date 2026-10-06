@@ -331,16 +331,17 @@ export class GameClient {
     this.env = this.makeEnv();
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
     this.ui.showHud({ holeNo: m.holeNo, total: m.total, name: def.name, par: def.par, sectorName: SECTOR_NAMES[def.sector] });
+    const prev = this.plan?.[m.holeNo - 1] !== undefined ? HOLES[this.plan[m.holeNo - 1]] : null;
     {
-      const prev = this.plan?.[m.holeNo - 1] !== undefined ? HOLES[this.plan[m.holeNo - 1]] : null;
       setTimeout(() => {
         if (!prev || prev.sector !== def.sector) this.ui.comms.say('courseStart', { sector: SECTOR_NAMES[def.sector] }, { force: true });
         else if (Math.random() < 0.35) this.ui.comms.say('holeStart');
       }, 2600);
     }
-    // your character's special move: one free use per hole
+    // your character's special move: one free use per course (it comes back when the next course starts)
     const sp = SPECIALS[characterByColor(this.me.color)?.id];
-    this.special = sp && !this.playoff ? { id: sp, used: false } : null;
+    const sameCourse = this.special?.id === sp && this.special.sector === def.sector && prev?.sector === def.sector;
+    this.special = sp && !this.playoff ? (sameCourse ? this.special : { id: sp, used: false, sector: def.sector }) : null;
     this.renderInventory();
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
@@ -696,7 +697,7 @@ export class GameClient {
     const opts = this.effects.onShoot();
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
-    if (opts.glide) this.ball.startGlide(2.5);
+    if (opts.glide) this.ball.startGlide(1.8);
     if (opts.fly) this.ball.startFly(8);
     if (opts.hover) this.ball.startGlide(3.5); // Overboard: hovers like the wings, a little longer
     if (opts.triplicate) this.spawnClones(yaw, power * opts.powerMul, opts.chip);
@@ -917,8 +918,9 @@ export class GameClient {
     if (!b || b.state !== 'idle' || !pos) return;
     const p = b.pos;
     const dx = pos[0] - p.x, dz = pos[2] - p.z, d = Math.hypot(dx, dz);
-    const k = d > 1.5 ? 1.5 / d : 1;
+    const k = d > 1 ? 1 / d : 1;
     const x = p.x + dx * k, z = p.z + dz * k;
+    if (this.nearCup(x, z)) return this.ui.toast('🌀 Too close to the cup for Telekinesis');
     const y = this.course.floorYAt(x, z);
     if (y === null) return this.ui.toast('🌀 Telekinesis needs solid ground');
     b.place(new THREE.Vector3(x, y + b.radius + 0.02, z));
@@ -927,6 +929,9 @@ export class GameClient {
     this.ui.toast('🌀 Telekinesis');
     this.sendState(true);
   }
+
+  /** Telekinesis can't drop a ball next to a cup (no free hole-out). */
+  nearCup(x, z) { return this.course.cups.some((cp) => Math.hypot(x - cp.x, z - cp.z) < 1.5); }
 
   // ---------- XANA Possession ----------
   /** I'm XANA: aim from my victim's ball and take their next shot. */
@@ -1083,7 +1088,7 @@ export class GameClient {
   }
 
   useSlot(i) {
-    if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this hole');
+    if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this course');
     const id = this.slotItem(i);
     if (!id || this.phase !== 'hole') return;
     if (this.effects.locked) return this.ui.toast('You can\'t skip this ad 📺');
@@ -1121,7 +1126,9 @@ export class GameClient {
     if (t.id === 'arrow') { const p = this.ball.pos; params = { ...params, from: [p.x, p.y, p.z] }; }
     if (t.id === 'telekinesis') {
       const p = this.ball.pos, q = params.pos;
-      if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.6) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
+      if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.1) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
+      const d = Math.hypot(q[0] - p.x, q[2] - p.z), k = d > 1 ? 1 / d : 1;
+      if (this.nearCup(p.x + (q[0] - p.x) * k, p.z + (q[2] - p.z) * k)) { this.ui.toast('🌀 Too close to the cup for Telekinesis'); return; }
     }
     if (this.slotItem(t.slot) === t.id) {
       this.consumeSlot(t.slot);

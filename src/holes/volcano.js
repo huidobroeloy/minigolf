@@ -68,10 +68,8 @@ export default [
   {
     id: 'volcano-4', name: 'Eruption Ridge', sector: 'volcano', par: 5, time: 170,
     tee: [0, 0, 0], cup: [-4.5, 2.5, 32],
-    hio: 'A secret: the warp pipe in the first corner pops you out below the summit. Hit it hard enough to roll all the way up.',
     parts: [
       { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 10], [-2.5, 10]], open: [2] },
-      { t: 'warp', a: [-1.7, 0, 8.6], b: [-4.5, 2.5, 24.5], dir: [0, 1], speed: 0.5, gain: 0.66, r: 0.38 }, // tuned with __tuneWarp: ~8 aces
       { t: 'ramp', a: [0, 10], b: [0, 18], w: 5, ya: 0, yb: 2.5 },
       { t: 'monster', type: 'boulder', path: rolling(-1.2, 17.5, 10.4, 2.5, 0, 5.5, 0), size: 0.6 },
       { t: 'monster', type: 'boulder', path: rolling(1.2, 17.5, 10.4, 2.5, 0, 5.5, 0.5), size: 0.6 },
@@ -101,14 +99,12 @@ export default [
   {
     id: 'volcano-6', name: 'Obsidian Maze', sector: 'volcano', par: 4, time: 150,
     tee: [-4.5, 0, 0], cup: [4.5, 0, 21.5],
-    hio: 'The warp pipe hidden in the first dead end comes out just short of the cup.',
     parts: [
       { t: 'floor', poly: rect(-6, -1.2, 6, 24) },
       { t: 'wall', pts: [[-6, 7], [3, 7]], h: 0.6, thick: 0.4 },
       { t: 'wall', pts: [[-3, 14], [6, 14]], h: 0.6, thick: 0.4 },
       { t: 'wall', pts: [[0, 7], [0, 10.5]], h: 0.6, thick: 0.4 },
       lava(-6, 8.6, -4, 13.4), lava(-6, 15, -3.6, 17.6), lava(-2, 2.6, 1, 4.4), lava(3, 22.9, 6, 24),
-      { t: 'warp', a: [4.6, 0, 3.4], b: [4.5, 0, 16.2], dir: [0, 1], speed: 4.3 },
       { t: 'monster', type: 'krabe', path: patrol([-2, 10.5], [4, 10.5], 6) },
       { t: 'monster', type: 'kankrelat', path: patrol([-5, 19], [1, 19], 4.5) },
     ],

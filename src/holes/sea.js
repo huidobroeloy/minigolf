@@ -99,7 +99,6 @@ export default [
   {
     id: 'sea-6', name: 'Kongre’s Abyss', sector: 'sea', water: true, par: 5, time: 170,
     tee: [0, 0, 0], cup: [1.8, 0, 41],
-    hio: 'A hidden warp in the first bay’s right corner pops you out on the final deck.',
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 12], [0.6, 12], [-0.6, 12], [-3, 12]], open: [3] },
       // dive tube down into the abyss
@@ -113,7 +112,6 @@ export default [
       { t: 'zone', kind: 'bubble', c: [0, 33], r: 0.9, height: 4.4, lift: 1.8, push: [0, 2.2] },
       { t: 'floor', poly: rect(-3, 34, 3, 44), open: [0], holes: [{ c: [-0.4, 43], r: 0.8 }, { c: [-2.2, 42.6], r: 0.55 }, { c: [2.4, 43.3], r: 0.55 }] },
       { t: 'box', p: [0, -1.5, 34.1], s: [6, 3, 0.2], kind: 'wall', look: '#123a6a' },
-      { t: 'warp', a: [2.3, 0, 10.8], b: [-1.2, 0, 35.8], dir: [0.5, 0.866], speed: 0.5, gain: 4.18, r: 0.4 }, // tuned with __tuneWarp: ~6 aces
       { t: 'monster', type: 'shark', path: orbit([0, 38], 2.2, 9), range: 3.5 },
     ],
   },

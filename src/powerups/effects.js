@@ -244,21 +244,21 @@ export class EffectManager {
     const c = this.client;
     for (const k of NEGATIVE) { delete this.pending[k]; delete this.active[k]; }
     this.leash = null;
-    this.immuneUntil = performance.now() + 15000;
+    this.immuneUntil = performance.now() + 10000;
     c.unfreeze();
     c.endPossessed();
     this.applyBallMods();
     c.ui.flash();
     c.healLP?.(50);
-    c.ui.bigToast('🌟 HOPPER\'S LIGHT', 'cleansed · +50 life points · immune for 15 s', 'good');
+    c.ui.bigToast('🌟 HOPPER\'S LIGHT', 'cleansed · +50 life points · immune for 10 s', 'good');
     sfx.play('hio');
   }
 
-  /** William's Zweihänder: the monster or moving obstacle nearest the point is cut out for 15 s. */
+  /** William's Zweihänder: the monster or moving obstacle nearest the point is cut out for 25 s. */
   slash(fx) {
     const p = fx.params.pos;
     const t = fx.at / 1000;
-    let best = null, bd = 2.5;
+    let best = null, bd = 3.5;
     const consider = (thing, x, z) => { const d = Math.hypot(x - p[0], z - p[2]); if (d < bd) { bd = d; best = thing; } };
     for (const m of this.course.monsters) { const s = m.model?.position; if (s && !m.slashed) consider(m, s.x, s.z); }
     for (const mv of this.course.movers) if (!mv.slashed) consider(mv, mv.cur.x, mv.cur.z);
@@ -271,7 +271,7 @@ export class EffectManager {
     if (mesh) mesh.visible = false;
     const at = mesh ? mesh.position : new THREE.Vector3(p[0], p[1], p[2]);
     for (let i = 0; i < 40; i++) this.particles?.spawn({ pos: [at.x, at.y + 0.4, at.z], vel: [(Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4], color: i % 2 ? '#ffffff' : '#9fe8ff', size: 0.14, life: 0.9, gravity: 4 });
-    this.slashed.push({ thing: best, body, mesh, until: t + 15 });
+    this.slashed.push({ thing: best, body, mesh, until: t + 25 });
     sfx.play('laser');
   }
 
@@ -439,7 +439,7 @@ export class EffectManager {
     const ball = this.client.ball;
     if (!ball) return;
     const e = { ...this.active, ...this.pending };
-    ball.mods.speedMul = (e.zany ? 2.4 : 1) * (e.sprint ? 1.6 : 1) * (e.overbike ? 1.4 : 1) * (e.overboard ? 1.15 : 1);
+    ball.mods.speedMul = (e.zany ? 2.4 : 1) * (e.sprint ? 1.35 : 1) * (e.overbike ? 1.4 : 1) * (e.overboard ? 1.15 : 1);
     const proof = !!(e.sprint || e.overbike);
     if (ball.mods.monsterProof !== proof) ball.setMonsterProof(proof);
     this.setVehicle(e.overwing ? 'overwing' : e.overbike ? 'overbike' : e.overboard ? 'overboard' : null);

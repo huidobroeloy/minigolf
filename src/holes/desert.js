@@ -96,14 +96,12 @@ export default [
   {
     id: 'desert-6', name: 'Mesa Switchbacks', sector: 'desert', par: 5, time: 170,
     tee: [-3, 0, 0], cup: [3, 3, 27.5],
-    hio: 'The sand tunnel by the first ramp drops you on the top mesa. Hit it hard enough to roll to the cup.',
     parts: [
       { t: 'floor', poly: [[-6, -1.2], [6, -1.2], [6, 6], [3, 6], [-6, 6]], open: [2] },
       { t: 'ramp', a: [4.5, 6], b: [4.5, 12], w: 3, ya: 0, yb: 1.5 },
       { t: 'floor', y: 1.5, poly: [[-6, 12], [3, 12], [6, 12], [6, 18], [-3, 18], [-6, 18]], open: [1, 4] },
       { t: 'ramp', a: [-4.5, 18], b: [-4.5, 24], w: 3, ya: 1.5, yb: 3 },
       { t: 'floor', y: 3, poly: [[-6, 24], [-3, 24], [6, 24], [6, 30], [-6, 30]], open: [0] },
-      { t: 'warp', a: [2.4, 0, 4.6], b: [-2.4, 3, 25.2], dir: [1, 0.4], speed: 1.5, color: '#d9a35f' },
       { t: 'cyl', p: [0, 0, 3], r: 0.6, h: 1.4, look: 'sandstone' },
       { t: 'cyl', p: [0.4, 3, 28.7], r: 0.5, h: 1.2, look: 'sandstone' },
       { t: 'zone', kind: 'slow', c: [-1, 15], y: 1.5, r: 1.2, mul: 3 },

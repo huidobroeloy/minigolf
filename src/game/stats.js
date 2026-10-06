@@ -25,7 +25,7 @@ export const ACHIEVEMENTS = [
   { id: 'survivor', icon: '🩹', name: 'Last life point', desc: 'Hole out with 10 LP or less', test: (s) => s.survivor >= 1 },
   { id: 'slayer', icon: '🗡️', name: 'Monster slayer', desc: 'Cut down 10 monsters with the Zweihänder', test: (s) => s.slashed >= 10 },
   { id: 'powerups', icon: '🧪', name: 'Power user', desc: 'Use 100 power-ups', test: (s) => s.powerups >= 100 },
-  { id: 'specials', icon: '★', name: 'Signature move', desc: 'Use your character’s special move 25 times', test: (s) => s.specials >= 25 },
+  { id: 'specials', icon: '★', name: 'Signature move', desc: 'Use your character’s special move 10 times', test: (s) => s.specials >= 10 },
   { id: 'fortune', icon: '🍀', name: 'Lucky streak', desc: 'Win 5 strokes back from Fortune Falls cups', test: (s) => s.fortuneWon >= 5 },
   { id: 'win1', icon: '🏆', name: 'Return to the past', desc: 'Win a match', test: (s) => s.wins >= 1 },
   { id: 'win5', icon: '👑', name: 'Code: Lyoko', desc: 'Win 5 matches', test: (s) => s.wins >= 5 },

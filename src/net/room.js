@@ -72,7 +72,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', mode: 'ffa' }; // mode: ffa | teams | elim
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -205,7 +205,7 @@ export class HostRoom {
         const pk = this.pickups[msg.pid];
         if (!pk || pk.taken) return;
         pk.taken = id;
-        const pu = pickPowerup(pk.cat, this.rankFactor(id));
+        const pu = pickPowerup(pk.cat, this.rankFactor(id), Math.random, this.settings.puSet);
         this.stat(id, 'pickups');
         this.broadcast({ t: 'picked', pid: msg.pid, by: id, pu });
         return;

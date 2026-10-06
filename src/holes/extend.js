@@ -3,20 +3,25 @@ import { pointInPoly } from '../course/geometry.js';
 
 // Longer holes. Every hole keeps its own layout, but now you reach it through a winding approach
 // lane: the new tee is at the far end of a dogleg corridor that joins the old start through its
-// back edge. Each lane carries its sector's hazards and monsters, and hides the hole's secret ace
-// route: a warp pipe near the tee that drops you on the old tee, aimed along the old ace line, at
-// the speed you went in with.
+// back edge. Each lane carries its sector's hazards and monsters. There is no shortcut: you play
+// the whole lane.
 
 // Corridor shapes, as points walking BACK from the old start's back edge (local frame: +z is
-// forward into the hole, +x right). Lengths: short ≈ 23, long ≈ 40.
-const SHAPES = {
-  S: [[0, 0], [0, -5], [8, -5], [8, -15]],
-  U: [[0, 0], [0, -8], [9, -8], [9, -2]],
-  Z: [[0, 0], [0, -4], [-6, -10], [-6, -18]],
-  L: [[0, 0], [0, -11], [-11, -11]],
-  zig: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [5, -23]],
-  long: [[0, 0], [0, -5], [9, -5], [9, -14], [0, -14], [0, -25]],
-  hook: [[0, 0], [0, -6], [-8, -6], [-8, -16], [2, -16], [2, -22]],
+// forward into the hole, +x right). Long lanes ≈ 41–55 (holes up to par 4); the short ones (≈ 22–40,
+// suffix 0) go in front of par-5 holes and are the fallback when a long lane doesn't fit.
+export const SHAPES = {
+  S: [[0, 0], [0, -5], [8, -5], [8, -15], [0, -15], [0, -25]],
+  Z: [[0, 0], [0, -4], [-6, -10], [-6, -20], [2, -28], [2, -36]],
+  U: [[0, 0], [0, -6], [-8, -6], [-8, -14], [0, -14], [0, -22], [8, -22], [8, -14]],
+  L: [[0, 0], [0, -11], [-11, -11], [-11, -22], [-1, -22], [-1, -30]],
+  zig: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [0, -24], [5, -29], [5, -35]],
+  hook: [[0, 0], [0, -6], [-8, -6], [-8, -15], [2, -15], [2, -23], [-5, -23], [-5, -30]],
+  S0: [[0, 0], [0, -5], [8, -5], [8, -15]],
+  U0: [[0, 0], [0, -8], [9, -8], [9, -2]],
+  Z0: [[0, 0], [0, -4], [-6, -10], [-6, -18]],
+  L0: [[0, 0], [0, -11], [-11, -11]],
+  zig0: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [5, -23]],
+  hook0: [[0, 0], [0, -6], [-8, -6], [-8, -16], [2, -16], [2, -22]],
 };
 
 // What each sector puts in its lanes: the floor look comes from the theme; these are the extras.
@@ -77,7 +82,7 @@ function backEdge(def) {
 }
 
 /**
- * Extend a hole with an approach lane. spec: { shape, mirror, extraPar, warp: { dir (deg), at, side } }
+ * Extend a hole with an approach lane. spec: { shape, mirror, extraPar }
  * Returns a new def (the original is untouched), or the original if it can't be extended.
  */
 export function extendHole(def, spec = {}) {
@@ -147,21 +152,6 @@ export function extendHole(def, spec = {}) {
     else parts.push({ t: 'monster', type, path: patrol([cx - nx * r, cz - nz * r], [cx + nx * r, cz + nz * r], type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4), ...(type === 'hornet' ? { aim: 'ball' } : {}) });
     if (flying && type === 'manta') parts[parts.length - 1].size = 0.8;
   }
-
-  // the secret ace route: a warp pipe near the tee onto the old tee, along the old ace line
-  const wsp = spec.warp ?? {};
-  const s0 = segs[0], [mx, mz] = at(s0, wsp.at ?? 0.62), side = wsp.side ?? 1;
-  const nx0 = -s0.d[1], nz0 = s0.d[0];
-  const aceYaw = (wsp.dir !== undefined ? wsp.dir * Math.PI / 180 : def.yaw ?? Math.atan2(def.cup[0] - def.tee[0], def.cup[2] - def.tee[2]));
-  parts.push({
-    // the exit keeps the entry speed (min 0.5), so only a narrow band of shots rolls on into the cup
-    t: 'warp', r: wsp.r ?? 0.26, color: '#ff2a2a', speed: wsp.speed ?? 0.5, gain: wsp.gain ?? 1,
-    // 0.9 off the wall: a ball sliding along the wall can't fall in, only a deliberate shot
-    a: [mx + nx0 * (w / 2 - 0.9) * side, y, mz + nz0 * (w / 2 - 0.9) * side],
-    // either a tuned drop point near the cup (aimed at it), or the old tee along the old ace line
-    b: wsp.exit || [def.tee[0], def.tee[1], def.tee[2]],
-    dir: wsp.dirVec || [Math.sin(aceYaw), Math.cos(aceYaw)],
-  });
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);
   return {

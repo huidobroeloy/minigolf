@@ -289,6 +289,8 @@ export class UI {
           <select id="timeMul" ${isHost ? '' : 'disabled'}>${[[0.75, 'Short (×0.75)'], [1, 'Normal'], [1.5, 'Relaxed (×1.5)'], [2, 'Chill (×2)']].map(([v, n]) => `<option value="${v}" ${Number(st.timeMul) === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Power-ups</label>
           <select id="puLevel" ${isHost ? '' : 'disabled'}>${[['off', 'Off'], ['few', 'Few'], ['normal', 'Normal'], ['chaos', 'Chaos 🌪️']].map(([v, n]) => `<option value="${v}" ${(st.puLevel || 'normal') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <label>Power-up set</label>
+          <select id="puSet" ${isHost ? '' : 'disabled'}>${[['all', 'All power-ups'], ['lyoko', 'Lyoko only 🗼']].map(([v, n]) => `<option value="${v}" ${(st.puSet || 'all') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Mode</label>
           <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['elim', 'Elimination (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
@@ -317,6 +319,7 @@ export class UI {
         course: s.querySelector('#course').value,
         timeMul: Number(s.querySelector('#timeMul').value),
         puLevel: s.querySelector('#puLevel').value,
+        puSet: s.querySelector('#puSet').value,
         mode: s.querySelector('#mode').value,
       });
       s.querySelectorAll('select, input').forEach((i) => i.addEventListener('change', send));
@@ -444,7 +447,7 @@ export class UI {
     });
     if (special) {
       const d = POWERUPS[special.id];
-      slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per hole): ${esc(d.name)}: ${esc(d.desc)}">
+      slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per course): ${esc(d.name)}: ${esc(d.desc)}">
         <kbd>4 ★</kbd><div class="ic">${d.icon}</div><div class="nm">${special.used ? 'Used' : esc(d.name)}</div></div>`);
     }
     this.$('.hud-inventory').innerHTML = slots.join('');
@@ -642,7 +645,7 @@ export class UI {
           <tr><td>W S / ↑ ↓ · mouse wheel</td><td>Tilt · zoom</td></tr>
           <tr><td>Space (hold)</td><td>Charge power, release to putt</td></tr>
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
-          <tr><td>4 / ★</td><td>Your character’s special move (once per hole)</td></tr>
+          <tr><td>4 / ★</td><td>Your character’s special move (once per course)</td></tr>
           <tr><td>C · 🎥 button</td><td>Camera: chase → first person → aerial (aerial: wheel/pinch zoom, right-drag or two fingers to look around)</td></tr>
           <tr><td>Placing power-ups</td><td>Click a spot · drag an arrow or line · right-click / Esc cancels</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
