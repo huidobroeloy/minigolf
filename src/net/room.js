@@ -56,10 +56,9 @@ export function pickupCount(def, players, level) {
   return Math.max(2, Math.min(12, Math.round((2 + 0.8 * players) * size * mul)));
 }
 
-// Running out of time: max(par, strokes) plus 1 per TIMEOUT_UNIT of track still left to the cup
-// (at least 1, at most TIMEOUT_CAP). Shots under par are free and every shot that gets you closer
-// lowers the penalty, so it always pays to keep playing until the clock runs out.
-export const TIMEOUT_UNIT = 6;
+// Running out of time: max(par, strokes) plus a penalty for the share of the track still left to
+// the cup (+TIMEOUT_CAP from the tee, down to +1 next to the cup). Shots under par are free and every
+// shot that gets you closer lowers the penalty, so it always pays to keep playing until the end.
 export const TIMEOUT_CAP = 8;
 
 /** Track left from p ([x, y, z]) to the cup: along the hole's route (lane, old tee, cup) when it has one. */
@@ -85,7 +84,8 @@ export function trackLeft(def, p) {
 export function timeoutScore(def, strokes, pos) {
   const base = Math.max(def.par, strokes);
   if (!pos) return base + TIMEOUT_CAP;
-  return base + Math.min(TIMEOUT_CAP, Math.max(1, Math.ceil(trackLeft(def, pos) / TIMEOUT_UNIT)));
+  const share = trackLeft(def, pos) / Math.max(1, trackLeft(def, def.tee));
+  return base + Math.min(TIMEOUT_CAP, Math.max(1, Math.ceil(TIMEOUT_CAP * share)));
 }
 
 /**
@@ -276,6 +276,9 @@ export class HostRoom {
         this.broadcast(fx);
         return;
       }
+      case 'agentPos':
+        if (p && this.phase === 'hole') this.broadcast({ ...msg, id }, id);
+        return;
       case 'draftPick':
         // only one of the three options this player was offered, once
         if (!p || !p.draft?.includes(msg.pu)) return;

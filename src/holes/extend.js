@@ -24,17 +24,45 @@ export const SHAPES = {
   hook0: [[0, 0], [0, -6], [-8, -6], [-8, -16], [2, -16], [2, -22]],
 };
 
+// Each sector's typical monsters (its lanes use these; holes/monsterRoll.js mixes in guests each match).
+export const ROSTER = {
+  desert: ['kankrelat', 'tarantula'],
+  forest: ['hornet', 'kankrelat', 'blok'],
+  ice: ['krabe', 'blok'],
+  mountain: ['tarantula', 'manta', 'hornet'],
+  sector5: ['creeper', 'manta'],
+  volcano: ['tarantula', 'krabe', 'blok'],
+  sea: ['shark', 'manta'],
+  network: ['manta', 'creeper'],
+};
+
 // What each sector puts in its lanes: the floor look comes from the theme; these are the extras.
 const FLAVOUR = {
-  desert: { shooters: ['kankrelat', 'kankrelat'], hazard: 'sand', prop: 'sandstone' },
-  forest: { shooters: ['hornet', 'kankrelat'], hazard: 'trees', prop: 'tree' },
-  ice: { shooters: ['krabe', 'blok'], hazard: 'snow', prop: 'ice' },
-  mountain: { shooters: ['tarantula', 'manta'], hazard: 'wind', prop: 'rock' },
-  sector5: { shooters: ['creeper', 'manta'], hazard: 'bumpers', prop: 's5' },
-  volcano: { shooters: ['tarantula', 'krabe'], hazard: 'lava', prop: 'rock' },
-  sea: { shooters: ['shark', 'shark'], hazard: 'current', prop: 'neon' },
-  network: { shooters: ['manta', 'creeper'], hazard: 'bumpers', prop: 'neon' },
+  desert: { hazard: 'sand', prop: 'sandstone' },
+  forest: { hazard: 'trees', prop: 'tree' },
+  ice: { hazard: 'snow', prop: 'ice' },
+  mountain: { hazard: 'wind', prop: 'rock' },
+  sector5: { hazard: 'bumpers', prop: 's5' },
+  volcano: { hazard: 'lava', prop: 'rock' },
+  sea: { hazard: 'current', prop: 'neon' },
+  network: { hazard: 'bumpers', prop: 'neon' },
 };
+
+/**
+ * A lane monster of any type on a lane slot: { a, b } its patrol ends across the lane, y the floor,
+ * k its index (phase). The slot is kept on the spec (lane) so the type can be re-rolled each match.
+ */
+export function laneMonster(type, slot) {
+  const { a, b, y, k } = slot;
+  if (type === 'creeper') return { t: 'monster', type, p: [b[0], y, b[1]], period: 4.2, phase: k * 0.37, lane: slot };
+  const spec = {
+    t: 'monster', type, lane: slot,
+    path: patrol(a, b, type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4),
+  };
+  if (type === 'hornet') spec.aim = 'ball';
+  if (type === 'manta') spec.size = 0.8;
+  return spec;
+}
 const SHOOTERS = new Set(['kankrelat', 'hornet', 'blok', 'krabe', 'tarantula', 'creeper', 'manta', 'shark', 'megatank', 'scyphozoa']);
 
 const len = (pts) => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
@@ -169,16 +197,20 @@ export function extendHole(def, spec = {}) {
   const shooters = def.parts.filter((p) => p.t === 'monster' && SHOOTERS.has(p.type)).length;
   const want = Math.max(1, 2 - shooters) + (len(pts) > 30 ? 1 : 0);
   const legs = segs.filter((s) => s.L > 4).sort((a, b) => b.L - a.L);
+  const roster = ROSTER[def.sector] || ROSTER.desert;
   for (let k = 0; k < Math.min(want, legs.length); k++) {
-    const s = legs[k], type = fl.shooters[k % fl.shooters.length];
+    const s = legs[k], type = roster[k % roster.length];
     // not right next to the tee: slide along the leg until it's at least 4.5 away
     let u = k === 0 ? 0.55 : 0.4;
     while (u < 0.9 && Math.hypot(at(s, u)[0] - tee[0], at(s, u)[1] - tee[2]) < 4.5 + w * 0.32) u += 0.05;
     const [cx, cz] = at(s, u), nx = -s.d[1], nz = s.d[0], r = w * 0.32;
-    const flying = type === 'manta' || type === 'hornet';
-    if (type === 'creeper') parts.push({ t: 'monster', type, p: [cx + nx * r, y, cz + nz * r], period: 4.2, phase: k * 0.37 });
-    else parts.push({ t: 'monster', type, path: patrol([cx - nx * r, cz - nz * r], [cx + nx * r, cz + nz * r], type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4), ...(type === 'hornet' ? { aim: 'ball' } : {}) });
-    if (flying && type === 'manta') parts[parts.length - 1].size = 0.8;
+    parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
+  }
+
+  // a dormant Way tower halfway along the longest leg, off to one side (see client.checkWayTowers)
+  if (legs.length) {
+    const s = legs[0], [cx, cz] = at(s, 0.3), side = legs.length % 2 ? 1 : -1;
+    parts.push({ t: 'waytower', p: [cx - s.d[1] * w * 0.28 * side, y, cz + s.d[0] * w * 0.28 * side] });
   }
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);

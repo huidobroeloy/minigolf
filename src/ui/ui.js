@@ -612,11 +612,50 @@ export class UI {
   }
 
   /** Big title card when a new course starts. */
-  courseCard(n, total, name, holes) {
-    const c = el(`<div class="course-card"><div class="cc-n">COURSE ${n} / ${total}</div><div class="cc-name">${esc(name)}</div><div class="cc-s">${holes} holes</div></div>`);
+  /**
+   * A new course: Jérémie's supercomputer screen with a map of Lyoko (drawn in code), the next sector
+   * lit up, and the course's numbers. Tap to skip. info: { n, total, sector, name, holes, par, lp, done, puMode }
+   */
+  sectorMap(info) {
+    // abstract layout: four sectors round Sector 5, the Network above, Volcano below, the Digital Sea
+    // all around, the casino off to the side
+    const spots = {
+      sector5: [200, 165, 26], forest: [110, 95, 30], ice: [290, 95, 30], desert: [110, 235, 30], mountain: [290, 235, 30],
+      network: [200, 40, 20], volcano: [200, 292, 20], fortune: [372, 165, 18], core: [200, 165, 12],
+    };
+    const NAMES = { sector5: 'SECTOR 5', forest: 'FOREST', ice: 'ICE', desert: 'DESERT', mountain: 'MOUNTAIN', network: 'NETWORK', volcano: 'VOLCANO', fortune: 'CASINO', core: 'CORE', sea: 'DIGITAL SEA' };
+    const ring = (key) => {
+      const [x, y, r] = spots[key];
+      const cls = key === info.sector ? 'on' : info.done?.includes(key) ? 'done' : '';
+      return `<g class="sm-node ${cls}"><circle cx="${x}" cy="${y}" r="${r}" /><circle class="inner" cx="${x}" cy="${y}" r="${r * 0.55}" />
+        <text x="${x}" y="${y + r + 13}">${NAMES[key]}${cls === 'done' ? ' ✓' : ''}</text></g>`;
+    };
+    const links = ['forest', 'ice', 'desert', 'mountain', 'network', 'volcano'].map((k) => `<line x1="200" y1="165" x2="${spots[k][0]}" y2="${spots[k][1]}" />`).join('');
+    const sea = info.sector === 'sea' ? 'on' : info.done?.includes('sea') ? 'done' : '';
+    const MODE = { pickups: 'Pickups', draft: 'Draft', mirror: 'Mirror match' };
+    const c = el(`<div class="sector-map">
+      <div class="sm-panel">
+        <div class="sm-head">SUPERCOMPUTER · TRANSFER TO ${esc((NAMES[info.sector] || info.name).toUpperCase())}</div>
+        <svg viewBox="0 0 400 330" class="sm-svg">
+          <ellipse class="sm-sea ${sea}" cx="200" cy="168" rx="194" ry="158" />
+          <text class="sm-sea-t ${sea}" x="52" y="306">${NAMES.sea}${sea === 'done' ? ' ✓' : ''}</text>
+          <g class="sm-links">${links}</g>
+          ${['network', 'forest', 'ice', 'desert', 'mountain', 'volcano', 'fortune', 'sector5'].map(ring).join('')}
+          ${info.sector === 'core' ? ring('core') : ''}
+        </svg>
+        <div class="sm-info">
+          <div class="cc-n">COURSE ${info.n} / ${info.total}</div>
+          <div class="cc-name">${esc(info.name)}</div>
+          <div class="sm-stats"><span>⛳ ${info.holes} holes · par ${info.par}</span><span>❤️ ${Math.round(info.lp)} LP</span><span>🎁 ${MODE[info.puMode] || 'Pickups'}</span></div>
+          <div class="small">tap to skip</div>
+        </div>
+      </div>
+    </div>`);
     this.$('#toasts').appendChild(c);
-    setTimeout(() => c.classList.add('fade'), 2800);
-    setTimeout(() => c.remove(), 3500);
+    this.mapOpen = true;
+    const close = () => { if (!c.isConnected) return; this.mapOpen = false; c.classList.add('fade'); setTimeout(() => c.remove(), 500); };
+    c.addEventListener('pointerdown', close);
+    setTimeout(close, 4000);
   }
 
   banner(title, sub) {
@@ -657,7 +696,7 @@ export class UI {
         </table>
         <h2>Rules</h2>
         <p>Everyone plays at the same time. Lowest total strokes wins. Falling into the Digital Sea costs +1.
-        Run out of time and you score <b>max(par, strokes) + 1 per 6 units of track still left</b> (+1 to +8), so every shot that gets you closer still counts. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
+        Run out of time and you score <b>max(par, strokes) + up to 8</b>: +8 from the tee, down to +1 next to the cup, so every shot that gets you closer still counts. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
         <h2>Power-ups</h2>
         <div class="pu-grid">${POWERUP_IDS.map((id) => `<div><span>${POWERUPS[id].icon}</span><b>${esc(POWERUPS[id].name)}</b> ${esc(POWERUPS[id].desc)}</div>`).join('')}</div>
         <button class="btn" id="closeHelp">Close</button>

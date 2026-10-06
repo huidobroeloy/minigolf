@@ -275,9 +275,23 @@ export class EffectManager {
     sfx.play('laser');
   }
 
+  /** XANA's Agent: the player who used it drives monster fx.params.i for 12 s (see client.steerAgent). */
+  takeOver(fx) {
+    const m = this.course.monsters[fx.params.i];
+    if (!m || m.slashed) return;
+    const t = fx.at / 1000;
+    const s = m.at(t);
+    m.agent = { by: fx.from, until: t + 12, pos: { x: s.x, y: s.y, z: s.z, ry: s.ry || 0 }, target: null };
+    const at = m.model.position;
+    for (let i = 0; i < 30; i++) this.particles?.spawn({ pos: [at.x, at.y + 0.5, at.z], vel: [(Math.random() - 0.5) * 3, Math.random() * 3, (Math.random() - 0.5) * 3], color: i % 2 ? '#ff2a2a' : '#200000', size: 0.14, life: 0.8, gravity: 2 });
+    sfx.play('debuff');
+    if (fx.from === this.client.myId) this.client.startAgent(fx.params.i, m);
+  }
+
   place(fx) {
     if (fx.pu === 'creativity') return this.create(fx);
     if (fx.pu === 'zweihander') return this.slash(fx);
+    if (fx.pu === 'agent') return this.takeOver(fx);
     const p = fx.params.pos;
     if (!p) return;
     if (fx.pu === 'swarm') return this.spawnSwarm(fx);

@@ -129,7 +129,8 @@ export class Gun {
     const from = this.base.muzzle(t);
     let to = null, ambient = false;
     const bp = ball?.pos;
-    const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4;
+    const driven = this.m.agent && t < this.m.agent.until;
+    const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4 && !(driven && this.m.agent.by === course.myId);
     // a resting ball is only targeted half the time (it can't dodge); a rolling one always
     if (inRange && canTarget(course, ball, t, { allowResting: cfg.allowResting }) && (ball.state === 'moving' || this.rng.next() < 0.5)) {
       const lead = ball.state === 'moving' ? cfg.charge * 0.5 : 0;
@@ -141,7 +142,7 @@ export class Gun {
       ambient = true;
       if (!to) { this.nextT = t + 0.6; return; }
     }
-    const enraged = t < (course.enrageUntil ?? -1);
+    const enraged = t < (course.enrageUntil ?? -1) || driven;
     this.nextT = t + this.rng.range(this.base.every[0], this.base.every[1]) * (enraged ? 0.5 : 1);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.6, 28), new THREE.MeshBasicMaterial({ color: PROJ_COLORS[cfg.kind] || '#ff2a2a', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
