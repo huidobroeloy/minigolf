@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HOLES, SECTOR_NAMES } from '../holes/index.js';
+import { HOLES, SECTOR_NAMES, worldCupLength } from '../holes/index.js';
 import { Physics, FIXED_DT } from '../physics/world.js';
 import { Ball, BALL_R, aimWobble } from '../physics/ball.js';
 import { buildCourse } from '../course/builder.js';
@@ -31,6 +31,9 @@ export const EMOTES = ['😂', '😡', '👏', '💀'];
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
 
+// the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
+const WEAK_SPEED = 6;
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian']);
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -252,7 +255,7 @@ export class GameClient {
         // in Teams every member of the winning side gets the win
         const won = m.teams ? !!m.teams[0]?.members.includes(this.myId) : winners[0]?.id === this.myId;
         if (won) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
-        if ((m.plan?.length ?? 0) >= 54) stats.add('worldcups');
+        if ((m.plan?.length ?? 0) >= worldCupLength()) stats.add('worldcups');
         // XANA won: the catastrophic ending instead of the tower being saved
         const xanaWins = m.teams ? m.teams[0]?.team === 'xana' : characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
@@ -336,8 +339,6 @@ export class GameClient {
     };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
-    this.wayPoint = null;
-    this.wayHealed = false;
     this.strokes = 0;
     // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
     this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
@@ -833,7 +834,7 @@ export class GameClient {
   onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
     if (['venom', 'freeze', 'xanafy', 'shark'].includes(kind)) this.ui.comms.say(kind);
-    if (kind !== 'vaporize') this.damageLP(dmg);
+    if (kind !== 'vaporize' && dmg > 0) this.damageLP(dmg);
     switch (kind) {
       case 'venom':
         e.pending.venom = true; e.applyBallMods();
@@ -852,6 +853,20 @@ export class GameClient {
         this.lp = 0;
         this.showLP(0, 100);
         this.vaporize();
+        break;
+      case 'guardian':
+        this.freezeBall(4, 'guardian', 'a Guardian');
+        break;
+      case 'ink':
+        this.ui.toast('🦑 Kalamar ink! You can barely see, and it\'s thick');
+        break;
+      case 'ninja':
+        this.ui.toast('🥷 Slashed by a Ninja!');
+        sfx.play('wall', 4);
+        break;
+      case 'mine':
+        this.ui.toast('💣 A Manta mine went off!');
+        this.cam.shake = Math.max(this.cam.shake, 0.6);
         break;
       case 'shark':
         this.ui.toast('🦈 Rammed by a Shark!');
@@ -879,23 +894,23 @@ export class GameClient {
   }
 
   /**
-   * Way towers: roll through a dormant (red) one to deactivate it. It turns white, heals +20 LP (once
-   * per hole) and becomes where you're re-virtualized after a devirtualization. Your towers only.
+   * The XANA eye is every monster's weak point: ram one with a fast ball (over WEAK_SPEED) and it's
+   * devirtualized for 20 s (+5 LP). Your client only, like the monsters' attacks on your ball.
    */
-  checkWayTowers(ball) {
-    for (const w of this.course.wayTowers || []) {
-      if (w.active || Math.hypot(ball.pos.x - w.x, ball.pos.z - w.z) > w.r || Math.abs(ball.pos.y - w.y) > 1) continue;
-      w.active = true;
-      w.model.userData.setColor('#ffffff');
-      this.wayPoint = new THREE.Vector3(w.x, w.y, w.z);
-      for (let i = 0; i < 40; i++) {
-        const a = Math.random() * Math.PI * 2;
-        this.effects.particles?.spawn({ pos: [w.x, w.y + 0.6 + Math.random(), w.z], vel: [Math.cos(a) * 2.2, 1 + Math.random() * 2, Math.sin(a) * 2.2], color: i % 2 ? '#ffffff' : '#bfe6ff', size: 0.12, life: 0.9, gravity: 2 });
-      }
-      sfx.play('teleport');
-      if (!this.wayHealed) { this.wayHealed = true; this.healLP(20); }
-      this.ui.bigToast('🗼 WAY TOWER DEACTIVATED', '+20 LP · you re-virtualize here if devirtualized', 'good');
-      this.stat('waytowers');
+  checkWeakPoints(ball) {
+    if (ball.state !== 'moving' || ball.mods.ghost) return;
+    const v = ball.vel;
+    if (Math.hypot(v.x, v.z) < WEAK_SPEED) return;
+    const t = this.course.time ?? 0;
+    for (const m of this.course.monsters) {
+      if (m.slashed || !m.model?.visible || WEAK_PROOF.has(m.spec.type)) continue;
+      const p = m.model.position;
+      if (Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) > 0.95 + ball.radius || Math.abs(ball.pos.y - p.y) > 1.4) continue;
+      this.effects.cutOut(m, t, 20, '#ff2a2a');
+      this.healLP(5);
+      sfx.play('jackpot');
+      this.ui.toast(`🎯 Right in the eye! ${m.spec.type[0].toUpperCase() + m.spec.type.slice(1)} devirtualized · +5 LP`);
+      stats.add('slashed');
     }
   }
 
@@ -937,9 +952,7 @@ export class GameClient {
     setTimeout(() => {
       if (this.ball !== b || fid !== this.fallId) return;
       this.falling = false;
-      // re-virtualized at your Way tower if you deactivated one, else at the last safe spot
-      if (this.wayPoint) b.place(this.wayPoint.clone().add(new THREE.Vector3(0.45, b.radius + 0.05, 0)));
-      else b.respawnAtSafe();
+      b.respawnAtSafe();
       this.lp = 100;
       this.showLP(100);
       this.cam.snapTo(b.mesh.position);
@@ -1658,7 +1671,7 @@ export class GameClient {
     this.stepClones(dt, 'post');
     if (ball.state === 'idle' || ball.state === 'moving') {
       for (const pid of this.pickups.touching(ball.pos, ball.radius)) this.link.send({ t: 'claim', pid });
-      this.checkWayTowers(ball);
+      this.checkWeakPoints(ball);
       if (ball.teleportCooldown > 0) ball.teleportCooldown -= dt;
       const dest = this.course.checkTeleport(ball, { pick: (a) => a[Math.floor(Math.random() * a.length)] });
       if (dest) {

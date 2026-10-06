@@ -263,16 +263,21 @@ export class EffectManager {
     for (const m of this.course.monsters) { const s = m.model?.position; if (s && !m.slashed) consider(m, s.x, s.z); }
     for (const mv of this.course.movers) if (!mv.slashed) consider(mv, mv.cur.x, mv.cur.z);
     if (!best) { this.client.ui.toast('🗡️ The Zweihänder hit nothing'); return; }
-    best.slashed = true;
     if (best.spec) stats.add('slashed'); // a monster (not a moving platform)
-    const body = best.body;
-    if (body) body.setEnabled(false);
-    const mesh = best.model || best.mesh;
-    if (mesh) mesh.visible = false;
-    const at = mesh ? mesh.position : new THREE.Vector3(p[0], p[1], p[2]);
-    for (let i = 0; i < 40; i++) this.particles?.spawn({ pos: [at.x, at.y + 0.4, at.z], vel: [(Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4], color: i % 2 ? '#ffffff' : '#9fe8ff', size: 0.14, life: 0.9, gravity: 4 });
-    this.slashed.push({ thing: best, body, mesh, until: t + 25 });
+    this.cutOut(best, t, 25);
     sfx.play('laser');
+  }
+
+  /** Take a monster or moving obstacle out of the course for `secs` (Zweihänder, a hit on the XANA eye). */
+  cutOut(thing, t, secs, color = '#9fe8ff') {
+    thing.slashed = true;
+    const body = thing.body;
+    if (body) body.setEnabled(false);
+    const mesh = thing.model || thing.mesh;
+    if (mesh) mesh.visible = false;
+    const at = mesh ? mesh.position : thing.cur;
+    if (at) for (let i = 0; i < 40; i++) this.particles?.spawn({ pos: [at.x, at.y + 0.4, at.z], vel: [(Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4], color: i % 2 ? '#ffffff' : color, size: 0.14, life: 0.9, gravity: 4 });
+    this.slashed.push({ thing, body, mesh, until: t + secs });
   }
 
   /** XANA's Agent: the player who used it drives monster fx.params.i for 12 s (see client.steerAgent). */
@@ -560,7 +565,7 @@ export class EffectManager {
 
   /** Physics-rate update: expire hazards, move swarms, expire creations. */
   update(t) {
-    // Zweihänder cuts heal after 15 s
+    // monsters cut out (Zweihänder, a hit on the XANA eye) come back when their time is up
     for (let i = this.slashed.length - 1; i >= 0; i--) {
       const s = this.slashed[i];
       if (t < s.until) continue;

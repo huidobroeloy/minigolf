@@ -621,9 +621,9 @@ export class UI {
     // all around, the casino off to the side
     const spots = {
       sector5: [200, 165, 26], forest: [110, 95, 30], ice: [290, 95, 30], desert: [110, 235, 30], mountain: [290, 235, 30],
-      network: [200, 40, 20], volcano: [200, 292, 20], fortune: [372, 165, 18], core: [200, 165, 12],
+      network: [200, 40, 20], volcano: [200, 292, 20], fortune: [372, 165, 18], cortex: [28, 165, 18], core: [200, 165, 12],
     };
-    const NAMES = { sector5: 'SECTOR 5', forest: 'FOREST', ice: 'ICE', desert: 'DESERT', mountain: 'MOUNTAIN', network: 'NETWORK', volcano: 'VOLCANO', fortune: 'CASINO', core: 'CORE', sea: 'DIGITAL SEA' };
+    const NAMES = { sector5: 'SECTOR 5', forest: 'FOREST', ice: 'ICE', desert: 'DESERT', mountain: 'MOUNTAIN', network: 'NETWORK', volcano: 'VOLCANO', fortune: 'CASINO', cortex: 'CORTEX', core: 'CORE', sea: 'DIGITAL SEA' };
     const ring = (key) => {
       const [x, y, r] = spots[key];
       const cls = key === info.sector ? 'on' : info.done?.includes(key) ? 'done' : '';
@@ -640,7 +640,7 @@ export class UI {
           <ellipse class="sm-sea ${sea}" cx="200" cy="168" rx="194" ry="158" />
           <text class="sm-sea-t ${sea}" x="52" y="306">${NAMES.sea}${sea === 'done' ? ' ✓' : ''}</text>
           <g class="sm-links">${links}</g>
-          ${['network', 'forest', 'ice', 'desert', 'mountain', 'volcano', 'fortune', 'sector5'].map(ring).join('')}
+          ${['network', 'forest', 'ice', 'desert', 'mountain', 'volcano', 'fortune', 'cortex', 'sector5'].map(ring).join('')}
           ${info.sector === 'core' ? ring('core') : ''}
         </svg>
         <div class="sm-info">

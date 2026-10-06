@@ -29,7 +29,7 @@ export const ACHIEVEMENTS = [
   { id: 'fortune', icon: '🍀', name: 'Lucky streak', desc: 'Win 5 strokes back from Fortune Falls cups', test: (s) => s.fortuneWon >= 5 },
   { id: 'win1', icon: '🏆', name: 'Return to the past', desc: 'Win a match', test: (s) => s.wins >= 1 },
   { id: 'win5', icon: '👑', name: 'Code: Lyoko', desc: 'Win 5 matches', test: (s) => s.wins >= 5 },
-  { id: 'worldcup', icon: '🌍', name: 'World Cup', desc: 'Finish a full 54-hole World Cup', test: (s) => s.worldcups >= 1 },
+  { id: 'worldcup', icon: '🌍', name: 'World Cup', desc: 'Finish a full World Cup', test: (s) => s.worldcups >= 1 },
   { id: 'xana', icon: '👁️', name: 'XANA wins', desc: 'Win a match as XANA', test: (s) => s.xanaWins >= 1, trail: 'xana' },
 ];
 

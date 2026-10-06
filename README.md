@@ -1,7 +1,7 @@
 # Lyoko Minigolf
 
 A browser minigolf party game for friends, inspired by Putt Party, with jokes and power-ups.
-It's a **Lyoko World Cup**: 9 courses of 6 holes (54 in all) across Code Lyoko's sectors, the Digital Sea and the Network, then a boss fight against the **Kolossus** at the Sector 5 Core. XANA's monsters shoot at you all the way.
+It's a **Lyoko World Cup**: 9 courses of 6 holes (54 in all) across Code Lyoko's sectors, the Digital Sea, the Network and the Cortex, then a boss fight against the **Kolossus** at the Sector 5 Core. XANA's monsters shoot at you all the way.
 Everyone plays at the same time, and there's no ball-to-ball contact.
 
 **Play:** https://huidobroeloy.github.io/minigolf/
@@ -24,6 +24,7 @@ For friends behind strict networks, the game uses PeerJS's free relay. For more 
 ## Formats
 - **World Cup:** all 9 courses, 6 holes each, then the Kolossus finale (55 holes). The courses come in a random order, and you play all 6 holes of a course before moving on.
 - **Cup of N:** the host picks 1–9 courses, still in random order.
+- **🎰 Feeling Lucky:** the Fortune Falls Casino on its own (6 holes of pure luck). The casino isn't part of the World Cup or the random cups.
 - **Single course** or **single hole**, for practice. The boss hole can be played on its own too.
 
 The host also picks a **mode**:
@@ -73,8 +74,7 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
-- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot (or your Way tower) with full LP.
-- **Way towers:** each lane has a dormant red tower. Roll through it to deactivate it: +20 LP, and it becomes where you come back after a devirtualization.
+- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
 - The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
 - Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 1 to 8**, depending on how much of the track you still had left: keep playing until the end, every shot closer counts.
@@ -88,20 +88,24 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 
 ## XANA's monsters
 Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
+**The XANA eye is their weak point:** ram a monster with a fast ball and it's devirtualized for 20 s (+5 LP). Not the Kolossus, Kongre or Guardians.
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
 | Monster | What it does |
 |---|---|
-| Kankrelat | Short laser |
-| Hornet | Laser, charged laser, or a poison spit that leaves a venom puddle (weaker, shakier next shot) |
+| Kankrelat | Weak lasers, often |
+| Hornet | Laser, charged laser, a dive-strafe, or an acid spit that leaves a puddle that slows you and envenoms your next shot |
 | Blok | Laser, rapid fire, a fire ring, or an ice beam that freezes your ball |
-| Krabe | Laser or charged laser; two Krabes together fire the mixed laser, which vaporizes |
-| Megatank | Opens up and fires its flat blade of light along a line; it **vaporizes** your ball (+1), and so does being run over |
-| Tarantula | Rapid double-laser bursts |
+| Krabe | Laser or charged laser; two Krabes together fire the combined beam (60 LP) |
+| Megatank | Opens up and fires its flat blade of light along a line: it **vaporizes** your ball (+1). Being run over costs 50 LP |
+| Tarantula | Rears up and fires rapid volleys that lead your ball |
 | Creeper | Pops out of the floor and fires |
-| Manta | Drops mines that vaporize a ball rolling into them |
+| Manta | Laser strafes, and the odd mine: 30 LP and a blast that throws your ball |
 | Scyphozoa | Grabs your ball and XANA-fies your next shot (inverted controls) |
-| Shark | Cruises its lane, then rams you |
+| Shark | Cruises its lane, rams you, and fires slow torpedoes that follow you |
+| Kalamar | Digital Sea: lasers, and ink clouds that hide the track and slow you down |
+| Ninja | The Cortex: dashes at your ball and slashes it with its sword, or fires from its palm |
+| Guardian | A drifting prison sphere: roll into it and you're trapped for 4 s |
 | Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane |
 | Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
 
@@ -192,7 +196,7 @@ Active effects show as chips with a countdown at the top of the screen.
 | 🐔 | Montapollos | A giant chicken runs around shoving balls |
 | 👾 | XANA's Agent | Take over a monster for 12 s and steer it (WASD/arrows or drag): it fires twice as often at everyone else |
 
-## The 9 courses
+## The courses
 1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks.
 2. **Forest Sector:** Hornets, log ramps, a turntable Blok, a data-stream waterfall, a treehouse and a hollow-log shortcut.
 3. **Ice Sector:** almost frictionless floors, a glass bobsled run, crevasses, thin ice and the **Kolossus** in the distance.
@@ -201,7 +205,8 @@ Active effects show as chips with a countdown at the top of the screen.
 6. **Volcano Replika:** lava rivers with basalt rafts, magma geysers, crumbling basalt, the Replika core and an obsidian maze.
 7. **The Digital Sea:** underwater floaty physics, glass tubes and Mario-style warp pipes, currents, bubble lifts, Sharks and Kongre.
 8. **The Network:** firewall gates, data highways, gravity launchers, the Skid docking bay, packet storms and the Hub.
-9. **Fortune Falls Casino:** pachinko, roulette, a slot machine, neon pinball, a dice table and cyberpunk rooftops. Every cup carries its own stroke bonus or penalty.
+9. **The Cortex:** XANA's world in its sphere: blocks that slide across the lane, a bridge that falls away, a data current, rising ground, a Guardian field and the Core itself. Ninjas guard it.
+10. **Fortune Falls Casino** (Feeling Lucky only): pachinko, roulette, a slot machine, neon pinball, a dice table and cyberpunk rooftops. Every cup carries its own stroke bonus or penalty.
 
 Plus the finale, **Sector 5 Core**, against the Kolossus.
 

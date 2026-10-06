@@ -7,6 +7,7 @@ import fortune from './fortune.js';
 import volcano from './volcano.js';
 import sea from './sea.js';
 import network from './network.js';
+import cortex from './cortex.js';
 import { extendHole } from './extend.js';
 import boss from './boss.js';
 
@@ -52,6 +53,7 @@ export const COURSES = [
   { key: 'volcano', name: 'Volcano Replika', holes: lengthen(volcano) },
   { key: 'sea', name: 'The Digital Sea', holes: lengthen(sea) },
   { key: 'network', name: 'The Network', holes: lengthen(network) },
+  { key: 'cortex', name: 'The Cortex', holes: lengthen(cortex) },
   { key: 'fortune', name: 'Fortune Falls Casino', holes: fortune },
 ].filter((c) => c.holes.length);
 
@@ -66,20 +68,28 @@ export const BOSS_INDEX = HOLES.length - 1;
 /** Global hole indices of a course, in play order. */
 export const courseHoles = (key) => HOLES.map((h, i) => [h, i]).filter(([h]) => h.sector === key).map(([, i]) => i);
 
+// Fortune Falls Casino is luck by design: it only plays in its own format, Feeling Lucky
+export const LUCKY = 'fortune';
+
+/** Holes in a World Cup: every course except the casino, then the Kolossus. */
+export const worldCupLength = () => COURSES.filter((c) => c.key !== LUCKY).reduce((a, c) => a + c.holes.length, 0) + 1;
+
 /**
  * Turn a match format into a list of hole indices:
- *   worldcup      every course, shuffled
- *   cupN          N random courses
+ *   worldcup      every course (not the casino), shuffled
+ *   cupN          N random courses (not the casino)
+ *   lucky         Feeling Lucky: the Fortune Falls Casino
  *   course:KEY    one course
  *   hole:N        one hole
  */
 export function buildPlan(format, rand = Math.random) {
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const keys = COURSES.map((c) => c.key);
+  const keys = COURSES.map((c) => c.key).filter((k) => k !== LUCKY);
   const f = String(format || 'cup3');
   if (f.startsWith('hole:')) return [Number(f.slice(5))];
+  if (f === 'lucky') return courseHoles(LUCKY);
   if (f.startsWith('course:')) { const h = courseHoles(f.slice(7)); if (h.length) return h; }
-  if (keys.includes(f)) return courseHoles(f); // old-style sector key
+  if (keys.includes(f) || f === LUCKY) return courseHoles(f); // old-style sector key
   let order = shuffle([...keys]);
   if (f.startsWith('cup')) order = order.slice(0, Math.max(1, Math.min(keys.length, Number(f.slice(3)) || 3)));
   const plan = order.flatMap(courseHoles);
@@ -89,13 +99,15 @@ export function buildPlan(format, rand = Math.random) {
 
 /** The format choices offered in the lobby and the menu. */
 export function formatOptions() {
-  const total = HOLES.length;
-  const per = Math.round((total - 1) / COURSES.length);
-  const cups = [2, 3, 4, 6].filter((n) => n < COURSES.length);
+  const main = COURSES.filter((c) => c.key !== LUCKY);
+  const lucky = COURSES.find((c) => c.key === LUCKY);
+  const per = Math.round((worldCupLength() - 1) / main.length);
+  const cups = [2, 3, 4, 6].filter((n) => n < main.length);
   return [
-    ['worldcup', `🏆 World Cup · all ${COURSES.length} courses + the Kolossus (${total} holes)`],
+    ['worldcup', `🏆 World Cup · all ${main.length} courses + the Kolossus (${worldCupLength()} holes)`],
     ...cups.map((n) => [`cup${n}`, `Cup · ${n} random courses (~${n * per} holes)`]),
-    ...COURSES.map((c) => [`course:${c.key}`, `${c.name} (${c.holes.length} holes)`]),
+    ...(lucky ? [['lucky', `🎰 Feeling Lucky · ${lucky.name} (${lucky.holes.length} holes)`]] : []),
+    ...main.map((c) => [`course:${c.key}`, `${c.name} (${c.holes.length} holes)`]),
     [`hole:${BOSS_INDEX}`, '🗿 Boss · the Kolossus at the Sector 5 Core (1 hole)'],
   ];
 }

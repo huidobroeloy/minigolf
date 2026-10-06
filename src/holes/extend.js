@@ -32,7 +32,8 @@ export const ROSTER = {
   mountain: ['tarantula', 'manta', 'hornet'],
   sector5: ['creeper', 'manta'],
   volcano: ['tarantula', 'krabe', 'blok'],
-  sea: ['shark', 'manta'],
+  sea: ['shark', 'manta', 'kalamar'],
+  cortex: ['ninja', 'krabe', 'tarantula', 'manta'],
   network: ['manta', 'creeper'],
 };
 
@@ -205,12 +206,6 @@ export function extendHole(def, spec = {}) {
     while (u < 0.9 && Math.hypot(at(s, u)[0] - tee[0], at(s, u)[1] - tee[2]) < 4.5 + w * 0.32) u += 0.05;
     const [cx, cz] = at(s, u), nx = -s.d[1], nz = s.d[0], r = w * 0.32;
     parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
-  }
-
-  // a dormant Way tower halfway along the longest leg, off to one side (see client.checkWayTowers)
-  if (legs.length) {
-    const s = legs[0], [cx, cz] = at(s, 0.3), side = legs.length % 2 ? 1 : -1;
-    parts.push({ t: 'waytower', p: [cx - s.d[1] * w * 0.28 * side, y, cz + s.d[0] * w * 0.28 * side] });
   }
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);

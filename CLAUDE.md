@@ -82,20 +82,21 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Parts: `warp` (exit speed is max(entry, `speed`)), `tube` (glass duct), `bowl` (cone ring). `def.water` gives floaty air.
   - Extra finishing cups: `cups: [[x,y,z],…]`. Use `course.nearestCup(p)` and `ball.sinkCup` instead of `course.cup` when the cup that was hit matters.
   - Courses (`COURSES` in `holes/index.js`): Desert, Forest, Ice, Mountain, Sector 5, Volcano Replika, Digital Sea,
-    Network and Fortune Falls Casino, 6 holes each (54). `buildPlan(format)` keeps each course together, in random course order.
-    `HOLES` ends with the Kolossus boss (`holes/boss.js`, sector `core`, `BOSS_INDEX`): the World Cup appends it (55 holes).
+    Network, the Cortex (`holes/cortex.js`) and Fortune Falls Casino, 6 holes each (60). `buildPlan(format)` keeps each
+    course together, in random course order. **Fortune Falls (`LUCKY`) is not in the World Cup or the random cups**: it
+    only plays in the `lucky` format ("Feeling Lucky"). `HOLES` ends with the Kolossus boss (`holes/boss.js`, sector
+    `core`, `BOSS_INDEX`): the World Cup is the 9 other courses + the boss (`worldCupLength()`, 55 holes).
   - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`): every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
     long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
     +1 par, +30 s). If a lane would cross the hole, the next shape (or mirror) that fits is used, falling back to the
     short shapes with a `[lanes]` console warning. forest-3 (round floor) has no lane. `APPROACH` takes per-hole
     `{ shape, mirror }` overrides. Lanes have **no warps**: the only warps left are sea-3's green pipe maze, which is
-    the hole itself (every exit ≥6 from the cup). Each lane has a **Way tower** (`waytower` part, about 30% along
-    the longest leg): rolling through it turns it white, heals +20 LP once per hole and becomes where you
-    re-virtualize after a devirtualization (`client.checkWayTowers`, `wayPoint`). Per client, reset every hole.
+    the hole itself (every exit ≥6 from the cup). (Way towers were tried and removed at the owner's request.)
   - **Monster rosters** (`ROSTER` in `extend.js`): each sector's typical lane monsters. `rollMonsters(def, seed)`
     (`holes/monsterRoll.js`) re-rolls lane monsters each match (`lane` slot on the spec, `laneMonster`), ~30% guests
-    from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Seeded from the host's hole
+    from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Ninjas only appear in the Cortex,
+    Kalamars and Sharks only in the Digital Sea. Seeded from the host's hole
     seed, so every client builds the same monsters in the same order; the client loads `rollMonsters(HOLES[i], seed)`.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
@@ -132,7 +133,14 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
 - **Sector map:** `ui.sectorMap` replaces the course card at each new course (SVG drawn in code, tap to skip).
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
-  Never let a monster fire at a ball whose owner is aiming.
+  Never let a monster fire at a ball whose owner is aiming. Show-faithful kits: Kankrelat weak frequent laser; Hornet
+  laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
+  two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens
+  for the blade beam (the only devirtualizing attack left besides grabs/fists), running a ball over costs 50; Manta laser
+  strafes and mines (30 LP + blast, every 12–18 s, max 2 live); Shark laser, ram and slow homing torpedoes; Ninja
+  (Cortex) dash + sword slash (25) and palm laser; Kalamar (Sea) laser and ink clouds that blind and slow; Guardian a
+  drifting prison sphere (4 s trap). **XANA-eye weak point:** a ball faster than `WEAK_SPEED` (6) hitting a monster
+  devirtualizes it for 20 s (+5 LP) via `effects.cutOut` (client.js `checkWeakPoints`, not bosses/Kongre/Guardians).
 - **Music** (`src/core/music.js` + `soundtrack.js`): a slot (intro, menu, levels, finale, xana) with a loaded file plays it;
   otherwise the procedural style plays.
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.

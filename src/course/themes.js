@@ -277,6 +277,14 @@ export const THEMES = {
     wallTex: null, wallColor: '#0b1636', wallTrim: '#3fa9ff', wallEmissive: '#3fa9ff',
     sideColor: '#060c20', particles: 'data', flag: '#3fa9ff',
   },
+  cortex: {
+    name: 'The Cortex',
+    sky: ['#04020c', '#24104e'], fog: '#120830', fogDensity: 0.017,
+    sun: { color: '#e6dcff', intensity: 1.7, dir: [0.2, 1, 0.3] }, hemi: ['#d8ccff', '#0a0418', 1.15],
+    floorMat: 's5', floorTex: 's5', floorColor: '#e9e4ff',
+    wallTex: null, wallColor: '#1a1030', wallTrim: '#9a6bff', wallEmissive: '#7a4bff',
+    sideColor: '#2a1a50', particles: 'cubes', flag: '#9a6bff',
+  },
   core: {
     name: 'Sector 5 · Core',
     sky: ['#12020a', '#4a0a1e'], fog: '#26061a', fogDensity: 0.016,

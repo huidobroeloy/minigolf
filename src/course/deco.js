@@ -210,6 +210,24 @@ export function decorate(sector, course, group, rng) {
     ambient = (dt) => {
       if (rand() < 0.8) em.spawn({ pos: [area.x - area.w / 2, minY + rand() * 10 - 3, area.z + (rand() - 0.5) * area.d], vel: [18 + rand() * 10, 0, 0], color: rand() < 0.5 ? '#3fa9ff' : '#ffffff', size: 0.1, life: area.w / 18 });
     };
+  } else if (sector === 'cortex') {
+    // the Cortex: blocks of terrain drifting up and down in the void, inside a great sphere
+    const blockMat = std('#e9e4ff', { emissive: '#7a4bff', emissiveIntensity: 0.15, roughness: 0.4 });
+    for (const p of ringPoints(course, rng, 22, 4, 24)) {
+      const s = rng.range(1.2, 3.5);
+      const m = add(new THREE.Mesh(new THREE.BoxGeometry(s, s * rng.range(0.4, 1.6), s), blockMat));
+      m.position.set(p.x, minY + rng.range(-10, 4), p.z);
+      const edges = add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: '#9a6bff' })));
+      edges.position.copy(m.position);
+      const spd = rng.range(0.3, 0.9), ph = rng.range(0, 6), amp = rng.range(0.004, 0.012);
+      anim.push((t) => { m.position.y += Math.sin(t * spd + ph) * amp; edges.position.copy(m.position); });
+    }
+    const shell = add(new THREE.Mesh(new THREE.SphereGeometry(90, 32, 20), new THREE.MeshBasicMaterial({ color: '#7a4bff', wireframe: true, transparent: true, opacity: 0.12, side: THREE.BackSide })));
+    shell.position.set(c.x, minY, c.z);
+    anim.push((t) => { shell.rotation.y = t * 0.02; });
+    ambient = (dt) => {
+      if (rand() < 0.5) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 6, area.z + (rand() - 0.5) * area.d], vel: [0, 2 + rand() * 2, 0], color: rand() < 0.5 ? '#9a6bff' : '#ffffff', size: 0.12, life: 6 });
+    };
   } else if (sector === 'fortune') {
     const tex = neonWindows();
     const neonColors = ['#ff2bd6', '#18f0ff', '#ffe600', '#7a5cff'];

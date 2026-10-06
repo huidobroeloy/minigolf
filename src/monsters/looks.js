@@ -504,3 +504,59 @@ export function kongreLook() {
   }
   return { g, arms };
 }
+
+// ---------- Ninja (the Cortex): a slim dark-red humanoid with the eye on its head and a sword ----------
+export function ninjaLook() {
+  const g = new THREE.Group();
+  const skin = std('#3a0d14', { roughness: 0.35, metalness: 0.3 }), trim = std('#c81e2e', { roughness: 0.3, emissive: '#5a0008', emissiveIntensity: 0.6 });
+  const body = new THREE.Group();
+  g.add(body);
+  add(body, new THREE.CapsuleGeometry(0.17, 0.42, 4, 10), skin, [0, 0.95, 0]);
+  add(body, new THREE.TorusGeometry(0.17, 0.03, 6, 18), trim, [0, 1.05, 0], [Math.PI / 2, 0, 0]);
+  const head = add(body, new THREE.SphereGeometry(0.15, 16, 12), skin, [0, 1.42, 0]);
+  decal(body, [0, 1.43, 0.155], 0.2);
+  const legs = [-1, 1].map((s) => leg(body, [s * 0.09, 0.66, 0], [s * 0.12, 0.35, 0.06], [s * 0.12, 0.02, 0], skin, { r: 0.06 }));
+  const armL = leg(body, [-0.22, 1.18, 0], [-0.3, 0.95, 0.08], [-0.26, 0.78, 0.2], skin, { r: 0.05 });
+  // the sword arm: a group we can swing, holding a thin glowing blade
+  const armR = new THREE.Group();
+  armR.position.set(0.22, 1.18, 0);
+  body.add(armR);
+  rod(armR, [0, 0, 0], [0.08, -0.32, 0.12], 0.05, 0.04, skin);
+  const sword = new THREE.Group();
+  sword.position.set(0.08, -0.34, 0.14);
+  armR.add(sword);
+  add(sword, new THREE.BoxGeometry(0.03, 0.04, 0.12), trim, [0, 0, 0]);
+  add(sword, new THREE.BoxGeometry(0.035, 0.012, 0.75), new THREE.MeshStandardMaterial({ color: '#e8ecf4', emissive: '#ff2a3a', emissiveIntensity: 0.35, metalness: 0.8, roughness: 0.2 }), [0, 0, 0.42]);
+  return { g, body, head, legs, armL, armR, sword };
+}
+
+// ---------- Kalamar (the Digital Sea): a squid with a pointed mantle, the eye, trailing arms ----------
+export function kalamarLook() {
+  const g = new THREE.Group();
+  const skin = std('#6a3fb0', { roughness: 0.35, emissive: '#1a0a3a', emissiveIntensity: 0.4 }), pale = std('#d9c6ff', { roughness: 0.4 });
+  const body = new THREE.Group();
+  g.add(body);
+  // the mantle points forward (+z), fins at the tip
+  const mantle = add(body, new THREE.ConeGeometry(0.32, 1.1, 18), skin, [0, 0, 0.35], [Math.PI / 2, 0, 0]);
+  for (const s of [-1, 1]) add(body, new THREE.ConeGeometry(0.2, 0.36, 3), skin, [s * 0.24, 0, 0.75], [0, 0, s * Math.PI / 2], [1, 1, 0.25]);
+  add(body, new THREE.SphereGeometry(0.33, 16, 12), pale, [0, 0, -0.15], [0, 0, 0], [1, 1, 0.8]);
+  decal(body, [0, 0.33, -0.12], 0.36, [-Math.PI / 2, 0, 0]);
+  const arms = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2, arm = new THREE.Group();
+    arm.position.set(Math.cos(a) * 0.16, Math.sin(a) * 0.16, -0.38);
+    body.add(arm);
+    for (let k = 0; k < 4; k++) add(arm, new THREE.SphereGeometry(0.06 - k * 0.01, 8, 6), k % 2 ? pale : skin, [0, 0, -0.1 - k * 0.14]);
+    arms.push(arm);
+  }
+  return { g, body, mantle, arms };
+}
+
+// ---------- Guardian: XANA's translucent prison sphere with red rings ----------
+export function guardianLook(r = 0.8) {
+  const g = new THREE.Group();
+  const shell = add(g, new THREE.SphereGeometry(r, 28, 18), new THREE.MeshPhysicalMaterial({ color: '#f4f8ff', transparent: true, opacity: 0.32, roughness: 0.08, transmission: 0.4, depthWrite: false }), [0, r, 0]);
+  shell.castShadow = false;
+  const rings = [0, 1, 2].map((i) => add(g, new THREE.TorusGeometry(r * 1.06, 0.02, 6, 48), new THREE.MeshBasicMaterial({ color: '#ff2a2a' }), [0, r, 0], [Math.PI / 2 + i * 0.7, i * 0.9, 0]));
+  return { g, shell, rings };
+}
