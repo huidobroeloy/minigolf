@@ -108,6 +108,14 @@ export function pickPowerup(category, rankFactor, rand = Math.random, set = 'all
   return ids[ids.length - 1];
 }
 
+/** One power-up from the whole set, by spawn weight only (no catch-up luck): Mirror match. */
+export function rollAny(set = 'all', rand = Math.random) {
+  const ids = POWERUP_IDS.filter((id) => set !== 'lyoko' || POWERUPS[id].lyoko);
+  let r = rand() * ids.reduce((a, id) => a + (WEIGHTS[id] ?? 5), 0);
+  for (const id of ids) { r -= WEIGHTS[id] ?? 5; if (r <= 0) return id; }
+  return ids[ids.length - 1];
+}
+
 /** Deterministic pickup categories for a hole (same on host and every client). */
 export function pickupCategories(seed, n, RNGClass) {
   const rng = new RNGClass((seed ^ 0x51ed27) >>> 0);

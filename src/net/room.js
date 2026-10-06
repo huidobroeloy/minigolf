@@ -2,7 +2,7 @@ import { HOLES, buildPlan } from '../holes/index.js';
 import { introDuration } from '../game/intro.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
-import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
+import { POWERUPS, pickPowerup, pickupCategories, rollAny, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
 import { CHARACTER_COLORS, characterByColor } from '../game/characters.js';
 
@@ -100,7 +100,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', puMode: 'pickups', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko · puMode: pickups | draft | mirror
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -276,6 +276,12 @@ export class HostRoom {
         this.broadcast(fx);
         return;
       }
+      case 'draftPick':
+        // only one of the three options this player was offered, once
+        if (!p || !p.draft?.includes(msg.pu)) return;
+        p.draft = null;
+        this.sendTo(id, { t: 'drafted', pu: msg.pu });
+        return;
       case 'specialBack':
         // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing)
         if (p) p.specialUsed = null;
@@ -338,6 +344,7 @@ export class HostRoom {
     if (this.phase === 'hole') {
       this.sendTo(id, this.holeMessage());
       this.sendTo(id, { t: 'resume', strokes: old.strokes, holed: old.holed });
+      if (old.draft) this.sendTo(id, { t: 'draft', options: old.draft });
     } else if (this.phase === 'between') {
       this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
     } else if (this.phase === 'final' && this.finalMsg) {
@@ -373,9 +380,10 @@ export class HostRoom {
 
   startMatch({ intro = true } = {}) {
     this.playoff = null;
+    this.mirror = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.lp = 100; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.lp = 100; p.draft = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;
@@ -461,6 +469,7 @@ export class HostRoom {
       playoff: this.playoff ? { shooters: this.playoff.shooters } : null,
       seed: this.holeSeed, duration: this.duration, elapsed: this.elapsed(),
       pickupCount: this.pickups.length,
+      mirror: this.playoff ? null : this.mirror ?? null,
       taken: this.pickups.map((p) => p.taken || null),
       cats: this.pickups.map((p) => p.cat),
       players: this.playerList(),
@@ -473,13 +482,17 @@ export class HostRoom {
     const def = HOLES[this.plan[this.holeNo]];
     // life points carry over from hole to hole; a new course re-virtualizes everyone at full LP
     const prevDef = this.holeNo > 0 ? HOLES[this.plan[this.holeNo - 1]] : null;
-    if (!prevDef || prevDef.sector !== def.sector) for (const p of this.players.values()) p.lp = 100;
+    const newCourse = !prevDef || prevDef.sector !== def.sector;
+    if (newCourse) for (const p of this.players.values()) p.lp = 100;
+    const puOn = this.settings.puLevel !== 'off';
+    // Mirror match: everyone gets the same power-up at the tee, and there are no pickups
+    this.mirror = puOn && this.settings.puMode === 'mirror' ? rollAny(this.settings.puSet) : null;
     this.phase = 'hole';
     this.holeSeed = randomSeed();
     this.duration = Math.round(def.time * 1000 * (this.settings.timeMul || 1));
     this.holeStart = performance.now();
     this.allHoledAt = null;
-    const n = pickupCount(def, this.activePlayers().length, this.settings.puLevel);
+    const n = this.settings.puMode === 'mirror' ? 0 : pickupCount(def, this.activePlayers().length, this.settings.puLevel);
     const cats = pickupCategories(this.holeSeed, n, RNG);
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
@@ -487,6 +500,13 @@ export class HostRoom {
     // XANA attack: about one hole in three, somewhere between 20% and 55% of the way through
     this.xanaAt = !this.playoff && Math.random() < 0.34 ? this.duration * (0.2 + Math.random() * 0.35) : null;
     this.broadcast(this.holeMessage());
+    // Draft: at the start of each course, every player picks 1 of 3 (one per category)
+    if (puOn && newCourse && this.settings.puMode === 'draft') {
+      for (const p of this.playing()) {
+        p.draft = ['self', 'sabotage', 'chaos'].map((cat) => pickPowerup(cat, this.rankFactor(p.id), Math.random, this.settings.puSet));
+        this.sendTo(p.id, { t: 'draft', options: p.draft });
+      }
+    }
   }
 
   /** XANA launches an attack on everyone for 20 s (rage, glitched floor, mirror world or a swarm). */

@@ -168,6 +168,15 @@ export class GameClient {
       case 'xanaAttack':
         this.effects.xanaAttack(m);
         break;
+      case 'draft':
+        // wait for the course's map screen to clear before asking
+        clearTimeout(this.draftT);
+        this.draftT = setTimeout(() => this.ui.pickDraft(m.options, (pu) => this.link.send({ t: 'draftPick', pu })), this.ui.mapOpen ? 4300 : 300);
+        break;
+      case 'drafted':
+        this.addPowerup(m.pu, 'draft');
+        this.ui.bigToast(`${POWERUPS[m.pu].icon} ${POWERUPS[m.pu].name}`, 'drafted for this course', 'good');
+        break;
       case 'gift':
         if (m.pu) { this.addPowerup(m.pu, 'steal'); this.ui.bigToast('🦝 Got it!', `stole ${POWERUPS[m.pu].name} from ${this.nameOf(m.from)}`, 'good'); }
         else this.ui.toast(`${this.nameOf(m.from)} had nothing to steal`);
@@ -354,6 +363,12 @@ export class GameClient {
     const mine = m.players?.find((q) => q.id === this.myId);
     this.special = sp && !this.playoff ? { id: sp, used: mine?.specialUsed === def.sector } : null;
     this.renderInventory();
+    // Mirror match: the same power-up for everyone, once per hole
+    if (m.mirror && POWERUPS[m.mirror] && this.mirrorHole !== `${m.holeNo}:${m.index}` && !this.players.get(this.myId)?.out) {
+      this.mirrorHole = `${m.holeNo}:${m.index}`;
+      this.addPowerup(m.mirror, 'mirror');
+      setTimeout(() => this.ui.toast(`🪞 Mirror match: everyone has ${POWERUPS[m.mirror].icon} ${POWERUPS[m.mirror].name}`), 1500);
+    }
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
     this.ui.setStatus([]);

@@ -1,4 +1,4 @@
-import { POWERUPS, POWERUP_IDS } from '../powerups/registry.js';
+import { POWERUPS, POWERUP_IDS, CATEGORY_OF } from '../powerups/registry.js';
 import { COLORS } from '../net/room.js';
 import { HOLES, SECTORS, COURSES, SECTOR_NAMES, formatOptions } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
@@ -291,6 +291,8 @@ export class UI {
           <select id="puLevel" ${isHost ? '' : 'disabled'}>${[['off', 'Off'], ['few', 'Few'], ['normal', 'Normal'], ['chaos', 'Chaos 🌪️']].map(([v, n]) => `<option value="${v}" ${(st.puLevel || 'normal') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Power-up set</label>
           <select id="puSet" ${isHost ? '' : 'disabled'}>${[['all', 'All power-ups'], ['lyoko', 'Lyoko only 🗼']].map(([v, n]) => `<option value="${v}" ${(st.puSet || 'all') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <label>Power-up mode</label>
+          <select id="puMode" ${isHost ? '' : 'disabled'}>${[['pickups', 'Pickups'], ['draft', 'Draft · pick 1 of 3 each course'], ['mirror', 'Mirror match · same item for all']].map(([v, n]) => `<option value="${v}" ${(st.puMode || 'pickups') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Mode</label>
           <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['elim', 'Elimination (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
@@ -320,6 +322,7 @@ export class UI {
         timeMul: Number(s.querySelector('#timeMul').value),
         puLevel: s.querySelector('#puLevel').value,
         puSet: s.querySelector('#puSet').value,
+        puMode: s.querySelector('#puMode').value,
         mode: s.querySelector('#mode').value,
       });
       s.querySelectorAll('select, input').forEach((i) => i.addEventListener('change', send));
@@ -670,6 +673,26 @@ export class UI {
       </div>`, 'picker');
     o.querySelectorAll('.target').forEach((b) => b.onclick = () => { this.closeOverlay(); cb(b.dataset.id); });
     o.querySelector('#cancelPick').onclick = () => { this.closeOverlay(); cb(null); };
+  }
+
+  /** Draft: pick one of three power-ups (auto-picks one at random when the time runs out). */
+  pickDraft(options, cb, secs = 12) {
+    const o = this.overlay(`
+      <div class="panel picker draft">
+        <h2>🖥️ JÉRÉMIE SENDS YOU A PROGRAM</h2>
+        <div class="small">Pick one for this course · <span class="draft-left">${secs}</span> s</div>
+        <div class="draft-cards">${options.map((id) => `<button class="btn draft-card cat-${CATEGORY_OF(id)}" data-id="${esc(id)}"><span class="ic">${POWERUPS[id].icon}</span><b>${esc(POWERUPS[id].name)}</b><span class="d">${esc(POWERUPS[id].desc)}</span></button>`).join('')}</div>
+      </div>`, 'picker');
+    let done = false;
+    const pick = (id) => { if (done) return; done = true; clearInterval(tick); if (this.$('#overlay').querySelector('.draft')) this.closeOverlay(); cb(id); };
+    let left = secs;
+    const tick = setInterval(() => {
+      left -= 1;
+      const el = o.querySelector('.draft-left');
+      if (el) el.textContent = left;
+      if (left <= 0 || !o.querySelector('.draft')) pick(options[Math.floor(Math.random() * options.length)]);
+    }, 1000);
+    o.querySelectorAll('.draft-card').forEach((b) => b.onclick = () => pick(b.dataset.id));
   }
 
   showAd(secs, rng, fromName) {
