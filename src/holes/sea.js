@@ -52,13 +52,12 @@ export default [
   {
     id: 'sea-3', name: 'Warp Pipe Maze', sector: 'sea', water: true, par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 21],
-    hio: 'The left pipe comes out facing the cup. Hit it at the right speed.',
     parts: [
       { t: 'floor', poly: [[-4.5, -1.2], [4.5, -1.2], [4.5, 8], [-4.5, 8], [-4.5, 7], [-4.5, 5]], open: [4] },
       { t: 'wall', pts: [[-1.25, 3.5], [-1.25, 8]], h: 0.5 },
       { t: 'wall', pts: [[1.25, 3.5], [1.25, 8]], h: 0.5 },
       { t: 'warp', a: [-2.9, 0, 6.6], b: [-3, 0, 15.2], dir: [0.45, 1], speed: 3.2, color: '#3ad14a' },
-      { t: 'warp', a: [0, 0, 6.6], b: [3.2, 0, 23.4], dir: [-1, 0], speed: 3, color: '#3ad14a' },
+      { t: 'warp', a: [0, 0, 6.6], b: [3.4, 0, 15.2], dir: [-0.45, 1], speed: 3, color: '#3ad14a' }, // the far side of the island, never next to the cup
       { t: 'warp', a: [2.9, 0, 6.6], b: [3.4, 0, 0.6], dir: [0, 1], speed: 2.5, color: '#3ad14a' }, // back to the start!
       // the island with the cup, out across open water
       { t: 'floor', poly: [[-4.5, 14], [-3.3, 14], [4.5, 14], [4.5, 25], [-4.5, 25]], open: [0] },
