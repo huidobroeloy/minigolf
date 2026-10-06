@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HOLES, SECTOR_NAMES } from '../holes/index.js';
+import { HOLES, SECTOR_NAMES, worldCupLength } from '../holes/index.js';
 import { Physics, FIXED_DT } from '../physics/world.js';
 import { Ball, BALL_R, aimWobble } from '../physics/ball.js';
 import { buildCourse } from '../course/builder.js';
@@ -255,7 +255,7 @@ export class GameClient {
         // in Teams every member of the winning side gets the win
         const won = m.teams ? !!m.teams[0]?.members.includes(this.myId) : winners[0]?.id === this.myId;
         if (won) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
-        if ((m.plan?.length ?? 0) >= 54) stats.add('worldcups');
+        if ((m.plan?.length ?? 0) >= worldCupLength()) stats.add('worldcups');
         // XANA won: the catastrophic ending instead of the tower being saved
         const xanaWins = m.teams ? m.teams[0]?.team === 'xana' : characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
@@ -834,7 +834,7 @@ export class GameClient {
   onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
     if (['venom', 'freeze', 'xanafy', 'shark'].includes(kind)) this.ui.comms.say(kind);
-    if (kind !== 'vaporize') this.damageLP(dmg);
+    if (kind !== 'vaporize' && dmg > 0) this.damageLP(dmg);
     switch (kind) {
       case 'venom':
         e.pending.venom = true; e.applyBallMods();
@@ -853,6 +853,16 @@ export class GameClient {
         this.lp = 0;
         this.showLP(0, 100);
         this.vaporize();
+        break;
+      case 'guardian':
+        this.freezeBall(4, 'guardian', 'a Guardian');
+        break;
+      case 'ink':
+        this.ui.toast('🦑 Kalamar ink! You can barely see, and it\'s thick');
+        break;
+      case 'ninja':
+        this.ui.toast('🥷 Slashed by a Ninja!');
+        sfx.play('wall', 4);
         break;
       case 'mine':
         this.ui.toast('💣 A Manta mine went off!');

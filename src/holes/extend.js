@@ -32,7 +32,8 @@ export const ROSTER = {
   mountain: ['tarantula', 'manta', 'hornet'],
   sector5: ['creeper', 'manta'],
   volcano: ['tarantula', 'krabe', 'blok'],
-  sea: ['shark', 'manta'],
+  sea: ['shark', 'manta', 'kalamar'],
+  cortex: ['ninja', 'krabe', 'tarantula', 'manta'],
   network: ['manta', 'creeper'],
 };
 

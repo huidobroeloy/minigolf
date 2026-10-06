@@ -5,7 +5,7 @@ import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
 import { Gun, MineLayer, canTarget, landHit, seededRng, damageFor } from './attacks.js';
-import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook } from './looks.js';
+import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook, ninjaLook, kalamarLook, guardianLook } from './looks.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
@@ -875,14 +875,157 @@ class KongreArm extends Monster {
   dispose() { super.dispose(); this.ctx.group.remove(this.warn); }
 }
 
+// ---------- Ninja (the Cortex): fast; dashes at you and slashes with its sword, or fires a palm laser ----------
+class Ninja extends Monster {
+  constructor(spec, ctx) {
+    const L = ninjaLook();
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.cuboid(0.22, 0.75, 0.22).setTranslation(0, 0.75, 0), 0.6]] });
+    this.L = L;
+    this.rng = seededRng(ctx, spec, 'ninja');
+    this.nextT = 3 + this.rng.range(0, 4);
+    this.dash = null; // { t0, from, to, ry, hit }
+    this.prev = super.at(0);
+    this.guns.push(new Gun(this, { kind: 'laser', every: [8, 12], charge: 0.7, range: 8, speed: 13, knock: 140, ready: () => !this.dash, muzzle: () => this.L.armL.localToWorld(new THREE.Vector3(-0.26, -0.4, 0.2)) }));
+  }
+  /** The path, with a dash on top: raise the sword (0.6 s), dash (0.25 s), slash, walk back (1 s). */
+  at(t) {
+    const s = super.at(t);
+    const d = this.dash;
+    if (!d) return s;
+    const u = t - d.t0;
+    if (u < 0.6) return { ...s, ry: d.ry };
+    if (u < 0.85) { const k = (u - 0.6) / 0.25; return { x: d.from.x + (d.to.x - d.from.x) * k, y: s.y, z: d.from.z + (d.to.z - d.from.z) * k, ry: d.ry }; }
+    if (u < 1.25) return { x: d.to.x, y: s.y, z: d.to.z, ry: d.ry };
+    if (u < 2.25) { const k = (u - 1.25); const e = k * k * (3 - 2 * k); return { x: d.to.x + (s.x - d.to.x) * e, y: s.y, z: d.to.z + (s.z - d.to.z) * e, ry: Math.atan2(s.x - d.to.x, s.z - d.to.z) }; }
+    return s;
+  }
+  update(t) {
+    if (this.dash && t - this.dash.t0 > 2.25) this.dash = null;
+    super.update(t);
+    if (this.dash || t < this.nextT || this.slashed) return;
+    const course = this.ctx.course;
+    this.nextT = t + this.rng.range(5, 8) * (t < (course.enrageUntil ?? -1) ? 0.5 : 1);
+    const ball = course.localBall;
+    if (!canTarget(course, ball, t, { allowResting: true })) return;
+    const s = super.at(t), bp = ball.pos;
+    const dx = bp.x - s.x, dz = bp.z - s.z, d = Math.hypot(dx, dz);
+    if (d > 4 || d < 0.6 || Math.abs(bp.y - s.y) > 1.2) return;
+    // stop just short of the ball, so the slash (not the body) is what hits
+    const k = (d - 0.55) / d;
+    this.dash = { t0: t, from: { x: s.x, z: s.z }, to: { x: s.x + dx * k, z: s.z + dz * k }, ry: Math.atan2(dx, dz), hit: false };
+    sfx.play('whoosh');
+  }
+  force(ball, t, out) {
+    const d = this.dash;
+    if (!d || d.hit || t - d.t0 < 0.85 || t - d.t0 > 1.1 || this.slashed) return;
+    const p = ball.pos, dx = p.x - d.to.x, dz = p.z - d.to.z, dist = Math.hypot(dx, dz);
+    if (dist > 0.95 || Math.abs(p.y - this.at(t).y) > 1.2) return;
+    d.hit = true;
+    out.x += (Math.sin(d.ry) + dx / (dist || 1)) * 200; out.z += (Math.cos(d.ry) + dz / (dist || 1)) * 200; out.y += 90; out.wake = true;
+    if (canTarget(this.ctx.course, ball, t, { allowResting: true })) landHit(this.ctx.course, 'ninja', t, damageFor('ninja', 'slash'));
+    sfx.play('laser');
+  }
+  frame(t) {
+    super.frame(t);
+    const d = this.dash, u = d ? t - d.t0 : 9;
+    // sword up while it winds up, a big swing on the slash
+    this.L.armR.rotation.x = u < 0.6 ? -2.2 * (u / 0.6) : u < 1.1 ? -2.2 + 3.4 * Math.min(1, (u - 0.6) / 0.35) : Math.sin(t * 4) * 0.15;
+    const run = d && u > 0.6 && u < 0.85 ? 3 : 1;
+    this.L.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * 9 * run + i * Math.PI) * 0.35; });
+    this.L.body.position.y = Math.abs(Math.sin(t * 9 * run)) * 0.03;
+  }
+}
+
+// ---------- Kalamar (the Digital Sea): drifts, fires lasers and squirts ink clouds that blind and slow ----------
+class Kalamar extends Monster {
+  constructor(spec, ctx) {
+    const L = kalamarLook();
+    super(spec, ctx, L.g, { yOff: 0.6, colliders: [[R.ColliderDesc.ball(0.4), 0.7]] });
+    this.L = L;
+    this.rng = seededRng(ctx, spec, 'ink');
+    this.nextInk = 4 + this.rng.range(0, 6);
+    this.clouds = [];
+    this.inkMat = new THREE.MeshBasicMaterial({ color: '#08020f', transparent: true, opacity: 0.85, depthWrite: false });
+    this.prev = super.at(0);
+    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.8, range: 8, speed: 11, knock: 140, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0, 0.9)) }));
+  }
+  update(t) {
+    super.update(t);
+    // ink on a seeded rhythm where the Kalamar is, so everyone sees the same clouds
+    if (t >= this.nextInk && !this.slashed) {
+      this.nextInk = t + this.rng.range(10, 14);
+      const s = this.at(t), y = this.ctx.course.floorYAt(s.x, s.z);
+      if (y !== null) {
+        const g = new THREE.Group();
+        for (let i = 0; i < 6; i++) {
+          const m = new THREE.Mesh(new THREE.SphereGeometry(0.55 + (i % 3) * 0.15, 12, 8), this.inkMat);
+          m.position.set(Math.cos(i * 1.05) * 0.7, 0.45 + (i % 2) * 0.35, Math.sin(i * 1.05) * 0.7);
+          g.add(m);
+        }
+        g.position.set(s.x, y, s.z);
+        this.ctx.group.add(g);
+        this.clouds.push({ g, x: s.x, y, z: s.z, r: 1.6, born: t, until: t + 6, touched: false });
+        sfx.play('splash');
+      }
+    }
+    this.clouds = this.clouds.filter((c) => { if (t < c.until) return true; this.ctx.group.remove(c.g); return false; });
+  }
+  force(ball, t, out) {
+    for (const c of this.clouds) {
+      const p = ball.pos;
+      if (Math.hypot(p.x - c.x, p.z - c.z) > c.r || Math.abs(p.y - c.y) > 1.5) continue;
+      if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 3; out.z -= v.z * 3; } // thick ink: twice the drag
+      if (!c.touched) { c.touched = true; if (canTarget(this.ctx.course, ball, t, { allowResting: true })) landHit(this.ctx.course, 'ink', t, damageFor('kalamar', 'ink')); }
+    }
+  }
+  frame(t) {
+    const s = this.at(t);
+    this.model.position.set(s.x, s.y + 0.6 + Math.sin(t * 2) * 0.15, s.z);
+    const dx = s.x - this.prev.x, dz = s.z - this.prev.z;
+    if (Math.hypot(dx, dz) > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
+    this.prev = s;
+    this.L.arms.forEach((a, i) => { a.rotation.x = Math.sin(t * 4 + i) * 0.35; a.rotation.y = Math.cos(t * 3 + i) * 0.25; });
+    for (const c of this.clouds) {
+      const life = Math.min(1, (t - c.born) * 3, (c.until - t) / 1.2);
+      c.g.scale.setScalar(Math.max(0.01, life));
+      c.g.rotation.y = t * 0.3;
+    }
+  }
+  dispose() { super.dispose(); for (const c of this.clouds) this.ctx.group.remove(c.g); }
+}
+
+// ---------- Guardian: a drifting prison sphere; roll into it and you're trapped for a few seconds ----------
+class Guardian extends Monster {
+  constructor(spec, ctx) {
+    const L = guardianLook(spec.r ?? 0.8);
+    super(spec, ctx, L.g);
+    this.L = L;
+    this.r = spec.r ?? 0.8;
+    this.lastT = -99;
+  }
+  force(ball, t, out) {
+    if (t - this.lastT < 6 || ball.frozen || this.slashed) return;
+    const s = this.at(t), p = ball.pos;
+    if (Math.hypot(p.x - s.x, p.z - s.z) > this.r + ball.radius || Math.abs(p.y - s.y - this.r) > this.r + 0.3) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    this.lastT = t;
+    landHit(this.ctx.course, 'guardian', t, 0);
+  }
+  frame(t) {
+    super.frame(t);
+    this.L.rings.forEach((r, i) => { r.rotation.z = t * (0.8 + i * 0.4); });
+    this.L.shell.scale.setScalar(1 + Math.sin(t * 3) * 0.03);
+  }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
-  kolossusBoss: KolossusBoss,
+  kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];
