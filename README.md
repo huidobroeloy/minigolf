@@ -74,7 +74,7 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
 - **Life points:** you start each hole with 100 LP. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
-- The cup is a real hole: slow balls drop in, fast ones lip out. Every cup sits under a XANA tower hologram, and holing out takes you inside the tower to deactivate it.
+- The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
 - Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 10**.
 - **Ties are broken**, never shared:

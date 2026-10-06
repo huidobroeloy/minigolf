@@ -50,10 +50,17 @@ export function arcPoly(cx, cz, r0, r1, a0, a1, n = 16) {
  */
 export function slabGeometry(poly, holes, y, th) {
   // Shape coordinates are (x, -z) so that after rotateX(-PI/2) the cap faces up and maps to (x, z).
-  const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+  // Windings must be opposite (outline counter-clockwise, holes clockwise): ExtrudeGeometry builds a
+  // hole's side walls in the order its path is given and only re-orients holes in some cases. A hole
+  // given the wrong way round gets walls facing into the slab, and the one-sided trimesh then pushes a
+  // ball in the hole straight through them (balls fell out of the cups into the Digital Sea).
+  const outline = poly.map(([x, z]) => new THREE.Vector2(x, -z));
+  if (THREE.ShapeUtils.isClockWise(outline)) outline.reverse();
+  const shape = new THREE.Shape(outline);
   for (const h of holes || []) {
-    const pts = h.poly ? h.poly : circlePoly(h.c[0], h.c[1], h.r, 28);
-    shape.holes.push(new THREE.Path(pts.map(([x, z]) => new THREE.Vector2(x, -z))));
+    const pts = (h.poly ? h.poly : circlePoly(h.c[0], h.c[1], h.r, 28)).map(([x, z]) => new THREE.Vector2(x, -z));
+    if (!THREE.ShapeUtils.isClockWise(pts)) pts.reverse();
+    shape.holes.push(new THREE.Path(pts));
   }
   const geo = new THREE.ExtrudeGeometry(shape, { depth: th, bevelEnabled: false, curveSegments: 1 });
   // extrusion goes along +Z (shape-space) → after rotateX(-PI/2) it goes along +Y; shift down so top = y

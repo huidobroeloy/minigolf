@@ -145,6 +145,7 @@ export class Ball {
     this.pinned = false;
     this.pinT = 0;
     this.glideT = 0;
+    this.rimT = 99;
     if (this.fly) this.endFly();
     this.mesh.visible = true;
     this.body.setEnabled(true);
@@ -379,6 +380,7 @@ export class Ball {
     // cup
     const cups = env.course?.cups || (env.course?.cup ? [env.course.cup] : []);
     let inCup = false;
+    this.rimT = (this.rimT ?? 99) + dt;
     for (const cup of cups) {
       if (!cup.physical) {
         if (this.cupWants(cup, p, v, dt)) { this.startSink(cup); return; }
@@ -396,6 +398,21 @@ export class Ball {
       if (d < CUP_R + 0.07 && d > 0.02 && sp < 3 && Math.abs(p.y - this.radius - cup.y) < 0.12 && this.radius < CUP_R * 0.92) {
         const k = 10 * (1 - sp / 3) * dt;
         this.body.setLinvel({ x: v.x - (dx / d) * k, y: v.y, z: v.z - (dz / d) * k }, true);
+      }
+      // at the rim (it can only get into the hole from here; a ball rolling on a level below the
+      // cup never passes this)
+      if (d < CUP_R + this.radius && p.y >= cup.y - 0.02 && p.y < cup.y + this.radius + 0.15) { this.rimCup = cup; this.rimT = 0; }
+      // in the hole: once the ball's centre is below the floor inside a real cup it came in through,
+      // it can't come back out, so it's holed right away. This runs before every fall check, and a
+      // ball that somehow slipped into the cup's wall or under it is put back on the bottom: a ball
+      // that went in the hole is never lost in the Digital Sea.
+      if (this.rimCup === cup && this.rimT < 0.6 && d < CUP_R + 0.1 && p.y < cup.y - 0.02 && p.y > cup.y - 1.5 && this.radius < CUP_R * 0.92) {
+        if (d > CUP_R - this.radius + 0.03 || p.y < cup.y - CUP_DEPTH + this.radius - 0.05) {
+          this.body.setTranslation({ x: cup.x, y: cup.y - CUP_DEPTH + this.radius + 0.02, z: cup.z }, true);
+          this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        }
+        this.holeOut(cup, env);
+        return;
       }
       if (d < CUP_R && p.y < cup.y + this.radius * 0.4) {
         inCup = true;

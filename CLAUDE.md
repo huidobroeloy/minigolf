@@ -35,6 +35,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__hioAll()`, which writes its results to `localStorage['lyokogolf.hio']`
   - `__tuneWarp(i)`, `__warpEntries(i)`, `__probeWarp(i)`: secret-warp tuning (see Holes)
   - `__rampTest()`: flags balls stopped or hovering on ramps
+  - `__cupWalls()`, `__cupTest({ holes })`: cup regression checks (see Physics)
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
   `canvas.toBlob` → `fetch('/__shot?name=x', {method:'POST', body})`; the dev server saves `.local/shots/x.png`.
 - **Ace searches are CPU-heavy:** 3–4 tabs in parallel make the shell and ripgrep time out; use Read/Edit meanwhile.
@@ -54,10 +55,17 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Rapier, fixed 120 Hz timestep.
   - The ball has zero friction. Rolling deceleration is custom, per surface (`SURFACES` in `world.js`; `glass` is the low-friction surface on the Fortune Falls board).
   - Ground snap is skipped while `launchTimer` is running.
-  - **Real cups:** on a flat floor the builder cuts a hole (`CUP_R`) and adds a liner `CUP_DEPTH` deep. The ball drops
-    in physically (rim pull for slow balls, lip-outs for fast ones) and is holed once its centre is below the rim for
-    0.12 s (`Ball.postStep`, looping over `course.cups`). Cups not on a flat floor (Fortune trays, bowls) keep the old
-    formula capture (`cup.physical` false).
+  - **Real cups:** on a flat floor the builder cuts a hole (`CUP_R` 0.36, ball 0.18) into the slab, adds a solid
+    liner (a ring of 24 box colliders, `kind: 'floor'`) and a bottom, `CUP_DEPTH` deep. The ball drops in physically
+    (rim pull for slow balls, lip-outs for fast ones). In `Ball.postStep` a ball whose centre gets below the floor
+    inside a cup it reached over the rim (`rimCup`/`rimT`) is holed at once, before any fall/lava/pit check, and is
+    put back on the bottom if it slipped into the wall. Cups not on a flat floor (Fortune trays, bowls) keep the
+    formula capture (`cup.physical` false). The cup is drawn as a glowing XANA tower shaft (`makeCupAt`).
+  - **Floor slabs are one-sided trimeshes** (`FIX_INTERNAL_EDGES`). `slabGeometry` forces the outline counter-clockwise
+    and holes clockwise so hole walls face into the hole. A wall facing into the slab pushes the ball through it:
+    that was the v6 "ball goes in the cup, then into the Digital Sea" bug. Check with `__cupWalls()` (must be 0
+    bad) and `__cupTest()` (rolls at every real cup with normal, ghost, fun-size and super-size balls; must report 0
+    leaks and 0 super-size holes).
   - Ramps: a ball only rests on a slope when `slopeAcc < decel`; otherwise rolling resistance is capped at half the slope
     pull, so it rolls off decisively. Sticky walls only grab on head-on impacts, never right after a shot.
 - **Holes** (`src/holes/<sector>.js`):
@@ -120,14 +128,17 @@ a round bank around the cup. Fix with an off-line cup, a lava strip or sinkhole 
 
 Run `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })`. That is 2196 simulated shots, about 2–5 minutes per hole.
 
-Last full run (v6, approach lanes + tuned secret warps; the owner's target is ~0.2–0.5%, i.e. 5–11 hits): the 40
-lengthened holes and the Kolossus all ace 4–17 times (0.18–0.77%) and only through the warp.
-- **Highest:** ice-5 17, forest-2 16, volcano-5 16 (the crater cup keeps the old ace line from the old tee, min exit
-  speed 1.5, mouth r 0.2: no clear drop point near that cup). **Lowest:** desert-1, mountain-5, sector5-2 at 4.
-- Ice holes need very high gains (4.6–4.9): entries are slow there and the ball slides a long way.
-- Not lengthened (unchanged since v5): par-5 holes, forest-3 (round floor), and Fortune Falls (exempt, luck by design).
-- `__tuneWarp`'s first-stage model is approximate; its second stage replays every recorded entry at its own speed ×
-  gain and entry time, which matches `__hio` within a few hits (network-2 was the exception: 7 predicted, 1 real at
-  gain 4.08; gain 2.7 gives 10). Always confirm with `__hio`.
+Last full run (after the cup fix, which raised most counts: shots that used to leak out of the cup now hole): all 50
+non-Fortune holes ace 1–20 times (≤0.91%). The owner's target is ~0.2–0.5% (5–11 hits); most holes are 5–12.
+- **Highest:** sector5-3 20, desert-6 20, ice-5 19, network-1 18. **Lowest:** network-5 and sector5-6 1, forest-6 and
+  mountain-6 2, ice-1 3. All within the rule.
+- Retuned warps: the 32 lengthened holes that went over, plus the par-5s with their own warps (volcano-4, network-6,
+  sea-6: their warp is in the hole file with `speed: 0.5, gain`). volcano-5 keeps the old ace line from the old tee
+  (min exit speed 1.5, mouth r 0.2).
+- Ice holes are the hardest to tune: entries are slow and the ball slides a long way, so the tuner's high-gain picks
+  (~5) can be far off in the real search. Prefer a validated pick with a moderate gain.
+- Not lengthened: par-5 holes, forest-3 (round floor), and Fortune Falls (exempt, luck by design).
+- `__tuneWarp`'s second stage replays every recorded entry at its own speed × gain and entry time; it usually matches
+  `__hio` within a few hits, but not always (network-2, ice-1, ice-3). Always confirm with `__hio`.
 - The searcher's fine pass centres on the closest miss, which can be the wrong region: when it reports 0, trace the
   intended route with `__sim(def, { yaw, power, t0, trace: true })` before redesigning.

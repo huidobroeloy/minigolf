@@ -98,7 +98,7 @@ export function buildCourse(def, physics, scene) {
       mesh.castShadow = false;
       const { positions, indices } = trimeshData(geo);
       physics.addTrimesh(positions, indices, { kind: 'floor', mat: p.mat || mats.theme.floorMat, unsafe: p.unsafe });
-      course.floors.push({ poly: p.poly, y, holes: p.holes || [] });
+      course.floors.push({ poly: p.poly, y, th, holes: p.holes || [] });
       for (const [x, z] of p.poly) expand(x, y, z);
       // holes → pits
       for (const h of p.holes || []) {
@@ -594,6 +594,17 @@ export function buildCourse(def, physics, scene) {
     if (cup.physical) {
       // the bottom of the cup (slightly wider than the hole so nothing slips past the liner)
       physics.addCylinder(0.06, CUP_R + 0.04, { kind: 'floor', mat: 'default' }, { pos: [cup.x, cup.y - CUP_DEPTH - 0.06, cup.z] });
+      // a solid liner as well: a ring of boxes whose inner faces sit on the hole's edge, from the
+      // floor top down into the bottom. Boxes are solid from every side, so the cup holds the ball
+      // even where the slab is thinner than the cup is deep. 'floor' kind: ghost balls hit it too.
+      const N = 24, T = 0.12, H = CUP_DEPTH + 0.06, rc = CUP_R + T / 2;
+      const half = (CUP_R + T) * Math.tan(Math.PI / N) + 0.01;
+      for (let k = 0; k < N; k++) {
+        const a = (k / N) * Math.PI * 2, tx = -Math.sin(a), tz = Math.cos(a);
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(tz, tx));
+        physics.addBox([half, H / 2, T / 2], { kind: 'floor', mat: 'default', restitution: 0.25 },
+          { pos: [cup.x + Math.cos(a) * rc, cup.y - H / 2, cup.z + Math.sin(a) * rc], quat: q });
+      }
     }
   }
 
@@ -969,6 +980,30 @@ function modLabel(mod) {
   return s;
 }
 
+/** Emissive map for the cup shaft: vertical data lines and bands, like a tower's inside. */
+let _shaftTex = null;
+function shaftTexture() {
+  if (_shaftTex) return _shaftTex;
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 128, 64);
+  const rng = new RNG('cupshaft');
+  for (let i = 0; i < 14; i++) { // data lines running down the wall
+    const x = rng.range(0, 128), y0 = rng.range(0, 30), len = rng.range(18, 60);
+    g.fillStyle = `rgba(255,255,255,${rng.range(0.35, 0.9)})`;
+    g.fillRect(x, y0, 2, len);
+  }
+  g.fillStyle = 'rgba(255,255,255,0.8)';
+  g.fillRect(0, 3, 128, 2); // a band just under the rim
+  g.fillStyle = 'rgba(255,255,255,0.35)';
+  g.fillRect(0, 40, 128, 1);
+  _shaftTex = new THREE.CanvasTexture(c);
+  _shaftTex.wrapS = THREE.RepeatWrapping;
+  _shaftTex.repeat.set(3, 1);
+  return _shaftTex;
+}
+
 function makeCupAt(course, group, mats, cup) {
   const { x, y, z } = cup;
   if (cup.mod !== null && cup.mod !== undefined) {
@@ -977,17 +1012,41 @@ function makeCupAt(course, group, mats, cup) {
     group.add(lbl);
     course.animators.push((t) => { lbl.position.y = y + 1.6 + Math.sin(t * 2.5 + x) * 0.08; });
   }
+  let shaftMats = null;
   if (cup.physical) {
-    const liner = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R - 0.004, CUP_R - 0.004, CUP_DEPTH, 32, 1, true),
-      new THREE.MeshStandardMaterial({ color: '#e9eef2', roughness: 0.6, side: THREE.BackSide }));
+    // the hole is the way into XANA's tower: a dark shaft with glowing red data lines, rings
+    // sinking down it and the eye of XANA at the bottom (all of it turns white once deactivated)
+    const wallMat = new THREE.MeshStandardMaterial({ color: '#0b0d14', roughness: 0.5, emissive: '#ff2a2a', emissiveMap: shaftTexture(), emissiveIntensity: 1.3, side: THREE.BackSide });
+    const liner = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R - 0.004, CUP_R - 0.004, CUP_DEPTH, 32, 1, true), wallMat);
     liner.position.set(x, y - CUP_DEPTH / 2, z);
-    liner.receiveShadow = true;
     group.add(liner);
-    const bottom = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.9 }));
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshStandardMaterial({ color: '#07080c', roughness: 0.9 }));
     bottom.rotation.x = -Math.PI / 2;
     bottom.position.set(x, y - CUP_DEPTH + 0.002, z);
-    bottom.receiveShadow = true;
     group.add(bottom);
+    const eyeMat = new THREE.MeshBasicMaterial({ map: TEX.xanaEyeGlow(), color: '#ff2a2a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const eye = new THREE.Mesh(new THREE.PlaneGeometry(CUP_R * 1.5, CUP_R * 1.5), eyeMat);
+    eye.rotation.x = -Math.PI / 2;
+    eye.position.set(x, y - CUP_DEPTH + 0.006, z);
+    group.add(eye);
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#ff3a3a', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+    const rings = [0, 0.5].map(() => {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(CUP_R - 0.012, 0.01, 6, 32), ringMat);
+      r.rotation.x = Math.PI / 2;
+      group.add(r);
+      return r;
+    });
+    const lipMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const lip = new THREE.Mesh(new THREE.RingGeometry(CUP_R - 0.05, CUP_R, 32), lipMat);
+    lip.rotation.x = -Math.PI / 2;
+    lip.position.set(x, y + 0.009, z);
+    group.add(lip);
+    course.animators.push((t) => {
+      rings.forEach((r, i) => { const u = (t * 0.45 + i * 0.5) % 1; r.position.set(x, y - 0.03 - u * (CUP_DEPTH - 0.06), z); });
+      ringMat.opacity = 0.6 + 0.3 * Math.sin(t * 5);
+      wallMat.emissiveIntensity = 1.1 + 0.35 * Math.sin(t * 2.2 + x);
+    });
+    shaftMats = { wall: wallMat, eye, rings: ringMat, lip: lipMat };
   } else {
     const hole = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 32), new THREE.MeshBasicMaterial({ color: '#050505' }));
     hole.rotation.x = -Math.PI / 2;
@@ -1012,6 +1071,17 @@ function makeCupAt(course, group, mats, cup) {
   const holo = makeTowerHolo({ mini: !!cup.extra, aura: cup.extra && cup.mod !== null && cup.mod !== undefined ? ringCol : '#ff2a2a' });
   holo.position.set(x, y, z);
   group.add(holo);
+  if (shaftMats) {
+    // deactivating the tower clears the shaft too: white light, no eye
+    const deactivate = holo.userData.deactivate;
+    holo.userData.deactivate = () => {
+      deactivate();
+      shaftMats.wall.emissive.set('#ffffff');
+      shaftMats.rings.color.set('#ffffff');
+      shaftMats.lip.color.set('#ffffff');
+      shaftMats.eye.visible = false;
+    };
+  }
   (course.towers ||= []).push({ cup, holo });
   course.animators.push((t) => holo.userData.animate(t));
 }
