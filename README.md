@@ -73,10 +73,11 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
-- **Life points:** you start each hole with 100 LP. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
+- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot (or your Way tower) with full LP.
+- **Way towers:** each lane has a dormant red tower. Roll through it to deactivate it: +20 LP, and it becomes where you come back after a devirtualization.
 - The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
-- Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 10**.
+- Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 1 to 8**, depending on how much of the track you still had left: keep playing until the end, every shot closer counts.
 - **Ties are broken**, never shared:
   1. countback over the last 3 holes;
   2. the last hole;
@@ -86,6 +87,7 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 - Holes are long, with doglegs: every hole starts with a winding approach lane (about 41–55 units in front of par 2–4 holes, a shorter one in front of par 5s) full of its sector's hazards and monsters. There are no shortcuts: you play the whole lane.
 
 ## XANA's monsters
+Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
 | Monster | What it does |
@@ -117,7 +119,10 @@ About one hole in three, XANA attacks everyone at once for 20 s, with an alarm a
 You can carry up to 3. Pick them up from mini Lyoko towers; if your slots are full, the new one is discarded.
 
 **Special moves:** your character's own move is in the gold ★ slot, free once per course: Ulrich **Super Sprint**, Odd **Laser Arrow**, Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
-The host sets the amount (**Off / Few / Normal / Chaos**) and the **power-up set**: all of them, or **Lyoko only** (just the ones from the show).
+The host sets the amount (**Off / Few / Normal / Chaos**), the **power-up set** (all of them, or **Lyoko only**: just the ones from the show) and the **power-up mode**:
+- **Pickups:** grab them from the mini towers (the classic).
+- **Draft:** at the start of each course, Jérémie sends you a program: pick 1 of 3 (pickups still spawn).
+- **Mirror match:** every hole, everyone gets the same power-up at the tee, and there are no pickups.
 The amount also scales with the number of players and the size of the hole.
 
 The tower halo tells you the **category**:
@@ -185,6 +190,7 @@ Active effects show as chips with a countdown at the top of the screen.
 | ⛸️ | Ice Rink | The whole floor freezes |
 | 🌊 | Tsunami | A giant wave sweeps the way you drag |
 | 🐔 | Montapollos | A giant chicken runs around shoving balls |
+| 👾 | XANA's Agent | Take over a monster for 12 s and steer it (WASD/arrows or drag): it fires twice as often at everyone else |
 
 ## The 9 courses
 1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks.

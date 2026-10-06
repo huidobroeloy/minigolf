@@ -90,7 +90,13 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     +1 par, +30 s). If a lane would cross the hole, the next shape (or mirror) that fits is used, falling back to the
     short shapes with a `[lanes]` console warning. forest-3 (round floor) has no lane. `APPROACH` takes per-hole
     `{ shape, mirror }` overrides. Lanes have **no warps**: the only warps left are sea-3's green pipe maze, which is
-    the hole itself.
+    the hole itself (every exit ≥6 from the cup). Each lane has a **Way tower** (`waytower` part, about 30% along
+    the longest leg): rolling through it turns it white, heals +20 LP once per hole and becomes where you
+    re-virtualize after a devirtualization (`client.checkWayTowers`, `wayPoint`). Per client, reset every hole.
+  - **Monster rosters** (`ROSTER` in `extend.js`): each sector's typical lane monsters. `rollMonsters(def, seed)`
+    (`holes/monsterRoll.js`) re-rolls lane monsters each match (`lane` slot on the spec, `laneMonster`), ~30% guests
+    from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Seeded from the host's hole
+    seed, so every client builds the same monsters in the same order; the client loads `rollMonsters(HOLES[i], seed)`.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
   - `registry.js` holds the 44 power-ups (including one per character) with their weights and catch-up luck.
@@ -114,8 +120,17 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   `'S'`; the room stores the course it was used on in `p.specialUsed`, so reloads and rejoins keep it). Balanced for fairness: Scanner shows only up to the first bounce
   (≤8 units, no landing ring), Telekinesis ≤1 unit and never within 1.5 of a cup, Sprint ×1.35, Wings 1.8 s, Hopper
   10 s immunity, Zweihänder 25 s / range 3, Activate Tower spares XANA's own ball (`course.calmUntil`, checked in `canTarget` and `landHit`).
-- **Life points:** 100 per hole; `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind, t, dmg)`; kind `vaporize`
-  devirtualizes outright.
+- **Life points:** cumulative: they carry over from hole to hole (the room keeps `p.lp` from the `st` messages, so
+  reloads keep them) and refill to 100 at each new course. `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind,
+  t, dmg)`; kind `vaporize` devirtualizes outright. `client.showLP` puts `body.lp-critical` (red screen) on when LP ≤
+  `maxHit`, the hole's hardest ordinary hit (one-shot attacks ≥80 don't count).
+- **Power-up modes** (`settings.puMode`): `pickups` (default), `draft` (first hole of each course: the room offers each
+  player 1 of 3, one per category; `draft`/`draftPick`/`drafted` messages, auto-pick after 12 s), `mirror` (one
+  `rollAny` item per hole for everyone in `holeMessage.mirror`, no pickups).
+- **XANA's Agent** (`agent` power-up): takes over a monster for 12 s (`m.agent`, `Monster.at` returns the steered
+  position). The driver's client picks the monster index (`agentTargetAt`), steers it (`steerAgent`) and relays
+  `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
+- **Sector map:** `ui.sectorMap` replaces the course card at each new course (SVG drawn in code, tap to skip).
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
   Never let a monster fire at a ball whose owner is aiming.
 - **Music** (`src/core/music.js` + `soundtrack.js`): a slot (intro, menu, levels, finale, xana) with a loaded file plays it;
@@ -123,7 +138,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.
 
 ## Rules the owner chose
-- **Time limit:** per hole (`time`, 120–170 s by par). Running out scores `max(par, strokes) + 10`.
+- **Time limit:** per hole (`time`, by par). Running out scores `max(par, strokes)` + 1…8 by the share of the track
+  still left (`timeoutScore`/`trackLeft` in `room.js`, along `def.route`), so it always pays to keep playing.
 - **Ties:** never shared — countback (last 3, last hole), most aces, then a closest-to-the-pin playoff.
 - **Players:** everyone plays simultaneously, up to 8.
 - **Power-ups after holing out:** power-ups that affect others can still be used.
