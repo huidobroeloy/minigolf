@@ -8,6 +8,7 @@ import { Ghosts } from './ghosts.js';
 import { Pickups } from './pickups.js';
 import { EffectManager } from '../powerups/effects.js';
 import { POWERUPS, SPECIALS } from '../powerups/registry.js';
+import { DAMAGE } from '../monsters/attacks.js';
 import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
@@ -259,6 +260,7 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    document.body.classList.remove('lp-critical');
     this.weather?.dispose();
     this.weather = null;
     for (const c of this.celebrations || []) this.scene.remove(c.g);
@@ -313,8 +315,12 @@ export class GameClient {
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
     this.strokes = 0;
-    this.lp = 100; // Lyoko life points, refilled every hole
-    this.ui.setLP(100);
+    // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
+    this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
+    // the danger screen comes on when the hardest ordinary hit on this hole would finish you
+    // (one-shot attacks like mines, beams and Blok fire rings don't count: they always would)
+    this.maxHit = Math.max(20, ...def.parts.filter((p) => p.t === 'monster').flatMap((p) => Object.values(DAMAGE[p.type] || {}).filter((v) => v < 80)));
+    this.showLP(this.lp);
     this.shotInProgress = false;
     this.falling = false;
     this.spectate = null;
@@ -424,7 +430,10 @@ export class GameClient {
     // record results
     for (const p of m.players) this.upsertPlayer(p);
     const mine = m.results.find((r) => r.id === this.myId);
-    if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); stats.add('holes'); }
+    if (mine?.timeout && this.phase === 'hole') {
+      sfx.play('buzzer'); stats.add('holes');
+      this.ui.bigToast('⏰ TIME UP', `scored ${mine.score}${mine.left != null ? ` · ${mine.left} units from the cup` : ''}`, 'bad');
+    }
     this.phase = 'between';
     music.play('menu');
     this.teardownHole();
@@ -477,6 +486,7 @@ export class GameClient {
 
   onHoled() {
     if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    document.body.classList.remove('lp-critical');
     // Fortune cups add or take strokes (never below 1)
     const mod = this.ball.sinkCup?.mod;
     this.rawStrokes = this.strokes;
@@ -804,7 +814,7 @@ export class GameClient {
         break;
       case 'vaporize':
         this.lp = 0;
-        this.ui.setLP(0, 100);
+        this.showLP(0, 100);
         this.vaporize();
         break;
       case 'shark':
@@ -821,7 +831,7 @@ export class GameClient {
     if (!this.ball || this.ball.state === 'holed' || this.falling) return;
     const before = this.lp ?? 100;
     this.lp = Math.max(0, before - dmg);
-    this.ui.setLP(this.lp, dmg);
+    this.showLP(this.lp, dmg);
     if (this.lp <= 0) {
       this.ui.bigToast('💥 DEVIRTUALIZED', 'your life points hit zero · +1 stroke', 'bad');
       this.vaporize(true);
@@ -832,9 +842,17 @@ export class GameClient {
     } else this.ui.comms.say('hit', { lp: this.lp });
   }
 
+  /** The LP bar, plus the red danger screen when one more hit would devirtualize you. */
+  showLP(lp, delta = 0) {
+    this.ui.setLP(lp, delta);
+    const live = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking' && this.phase === 'hole';
+    document.body.classList.toggle('lp-critical', !!live && lp > 0 && lp <= (this.maxHit ?? 20));
+    this.sendState(true);
+  }
+
   healLP(n) {
     this.lp = Math.min(100, (this.lp ?? 100) + n);
-    this.ui.setLP(this.lp, -n);
+    this.showLP(this.lp, -n);
   }
 
   /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
@@ -864,7 +882,7 @@ export class GameClient {
       this.falling = false;
       b.respawnAtSafe();
       this.lp = 100;
-      this.ui.setLP(100);
+      this.showLP(100);
       this.cam.snapTo(b.mesh.position);
       this.virtualize(b.mesh.position);
       this.onRest();
@@ -1573,7 +1591,7 @@ export class GameClient {
     const r3 = (v) => Math.round(v * 1000) / 1000;
     this.link.send({
       t: 'st', p: [r3(p.x), r3(p.y), r3(p.z)], r: r3(this.ball.radius),
-      s: this.falling || this.trip?.mainDead ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0,
+      s: this.falling || this.trip?.mainDead ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0, lp: this.lp,
       cl: this.trip ? this.trip.clones.filter((c) => !c.dead && !c.holed).map((c) => { const q = c.pos; return [r3(q.x), r3(q.y), r3(q.z)]; }) : undefined,
     });
     const me = this.players.get(this.myId);

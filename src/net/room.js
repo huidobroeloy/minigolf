@@ -56,8 +56,36 @@ export function pickupCount(def, players, level) {
   return Math.max(2, Math.min(12, Math.round((2 + 0.8 * players) * size * mul)));
 }
 
-export function timeoutScore(par, strokes) {
-  return Math.max(par, strokes) + 10;
+// Running out of time: max(par, strokes) plus 1 per TIMEOUT_UNIT of track still left to the cup
+// (at least 1, at most TIMEOUT_CAP). Shots under par are free and every shot that gets you closer
+// lowers the penalty, so it always pays to keep playing until the clock runs out.
+export const TIMEOUT_UNIT = 6;
+export const TIMEOUT_CAP = 8;
+
+/** Track left from p ([x, y, z]) to the cup: along the hole's route (lane, old tee, cup) when it has one. */
+export function trackLeft(def, p) {
+  const cups = [def.cup, ...(def.cups || [])];
+  const straight = Math.min(...cups.map((c) => Math.hypot(p[0] - c[0], p[2] - c[2])));
+  const r = def.route;
+  if (!r || r.length < 2) return straight;
+  const seg = (i) => Math.hypot(r[i + 1][0] - r[i][0], r[i + 1][1] - r[i][1]);
+  let best = Infinity, bi = 0, bk = 0;
+  for (let i = 0; i < r.length - 1; i++) {
+    const dx = r[i + 1][0] - r[i][0], dz = r[i + 1][1] - r[i][1], L2 = dx * dx + dz * dz || 1;
+    const k = Math.max(0, Math.min(1, ((p[0] - r[i][0]) * dx + (p[2] - r[i][1]) * dz) / L2));
+    const d = Math.hypot(p[0] - r[i][0] - dx * k, p[2] - r[i][1] - dz * k);
+    if (d < best) { best = d; bi = i; bk = k; }
+  }
+  let rest = best + seg(bi) * (1 - bk);
+  for (let i = bi + 1; i < r.length - 1; i++) rest += seg(i);
+  return rest; // the route ends at the cup
+}
+
+/** Score for a player still out when the clock runs out (pos: their ball, or null if unknown). */
+export function timeoutScore(def, strokes, pos) {
+  const base = Math.max(def.par, strokes);
+  if (!pos) return base + TIMEOUT_CAP;
+  return base + Math.min(TIMEOUT_CAP, Math.max(1, Math.ceil(trackLeft(def, pos) / TIMEOUT_UNIT)));
 }
 
 /**
@@ -122,7 +150,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null,
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, lp: p.lp ?? 100,
     }));
   }
 
@@ -175,6 +203,7 @@ export class HostRoom {
         if (!p) return;
         p.strokes = msg.k ?? p.strokes;
         p.pos = msg.p;
+        if (typeof msg.lp === 'number') p.lp = Math.max(0, Math.min(100, msg.lp));
         this.broadcast({ ...msg, id }, id);
         return;
       case 'possessShot': {
@@ -283,7 +312,7 @@ export class HostRoom {
     let color = msg.color && COLORS.includes(msg.color) && !used.has(msg.color) ? msg.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
-    const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi].par, 0) : null));
+    const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi], 0, null) : null));
     const trail = typeof msg.trail === 'string' ? msg.trail.slice(0, 16) : 'default';
     this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token, trail });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
@@ -346,7 +375,7 @@ export class HostRoom {
     this.playoff = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.lp = 100; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;
@@ -442,6 +471,9 @@ export class HostRoom {
     this.holeNo++;
     if (this.holeNo >= this.plan.length || this.endEarly) return this.finish();
     const def = HOLES[this.plan[this.holeNo]];
+    // life points carry over from hole to hole; a new course re-virtualizes everyone at full LP
+    const prevDef = this.holeNo > 0 ? HOLES[this.plan[this.holeNo - 1]] : null;
+    if (!prevDef || prevDef.sector !== def.sector) for (const p of this.players.values()) p.lp = 100;
     this.phase = 'hole';
     this.holeSeed = randomSeed();
     this.duration = Math.round(def.time * 1000 * (this.settings.timeMul || 1));
@@ -480,8 +512,8 @@ export class HostRoom {
       if (p.out) { results.push({ id: p.id, score: null, out: true }); continue; } // eliminated: no score
       if (!p.holed) {
         this.stat(p.id, 'timeouts');
-        p.scores[this.holeNo] = timeoutScore(def.par, p.strokes);
-        results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true });
+        p.scores[this.holeNo] = timeoutScore(def, p.strokes, p.pos);
+        results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true, left: p.pos ? Math.round(trackLeft(def, p.pos)) : null });
       } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
     }
     this.phase = 'between';

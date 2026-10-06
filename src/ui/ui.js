@@ -654,7 +654,7 @@ export class UI {
         </table>
         <h2>Rules</h2>
         <p>Everyone plays at the same time. Lowest total strokes wins. Falling into the Digital Sea costs +1.
-        Run out of time and you score <b>max(par, strokes) + 10</b>. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
+        Run out of time and you score <b>max(par, strokes) + 1 per 6 units of track still left</b> (+1 to +8), so every shot that gets you closer still counts. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
         <h2>Power-ups</h2>
         <div class="pu-grid">${POWERUP_IDS.map((id) => `<div><span>${POWERUPS[id].icon}</span><b>${esc(POWERUPS[id].name)}</b> ${esc(POWERUPS[id].desc)}</div>`).join('')}</div>
         <button class="btn" id="closeHelp">Close</button>
@@ -722,7 +722,7 @@ export class UI {
     const cell = (s, i) => {
       if (s === null || s === undefined) return '<td class="na">·</td>';
       const d = s - pars[i];
-      return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 10 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
+      return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 8 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
     };
     const s = this.setScreen(`
       <div class="panel scoreboard${xana ? ' xana-board' : ''}">
@@ -740,7 +740,7 @@ export class UI {
             const r = resultMap.get(p.id);
             const rel = p.total - parSum;
             const subt = (g) => { const v = g.idx.map((i) => p.scores[i]).filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) : '·'; };
-            return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ' ⏰' : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
+            return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ` ⏰${r.left != null ? `<span class="left">${r.left}u left</span>` : ''}` : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
               ${groups.map((g) => g.idx.map((i) => cell(p.scores[i], i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
           }).join('')}</tbody>
         </table></div>
