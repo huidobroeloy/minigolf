@@ -6,7 +6,6 @@ import { rect, patrol } from './helpers.js';
 export default {
   id: 'core-boss', name: 'Sector 5 Core', sector: 'core', par: 5, time: 210, boss: true,
   tee: [0, 0, 0], cup: [0, 0, 38.5],
-  hio: 'The red pipe a little left of the lane exit drops you behind the gate, rolling at the core.',
   parts: [
     { t: 'floor', poly: rect(-2, -1.2, 2, 14.2), open: [2] },
     // the arena, with an alcove on the right where the Kolossus plants its foot
@@ -25,7 +24,5 @@ export default {
     },
     { t: 'monster', type: 'manta', path: patrol([-1.6, 5], [1.6, 9], 5, 1.0) },
     { t: 'monster', type: 'creeper', p: [-1.3, 0, 35], period: 4.4, phase: 0.3 },
-    // the secret route: drop in here and come out behind the gate
-    { t: 'warp', r: 0.26, color: '#ff2a2a', a: [-3, 0, 21.5], b: [0, 0, 32.5], dir: [0, 1], speed: 0.5, gain: 1.08 },
   ],
 };

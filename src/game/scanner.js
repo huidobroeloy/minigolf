@@ -6,7 +6,11 @@ import { buildCourse } from '../course/builder.js';
 /**
  * Jérémie's Scanner: predicts the next shot by replaying it in a private, invisible copy
  * of the course (same physics, same monster clock), then draws the path as holo dots.
+ * It only shows the path up to the first bounce (or MAX_LEN units), never a whole ace line.
  */
+const MAX_LEN = 8;
+const BOUNCE = 0.35; // a sudden turn of this many radians in one step is a bounce
+
 export class Scanner {
   constructor(def, scene) {
     this.def = def;
@@ -64,6 +68,7 @@ export class Scanner {
     b.shoot(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), power * (mods.powerMul ?? 1), { chip: mods.chip });
     this.result = null;
     const pts = [];
+    let dist = 0, px = b.pos.x, pz = b.pos.z, heading = null;
     for (let i = 0; i < 480 && !this.result; i++) {
       this.course.update(t, FIXED_DT);
       b.preStep(FIXED_DT, this.env);
@@ -72,9 +77,20 @@ export class Scanner {
       if (b.state === 'sinking') { this.result = 'hole'; }
       if (b.state === 'idle') { this.result = 'rest'; }
       t += FIXED_DT;
-      if (i % 5 === 0) { const p = b.pos; pts.push(new THREE.Vector3(p.x, p.y - b.radius + 0.06, p.z)); }
+      const p = b.pos, v = b.vel;
+      const step = Math.hypot(p.x - px, p.z - pz);
+      if (step > 0.5) { this.result = 'cut'; break; } // teleported: never show where it comes out
+      dist += step; px = p.x; pz = p.z;
+      if (Math.hypot(v.x, v.z) > 0.3) {
+        const h = Math.atan2(v.x, v.z);
+        if (heading !== null && Math.abs(Math.atan2(Math.sin(h - heading), Math.cos(h - heading))) > BOUNCE) this.result = 'cut';
+        heading = h;
+      }
+      if (dist > MAX_LEN) this.result = 'cut';
+      if (i % 5 === 0 || this.result === 'cut') pts.push(new THREE.Vector3(p.x, p.y - b.radius + 0.06, p.z));
     }
-    const end = b.state === 'sinking' ? b.sinkFrom : b.pos;
+    // cut short: no landing ring, so it never tells you where (or whether) the ball ends up in the cup
+    const end = this.result === 'cut' ? null : b.state === 'sinking' ? b.sinkFrom : b.pos;
     this.draw(pts, end && new THREE.Vector3(end.x, end.y - b.radius + 0.03, end.z));
   }
 

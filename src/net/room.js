@@ -2,7 +2,7 @@ import { HOLES, buildPlan } from '../holes/index.js';
 import { introDuration } from '../game/intro.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
-import { POWERUPS, pickPowerup, pickupCategories, CATEGORY_WEIGHTS } from '../powerups/registry.js';
+import { POWERUPS, pickPowerup, pickupCategories, rollAny, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
 import { CHARACTER_COLORS, characterByColor } from '../game/characters.js';
 
@@ -56,8 +56,36 @@ export function pickupCount(def, players, level) {
   return Math.max(2, Math.min(12, Math.round((2 + 0.8 * players) * size * mul)));
 }
 
-export function timeoutScore(par, strokes) {
-  return Math.max(par, strokes) + 10;
+// Running out of time: max(par, strokes) plus a penalty for the share of the track still left to
+// the cup (+TIMEOUT_CAP from the tee, down to +1 next to the cup). Shots under par are free and every
+// shot that gets you closer lowers the penalty, so it always pays to keep playing until the end.
+export const TIMEOUT_CAP = 8;
+
+/** Track left from p ([x, y, z]) to the cup: along the hole's route (lane, old tee, cup) when it has one. */
+export function trackLeft(def, p) {
+  const cups = [def.cup, ...(def.cups || [])];
+  const straight = Math.min(...cups.map((c) => Math.hypot(p[0] - c[0], p[2] - c[2])));
+  const r = def.route;
+  if (!r || r.length < 2) return straight;
+  const seg = (i) => Math.hypot(r[i + 1][0] - r[i][0], r[i + 1][1] - r[i][1]);
+  let best = Infinity, bi = 0, bk = 0;
+  for (let i = 0; i < r.length - 1; i++) {
+    const dx = r[i + 1][0] - r[i][0], dz = r[i + 1][1] - r[i][1], L2 = dx * dx + dz * dz || 1;
+    const k = Math.max(0, Math.min(1, ((p[0] - r[i][0]) * dx + (p[2] - r[i][1]) * dz) / L2));
+    const d = Math.hypot(p[0] - r[i][0] - dx * k, p[2] - r[i][1] - dz * k);
+    if (d < best) { best = d; bi = i; bk = k; }
+  }
+  let rest = best + seg(bi) * (1 - bk);
+  for (let i = bi + 1; i < r.length - 1; i++) rest += seg(i);
+  return rest; // the route ends at the cup
+}
+
+/** Score for a player still out when the clock runs out (pos: their ball, or null if unknown). */
+export function timeoutScore(def, strokes, pos) {
+  const base = Math.max(def.par, strokes);
+  if (!pos) return base + TIMEOUT_CAP;
+  const share = trackLeft(def, pos) / Math.max(1, trackLeft(def, def.tee));
+  return base + Math.min(TIMEOUT_CAP, Math.max(1, Math.ceil(TIMEOUT_CAP * share)));
 }
 
 /**
@@ -72,7 +100,7 @@ export class HostRoom {
     this.links = new Map();       // id -> send(msg)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', mode: 'ffa' }; // mode: ffa | teams | elim
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', puMode: 'pickups', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko · puMode: pickups | draft | mirror
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -122,7 +150,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {},
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, lp: p.lp ?? 100,
     }));
   }
 
@@ -175,6 +203,7 @@ export class HostRoom {
         if (!p) return;
         p.strokes = msg.k ?? p.strokes;
         p.pos = msg.p;
+        if (typeof msg.lp === 'number') p.lp = Math.max(0, Math.min(100, msg.lp));
         this.broadcast({ ...msg, id }, id);
         return;
       case 'possessShot': {
@@ -205,7 +234,7 @@ export class HostRoom {
         const pk = this.pickups[msg.pid];
         if (!pk || pk.taken) return;
         pk.taken = id;
-        const pu = pickPowerup(pk.cat, this.rankFactor(id));
+        const pu = pickPowerup(pk.cat, this.rankFactor(id), Math.random, this.settings.puSet);
         this.stat(id, 'pickups');
         this.broadcast({ t: 'picked', pid: msg.pid, by: id, pu });
         return;
@@ -237,6 +266,8 @@ export class HostRoom {
           if (blocked) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Too close to a ball or the tee — place it somewhere else' }); return; }
         }
         this.stat(id, 'used');
+        // a character's special is once per course: the room remembers which course it was used on
+        if (msg.special && !this.playoff) p.specialUsed = HOLES[this.plan[this.holeNo]]?.sector ?? null;
         if (msg.pu === 'switch') {
           const tgt = this.players.get(msg.target);
           if (!tgt || tgt.holed || p.holed || !tgt.pos || !p.pos) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Switch failed: target unavailable' }); return; }
@@ -245,6 +276,19 @@ export class HostRoom {
         this.broadcast(fx);
         return;
       }
+      case 'agentPos':
+        if (p && this.phase === 'hole') this.broadcast({ ...msg, id }, id);
+        return;
+      case 'draftPick':
+        // only one of the three options this player was offered, once
+        if (!p || !p.draft?.includes(msg.pu)) return;
+        p.draft = null;
+        this.sendTo(id, { t: 'drafted', pu: msg.pu });
+        return;
+      case 'specialBack':
+        // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing)
+        if (p) p.specialUsed = null;
+        return;
       case 'reflect': {
         // a Firewall bounced an effect: send it back at the original sender, once
         const f = msg.fx;
@@ -277,7 +321,7 @@ export class HostRoom {
     let color = msg.color && COLORS.includes(msg.color) && !used.has(msg.color) ? msg.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
-    const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi].par, 0) : null));
+    const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi], 0, null) : null));
     const trail = typeof msg.trail === 'string' ? msg.trail.slice(0, 16) : 'default';
     this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token, trail });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
@@ -303,6 +347,7 @@ export class HostRoom {
     if (this.phase === 'hole') {
       this.sendTo(id, this.holeMessage());
       this.sendTo(id, { t: 'resume', strokes: old.strokes, holed: old.holed });
+      if (old.draft) this.sendTo(id, { t: 'draft', options: old.draft });
     } else if (this.phase === 'between') {
       this.sendTo(id, { t: 'holeEnd', results: this.lastResults, players: this.playerList(), holeNo: this.holeNo, plan: this.plan });
     } else if (this.phase === 'final' && this.finalMsg) {
@@ -338,9 +383,10 @@ export class HostRoom {
 
   startMatch({ intro = true } = {}) {
     this.playoff = null;
+    this.mirror = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.lp = 100; p.draft = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;
@@ -426,6 +472,7 @@ export class HostRoom {
       playoff: this.playoff ? { shooters: this.playoff.shooters } : null,
       seed: this.holeSeed, duration: this.duration, elapsed: this.elapsed(),
       pickupCount: this.pickups.length,
+      mirror: this.playoff ? null : this.mirror ?? null,
       taken: this.pickups.map((p) => p.taken || null),
       cats: this.pickups.map((p) => p.cat),
       players: this.playerList(),
@@ -436,12 +483,19 @@ export class HostRoom {
     this.holeNo++;
     if (this.holeNo >= this.plan.length || this.endEarly) return this.finish();
     const def = HOLES[this.plan[this.holeNo]];
+    // life points carry over from hole to hole; a new course re-virtualizes everyone at full LP
+    const prevDef = this.holeNo > 0 ? HOLES[this.plan[this.holeNo - 1]] : null;
+    const newCourse = !prevDef || prevDef.sector !== def.sector;
+    if (newCourse) for (const p of this.players.values()) p.lp = 100;
+    const puOn = this.settings.puLevel !== 'off';
+    // Mirror match: everyone gets the same power-up at the tee, and there are no pickups
+    this.mirror = puOn && this.settings.puMode === 'mirror' ? rollAny(this.settings.puSet) : null;
     this.phase = 'hole';
     this.holeSeed = randomSeed();
     this.duration = Math.round(def.time * 1000 * (this.settings.timeMul || 1));
     this.holeStart = performance.now();
     this.allHoledAt = null;
-    const n = pickupCount(def, this.activePlayers().length, this.settings.puLevel);
+    const n = this.settings.puMode === 'mirror' ? 0 : pickupCount(def, this.activePlayers().length, this.settings.puLevel);
     const cats = pickupCategories(this.holeSeed, n, RNG);
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
@@ -449,6 +503,13 @@ export class HostRoom {
     // XANA attack: about one hole in three, somewhere between 20% and 55% of the way through
     this.xanaAt = !this.playoff && Math.random() < 0.34 ? this.duration * (0.2 + Math.random() * 0.35) : null;
     this.broadcast(this.holeMessage());
+    // Draft: at the start of each course, every player picks 1 of 3 (one per category)
+    if (puOn && newCourse && this.settings.puMode === 'draft') {
+      for (const p of this.playing()) {
+        p.draft = ['self', 'sabotage', 'chaos'].map((cat) => pickPowerup(cat, this.rankFactor(p.id), Math.random, this.settings.puSet));
+        this.sendTo(p.id, { t: 'draft', options: p.draft });
+      }
+    }
   }
 
   /** XANA launches an attack on everyone for 20 s (rage, glitched floor, mirror world or a swarm). */
@@ -474,8 +535,8 @@ export class HostRoom {
       if (p.out) { results.push({ id: p.id, score: null, out: true }); continue; } // eliminated: no score
       if (!p.holed) {
         this.stat(p.id, 'timeouts');
-        p.scores[this.holeNo] = timeoutScore(def.par, p.strokes);
-        results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true });
+        p.scores[this.holeNo] = timeoutScore(def, p.strokes, p.pos);
+        results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true, left: p.pos ? Math.round(trackLeft(def, p.pos)) : null });
       } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
     }
     this.phase = 'between';

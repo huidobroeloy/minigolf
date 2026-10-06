@@ -8,6 +8,9 @@ import { Ghosts } from './ghosts.js';
 import { Pickups } from './pickups.js';
 import { EffectManager } from '../powerups/effects.js';
 import { POWERUPS, SPECIALS } from '../powerups/registry.js';
+import { DAMAGE } from '../monsters/attacks.js';
+import { AGENT_PROOF } from '../monsters/index.js';
+import { rollMonsters } from '../holes/monsterRoll.js';
 import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
@@ -27,6 +30,10 @@ export const EMOTES = ['😂', '😡', '👏', '💀'];
 
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
+
+// Telekinesis: how far it moves your ball, and how close to a cup it may drop it
+const TK_REACH = 1;
+const TK_CUP = 1.5;
 
 export class GameClient {
   constructor(app, link, me, { debug = false, isHost = false } = {}) {
@@ -97,7 +104,7 @@ export class GameClient {
   canShoot() {
     if (this.playoff && this.strokes >= 1) return false;
     if (this.possessing) return !this.flyover && this.phase === 'hole' && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen;
-    if (this.possessedBy || this.ball?.frozen) return false;
+    if (this.possessedBy || this.ball?.frozen || this.agentCtl) return false;
     return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
@@ -162,6 +169,23 @@ export class GameClient {
         break;
       case 'xanaAttack':
         this.effects.xanaAttack(m);
+        break;
+      case 'agentPos': {
+        const mo = this.course?.monsters[m.i];
+        if (mo?.agent && mo.agent.by === m.id) {
+          mo.agent.target = m.p;
+          if (m.end) mo.agent.until = Math.min(mo.agent.until, this.course.time ?? 0);
+        }
+        break;
+      }
+      case 'draft':
+        // wait for the course's map screen to clear before asking
+        clearTimeout(this.draftT);
+        this.draftT = setTimeout(() => this.ui.pickDraft(m.options, (pu) => this.link.send({ t: 'draftPick', pu })), this.ui.mapOpen ? 4300 : 300);
+        break;
+      case 'drafted':
+        this.addPowerup(m.pu, 'draft');
+        this.ui.bigToast(`${POWERUPS[m.pu].icon} ${POWERUPS[m.pu].name}`, 'drafted for this course', 'good');
         break;
       case 'gift':
         if (m.pu) { this.addPowerup(m.pu, 'steal'); this.ui.bigToast('🦝 Got it!', `stole ${POWERUPS[m.pu].name} from ${this.nameOf(m.from)}`, 'good'); }
@@ -255,6 +279,7 @@ export class GameClient {
   // ---------- hole lifecycle ----------
   teardownHole() {
     this.cancelAim();
+    document.body.classList.remove('lp-critical');
     this.weather?.dispose();
     this.weather = null;
     for (const c of this.celebrations || []) this.scene.remove(c.g);
@@ -266,6 +291,7 @@ export class GameClient {
     this.endTrip(true);
     if (this.towerTrip) { this.towerTrip.dispose(); this.towerTrip = null; }
     if (this.scanner) { this.scanner.dispose(); this.scanner = null; }
+    this.agentCtl = null;
     this.preShot = null;
     this.clearMarkers();
     this.effects.clear();
@@ -283,7 +309,8 @@ export class GameClient {
   loadHole(m) {
     this.teardownHole();
     this.app.hideBackdrop();
-    const def = HOLES[m.index];
+    // this match's monsters: the sector's typical ones plus a few guests, the same on every client
+    const def = rollMonsters(HOLES[m.index], m.seed ?? 1);
     this.def = def;
     this.holeMsg = m;
     this.phase = 'hole';
@@ -297,6 +324,7 @@ export class GameClient {
     this.ball = new Ball(this.physics, this.scene, this.me.color);
     this.ball.onEvent = (type, data) => this.onBallEvent(type, data);
     this.course.localBall = this.ball;
+    this.course.myId = this.myId; // XANA's Agent: a monster you drive never fires at you
     this.course.camera = this.cam.camera;
     this.course.onShake = (k) => { this.cam.shake = Math.max(this.cam.shake, k); };
     this.course.onMonsterHit = (kind, dmg) => this.onMonsterHit(kind, dmg);
@@ -308,9 +336,15 @@ export class GameClient {
     };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
+    this.wayPoint = null;
+    this.wayHealed = false;
     this.strokes = 0;
-    this.lp = 100; // Lyoko life points, refilled every hole
-    this.ui.setLP(100);
+    // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
+    this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
+    // the danger screen comes on when the hardest ordinary hit on this hole would finish you
+    // (one-shot attacks like mines, beams and Blok fire rings don't count: they always would)
+    this.maxHit = Math.max(20, ...def.parts.filter((p) => p.t === 'monster').flatMap((p) => Object.values(DAMAGE[p.type] || {}).filter((v) => v < 80)));
+    this.showLP(this.lp);
     this.shotInProgress = false;
     this.falling = false;
     this.spectate = null;
@@ -338,10 +372,18 @@ export class GameClient {
         else if (Math.random() < 0.35) this.ui.comms.say('holeStart');
       }, 2600);
     }
-    // your character's special move: one free use per hole
+    // your character's special move: one free use per course. The room remembers which course you
+    // used it on, so it stays used through a reload or a rejoin and comes back when a new course starts.
     const sp = SPECIALS[characterByColor(this.me.color)?.id];
-    this.special = sp && !this.playoff ? { id: sp, used: false } : null;
+    const mine = m.players?.find((q) => q.id === this.myId);
+    this.special = sp && !this.playoff ? { id: sp, used: mine?.specialUsed === def.sector } : null;
     this.renderInventory();
+    // Mirror match: the same power-up for everyone, once per hole
+    if (m.mirror && POWERUPS[m.mirror] && this.mirrorHole !== `${m.holeNo}:${m.index}` && !this.players.get(this.myId)?.out) {
+      this.mirrorHole = `${m.holeNo}:${m.index}`;
+      this.addPowerup(m.mirror, 'mirror');
+      setTimeout(() => this.ui.toast(`🪞 Mirror match: everyone has ${POWERUPS[m.mirror].icon} ${POWERUPS[m.mirror].name}`), 1500);
+    }
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
     this.ui.setStatus([]);
@@ -363,8 +405,14 @@ export class GameClient {
       if (!prev || prev.sector !== def.sector) {
         const starts = plan.filter((hi, i) => i === 0 || HOLES[plan[i - 1]].sector !== HOLES[hi].sector).length;
         const n = plan.slice(0, m.holeNo + 1).filter((hi, i) => i === 0 || HOLES[plan[i - 1]].sector !== HOLES[hi].sector).length;
-        const holes = plan.filter((hi) => HOLES[hi].sector === def.sector).length;
-        if (plan.length > 1) this.ui.courseCard(n, starts, SECTOR_NAMES[def.sector], holes);
+        const inIt = plan.filter((hi) => HOLES[hi].sector === def.sector);
+        const done = [...new Set(plan.slice(0, m.holeNo).map((hi) => HOLES[hi].sector))];
+        if (plan.length > 1) {
+          this.ui.sectorMap({
+            n, total: starts, sector: def.sector, name: SECTOR_NAMES[def.sector], holes: inIt.length,
+            par: inIt.reduce((a, hi) => a + HOLES[hi].par, 0), lp: this.lp, done, puMode: this.lobby?.settings?.puMode,
+          });
+        }
       }
       const inCourse = plan.slice(0, m.holeNo + 1).reverse().findIndex((hi) => HOLES[hi].sector !== def.sector);
       const k = inCourse < 0 ? m.holeNo + 1 : inCourse;
@@ -418,7 +466,10 @@ export class GameClient {
     // record results
     for (const p of m.players) this.upsertPlayer(p);
     const mine = m.results.find((r) => r.id === this.myId);
-    if (mine?.timeout && this.phase === 'hole') { sfx.play('buzzer'); stats.add('holes'); }
+    if (mine?.timeout && this.phase === 'hole') {
+      sfx.play('buzzer'); stats.add('holes');
+      this.ui.bigToast('⏰ TIME UP', `scored ${mine.score}${mine.left != null ? ` · ${mine.left} units from the cup` : ''}`, 'bad');
+    }
     this.phase = 'between';
     music.play('menu');
     this.teardownHole();
@@ -471,6 +522,7 @@ export class GameClient {
 
   onHoled() {
     if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    document.body.classList.remove('lp-critical');
     // Fortune cups add or take strokes (never below 1)
     const mod = this.ball.sinkCup?.mod;
     this.rawStrokes = this.strokes;
@@ -696,7 +748,7 @@ export class GameClient {
     const opts = this.effects.onShoot();
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
-    if (opts.glide) this.ball.startGlide(2.5);
+    if (opts.glide) this.ball.startGlide(1.8);
     if (opts.fly) this.ball.startFly(8);
     if (opts.hover) this.ball.startGlide(3.5); // Overboard: hovers like the wings, a little longer
     if (opts.triplicate) this.spawnClones(yaw, power * opts.powerMul, opts.chip);
@@ -798,7 +850,7 @@ export class GameClient {
         break;
       case 'vaporize':
         this.lp = 0;
-        this.ui.setLP(0, 100);
+        this.showLP(0, 100);
         this.vaporize();
         break;
       case 'shark':
@@ -815,7 +867,7 @@ export class GameClient {
     if (!this.ball || this.ball.state === 'holed' || this.falling) return;
     const before = this.lp ?? 100;
     this.lp = Math.max(0, before - dmg);
-    this.ui.setLP(this.lp, dmg);
+    this.showLP(this.lp, dmg);
     if (this.lp <= 0) {
       this.ui.bigToast('💥 DEVIRTUALIZED', 'your life points hit zero · +1 stroke', 'bad');
       this.vaporize(true);
@@ -826,9 +878,38 @@ export class GameClient {
     } else this.ui.comms.say('hit', { lp: this.lp });
   }
 
+  /**
+   * Way towers: roll through a dormant (red) one to deactivate it. It turns white, heals +20 LP (once
+   * per hole) and becomes where you're re-virtualized after a devirtualization. Your towers only.
+   */
+  checkWayTowers(ball) {
+    for (const w of this.course.wayTowers || []) {
+      if (w.active || Math.hypot(ball.pos.x - w.x, ball.pos.z - w.z) > w.r || Math.abs(ball.pos.y - w.y) > 1) continue;
+      w.active = true;
+      w.model.userData.setColor('#ffffff');
+      this.wayPoint = new THREE.Vector3(w.x, w.y, w.z);
+      for (let i = 0; i < 40; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.effects.particles?.spawn({ pos: [w.x, w.y + 0.6 + Math.random(), w.z], vel: [Math.cos(a) * 2.2, 1 + Math.random() * 2, Math.sin(a) * 2.2], color: i % 2 ? '#ffffff' : '#bfe6ff', size: 0.12, life: 0.9, gravity: 2 });
+      }
+      sfx.play('teleport');
+      if (!this.wayHealed) { this.wayHealed = true; this.healLP(20); }
+      this.ui.bigToast('🗼 WAY TOWER DEACTIVATED', '+20 LP · you re-virtualize here if devirtualized', 'good');
+      this.stat('waytowers');
+    }
+  }
+
+  /** The LP bar, plus the red danger screen when one more hit would devirtualize you. */
+  showLP(lp, delta = 0) {
+    this.ui.setLP(lp, delta);
+    const live = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking' && this.phase === 'hole';
+    document.body.classList.toggle('lp-critical', !!live && lp > 0 && lp <= (this.maxHit ?? 20));
+    this.sendState(true);
+  }
+
   healLP(n) {
     this.lp = Math.min(100, (this.lp ?? 100) + n);
-    this.ui.setLP(this.lp, -n);
+    this.showLP(this.lp, -n);
   }
 
   /** The Megatank's beam: the ball is vaporized, +1 stroke, back to the last safe spot. */
@@ -856,9 +937,11 @@ export class GameClient {
     setTimeout(() => {
       if (this.ball !== b || fid !== this.fallId) return;
       this.falling = false;
-      b.respawnAtSafe();
+      // re-virtualized at your Way tower if you deactivated one, else at the last safe spot
+      if (this.wayPoint) b.place(this.wayPoint.clone().add(new THREE.Vector3(0.45, b.radius + 0.05, 0)));
+      else b.respawnAtSafe();
       this.lp = 100;
-      this.ui.setLP(100);
+      this.showLP(100);
       this.cam.snapTo(b.mesh.position);
       this.virtualize(b.mesh.position);
       this.onRest();
@@ -914,18 +997,85 @@ export class GameClient {
   // ---------- Telekinesis ----------
   nudgeBall(pos) {
     const b = this.ball;
-    if (!b || b.state !== 'idle' || !pos) return;
-    const p = b.pos;
-    const dx = pos[0] - p.x, dz = pos[2] - p.z, d = Math.hypot(dx, dz);
-    const k = d > 1.5 ? 1.5 / d : 1;
-    const x = p.x + dx * k, z = p.z + dz * k;
-    const y = this.course.floorYAt(x, z);
-    if (y === null) return this.ui.toast('🌀 Telekinesis needs solid ground');
-    b.place(new THREE.Vector3(x, y + b.radius + 0.02, z));
+    const s = this.telekinesisSpot(pos);
+    if (s.err) {
+      // the room already counted the special as used: hand it back
+      if (this.special?.id === 'telekinesis' && this.special.used) { this.special.used = false; this.renderInventory(); this.link.send({ t: 'specialBack' }); }
+      return this.ui.toast(s.err);
+    }
+    b.place(new THREE.Vector3(s.x, s.y + b.radius + 0.02, s.z));
     this.cam.snapTo(b.mesh.position);
     sfx.play('teleport');
     this.ui.toast('🌀 Telekinesis');
     this.sendState(true);
+  }
+
+  /**
+   * Where Telekinesis would put your resting ball for a click at q ([x, y, z]): within 1 unit, on
+   * solid ground, and never next to a cup (no free hole-out). Returns { x, y, z } or { err }.
+   */
+  telekinesisSpot(q) {
+    const b = this.ball, p = b?.pos;
+    if (!q || !p || b.state !== 'idle') return { err: '🌀 Your ball has to be resting' };
+    const dx = q[0] - p.x, dz = q[2] - p.z, d = Math.hypot(dx, dz);
+    if (d > TK_REACH + 0.1) return { err: '🌀 Pick a spot within reach of your resting ball' };
+    const k = d > TK_REACH ? TK_REACH / d : 1;
+    const x = p.x + dx * k, z = p.z + dz * k;
+    if (this.course.cups.some((c) => Math.hypot(x - c.x, z - c.z) < TK_CUP)) return { err: '🌀 Too close to the cup for Telekinesis' };
+    const y = this.course.floorYAt(x, z);
+    if (y === null) return { err: '🌀 Telekinesis needs solid ground' };
+    return { x, y, z };
+  }
+
+  // ---------- XANA's Agent ----------
+  /** Index of the monster nearest q that the Agent can take over (within 2.5), or -1. */
+  agentTargetAt(q) {
+    let best = -1, bd = 2.5;
+    const t = this.course.time ?? 0;
+    this.course.monsters.forEach((m, i) => {
+      if (m.slashed || AGENT_PROOF.has(m.spec.type) || (m.agent && t < m.agent.until)) return;
+      const s = m.model.position, d = Math.hypot(s.x - q[0], s.z - q[2]);
+      if (d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+
+  startAgent(i, m) {
+    this.cancelAim();
+    const p = m.agent.pos;
+    // fliers keep their height above the floor
+    const fy = this.course.floorYAt(p.x, p.z);
+    this.agentCtl = { i, m, keys: new Set(), joy: null, alt: fy === null ? 0 : p.y - fy, sent: 0 };
+    this.ui.bigToast('👾 YOU ARE XANA\'S AGENT', 'WASD / arrows or drag to steer · 12 s · Esc to stop', 'good');
+  }
+
+  endAgent() {
+    if (!this.agentCtl) return;
+    const m = this.agentCtl.m;
+    if (m.agent) m.agent.until = Math.min(m.agent.until, this.course.time ?? 0);
+    this.link.send({ t: 'agentPos', i: this.agentCtl.i, p: { ...m.agent?.pos }, end: 1 });
+    this.agentCtl = null;
+  }
+
+  /** Drive the monster: keys move it relative to the camera, a drag works like a joystick. */
+  steerAgent(dt) {
+    const a = this.agentCtl, m = a.m, t = this.course.time ?? 0;
+    if (!m.agent || t >= m.agent.until || m.slashed) { this.agentCtl = null; this.ui.toast('👾 The monster slips back to XANA'); return; }
+    const k = a.keys;
+    let fx = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+    let fz = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+    if (a.joy) { fx = Math.max(-1, Math.min(1, a.joy.dx / 60)); fz = Math.max(-1, Math.min(1, -a.joy.dy / 60)); }
+    const L = Math.hypot(fx, fz);
+    if (L > 0.1) {
+      const yaw = this.cam.yaw, sp = 3.2 * Math.min(1, L) * dt;
+      const dx = (Math.sin(yaw) * fz - Math.cos(yaw) * fx) / L * sp, dz = (Math.cos(yaw) * fz + Math.sin(yaw) * fx) / L * sp;
+      const p = m.agent.pos, nx = p.x + dx, nz = p.z + dz;
+      const fy = this.course.floorYAt(nx, nz);
+      // stays on the course: no walking off edges or up cliffs
+      if (fy !== null && Math.abs(fy + a.alt - p.y) < 1.2) m.agent.pos = { x: nx, y: fy + a.alt, z: nz, ry: Math.atan2(dx, dz) };
+    }
+    a.sent += dt;
+    if (a.sent > 1 / 15) { a.sent = 0; this.link.send({ t: 'agentPos', i: a.i, p: m.agent.pos }); }
   }
 
   // ---------- XANA Possession ----------
@@ -1083,7 +1233,7 @@ export class GameClient {
   }
 
   useSlot(i) {
-    if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this hole');
+    if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this course');
     const id = this.slotItem(i);
     if (!id || this.phase !== 'hole') return;
     if (this.effects.locked) return this.ui.toast('You can\'t skip this ad 📺');
@@ -1120,8 +1270,14 @@ export class GameClient {
     if (!t) return;
     if (t.id === 'arrow') { const p = this.ball.pos; params = { ...params, from: [p.x, p.y, p.z] }; }
     if (t.id === 'telekinesis') {
-      const p = this.ball.pos, q = params.pos;
-      if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.6) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
+      const s = this.telekinesisSpot(params.pos);
+      if (s.err) { this.ui.toast(s.err); return; }
+    }
+    if (t.id === 'agent') {
+      // pick the monster here, so every client takes over the same one
+      const i = this.agentTargetAt(params.pos);
+      if (i < 0) { this.ui.toast('👾 Click right next to a monster'); return; }
+      params = { ...params, i };
     }
     if (this.slotItem(t.slot) === t.id) {
       this.consumeSlot(t.slot);
@@ -1208,6 +1364,7 @@ export class GameClient {
         return;
       }
       if (this.targeting && e.button === 0) { this.targeting.down(e); return; }
+      if (this.agentCtl && e.button === 0) { this.agentCtl.joy = { sx: e.clientX, sy: e.clientY, dx: 0, dy: 0 }; return; }
       if (e.button === 2) this.rightDown = { x: e.clientX, y: e.clientY };
       if (e.button === 0 && this.canShoot()) {
         this.aim = { sx: e.clientX, sy: e.clientY, power: 0 };
@@ -1218,6 +1375,7 @@ export class GameClient {
     this.disposers.push(inp.on('pointermove', (e, p) => {
       if (this.targeting && this.course && inp.pointers.size < 2 && !(p && p.button === 2)) this.targeting.move(e);
       if (!p) return;
+      if (this.agentCtl?.joy) { this.agentCtl.joy.dx = e.clientX - this.agentCtl.joy.sx; this.agentCtl.joy.dy = e.clientY - this.agentCtl.joy.sy; return; }
       const ts = this.effects.timeScale();
       if (inp.pointers.size >= 2 && tactical()) {
         const d = this.pinchDist();
@@ -1262,6 +1420,7 @@ export class GameClient {
         if (Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y) < 6) this.cancelTargeting();
       }
       this.rightDown = null;
+      if (this.agentCtl) this.agentCtl.joy = null;
       if (this.aim) {
         const pw = this.aim.power;
         this.cancelAim();
@@ -1276,6 +1435,7 @@ export class GameClient {
     }));
     this.disposers.push(inp.on('keydown', (e) => this.onKey(e)));
     this.disposers.push(inp.on('keyup', (e) => {
+      this.agentCtl?.keys.delete(e.code);
       if (e.code === 'Space' && this.spaceCharge) {
         const pw = this.spaceCharge.power;
         this.cancelAim();
@@ -1296,6 +1456,7 @@ export class GameClient {
     if (e.code === 'KeyM') return this.app.toggleMute();
     if (e.code === 'Escape') {
       if (this.targeting) return this.cancelTargeting();
+      if (this.agentCtl) { this.endAgent(); return this.ui.toast('👾 You let the monster go'); }
       if (this.possessing) { this.endPossessing(); return this.ui.toast('👁️ You let go'); }
       if (this.cam.mode === 'tactical') { this.cam.mode = 'chase'; return; }
       if (this.ui.overlayOpen && !this.effects.locked && !this.falling) return this.ui.closeOverlay();
@@ -1303,6 +1464,7 @@ export class GameClient {
       return this.ui.toggleSettings();
     }
     if (this.phase !== 'hole') return;
+    if (this.agentCtl && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) { this.agentCtl.keys.add(e.code); return; }
     const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2, Digit4: 'S', Numpad4: 'S' }[e.code];
     if (digit !== undefined) return e.shiftKey ? this.discardSlot(digit) : this.useSlot(digit);
     if (e.code === 'KeyC') return this.cycleView();
@@ -1496,6 +1658,7 @@ export class GameClient {
     this.stepClones(dt, 'post');
     if (ball.state === 'idle' || ball.state === 'moving') {
       for (const pid of this.pickups.touching(ball.pos, ball.radius)) this.link.send({ t: 'claim', pid });
+      this.checkWayTowers(ball);
       if (ball.teleportCooldown > 0) ball.teleportCooldown -= dt;
       const dest = this.course.checkTeleport(ball, { pick: (a) => a[Math.floor(Math.random() * a.length)] });
       if (dest) {
@@ -1533,9 +1696,17 @@ export class GameClient {
       if (u >= 1) { this.flyover = null; this.cam.snapTo(ball); }
       return;
     }
+    // someone else's Agent: ease toward the positions they send (15 Hz)
+    for (const mo of this.course.monsters) {
+      const ag = mo.agent, q = ag?.target;
+      if (!q || ag.by === this.myId) continue;
+      const k = 1 - Math.exp(-dt * 12), p = ag.pos;
+      ag.pos = { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: p.z + (q.z - p.z) * k, ry: q.ry ?? p.ry };
+    }
     let target = this.ball.mesh.position;
     const victim = this.possessing && this.ghosts.position(this.possessing.target);
-    if (victim) target = victim;
+    if (this.agentCtl) { this.steerAgent(dt); const ap = this.agentCtl?.m.agent?.pos; if (ap) target = new THREE.Vector3(ap.x, ap.y + 0.3, ap.z); }
+    else if (victim) target = victim;
     else if (this.ball.state === 'holed') {
       const sp = this.spectate && this.ghosts.position(this.spectate);
       if (sp) target = sp;
@@ -1551,7 +1722,7 @@ export class GameClient {
     const r3 = (v) => Math.round(v * 1000) / 1000;
     this.link.send({
       t: 'st', p: [r3(p.x), r3(p.y), r3(p.z)], r: r3(this.ball.radius),
-      s: this.falling || this.trip?.mainDead ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0,
+      s: this.falling || this.trip?.mainDead ? 'gone' : this.ball.state, k: this.strokes, g: this.ball.mods.ghost ? 1 : 0, lp: this.lp,
       cl: this.trip ? this.trip.clones.filter((c) => !c.dead && !c.holed).map((c) => { const q = c.pos; return [r3(q.x), r3(q.y), r3(q.z)]; }) : undefined,
     });
     const me = this.players.get(this.myId);

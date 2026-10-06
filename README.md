@@ -59,7 +59,7 @@ Each character can only be picked by one player per room.
 | Space (hold) | Alternative power meter |
 | C / 🎥 | Switch camera: **chase**, **first-person (POV)**, **aerial** (wheel or pinch to zoom, drag to pan) |
 | 1 2 3 | Use a power-up (Shift + number discards it) |
-| 4 / ★ slot | Your character's **special move**, once per hole |
+| 4 / ★ slot | Your character's **special move**, once per course |
 | Tab / 👁️ | Spectate others after you hole out |
 | 7 8 9 0 | Emotes 😂 😡 👏 💀 |
 | Esc / ⚙️ | Settings: music, sound effects, mutes, graphics, intro, your soundtrack |
@@ -73,19 +73,21 @@ If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** 
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
-- **Life points:** you start each hole with 100 LP. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
+- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot (or your Way tower) with full LP.
+- **Way towers:** each lane has a dormant red tower. Roll through it to deactivate it: +20 LP, and it becomes where you come back after a devirtualization.
 - The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
-- Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 10**.
+- Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 1 to 8**, depending on how much of the track you still had left: keep playing until the end, every shot closer counts.
 - **Ties are broken**, never shared:
   1. countback over the last 3 holes;
   2. the last hole;
   3. most aces;
   4. a sudden-death closest-to-the-pin playoff.
 - **Fortune Falls Casino:** every cup ends the hole, but each one adds or removes strokes. The number is written over the cup, for example −2 or +3. The neon pits midway add a random penalty.
-- Holes are long, with doglegs: a full-power shot never reaches the cup directly. Every hole still has a hole-in-one, through a **secret route**: on most holes a red warp pipe in the approach lane that drops you near the cup, at a speed that only rolls in if you hit the pipe just right (about 0.4% of shots).
+- Holes are long, with doglegs: every hole starts with a winding approach lane (about 41–55 units in front of par 2–4 holes, a shorter one in front of par 5s) full of its sector's hazards and monsters. There are no shortcuts: you play the whole lane.
 
 ## XANA's monsters
+Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
 | Monster | What it does |
@@ -116,12 +118,16 @@ About one hole in three, XANA attacks everyone at once for 20 s, with an alarm a
 ## Power-ups
 You can carry up to 3. Pick them up from mini Lyoko towers; if your slots are full, the new one is discarded.
 
-**Special moves:** your character's own move is in the gold ★ slot, free once per hole: Ulrich **Super Sprint**, Odd **Laser Arrow**, Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
-The host sets the amount (**Off / Few / Normal / Chaos**). It also scales with the number of players and the size of the hole.
+**Special moves:** your character's own move is in the gold ★ slot, free once per course: Ulrich **Super Sprint**, Odd **Laser Arrow**, Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
+The host sets the amount (**Off / Few / Normal / Chaos**), the **power-up set** (all of them, or **Lyoko only**: just the ones from the show) and the **power-up mode**:
+- **Pickups:** grab them from the mini towers (the classic).
+- **Draft:** at the start of each course, Jérémie sends you a program: pick 1 of 3 (pickups still spawn).
+- **Mirror match:** every hole, everyone gets the same power-up at the tee, and there are no pickups.
+The amount also scales with the number of players and the size of the hole.
 
 The tower halo tells you the **category**:
 - **Blue:** helps you.
-- **Red:** sabotages others.
+- **Amber:** sabotages others.
 - **Purple:** chaos.
 
 The exact item is a surprise. Players lower on the leaderboard get nastier items (**catch-up luck**), and collected pickups respawn every 25 s.
@@ -143,20 +149,20 @@ Active effects show as chips with a countdown at the top of the screen.
 | 👻 | Ghost | Pass through walls, monsters and pits (but not off the edge) |
 | 🦘 | Chip Shot | Your next shot jumps |
 | ⏪ | Return to the Past | Undo your last shot (the stroke still counts) |
-| ⚔️ | Super Sprint | Ulrich: next shot 60% faster, and monsters can't touch it |
-| 🌀 | Telekinesis | Yumi: nudge your resting ball up to 1.5 units, for free |
-| 👼 | Angel Wings | Aelita: your next shot glides for 2.5 s over pits, water and gaps |
+| ⚔️ | Super Sprint | Ulrich: next shot 35% faster, and monsters can't touch it |
+| 🌀 | Telekinesis | Yumi: nudge your resting ball up to 1 unit, for free (not next to the cup) |
+| 👼 | Angel Wings | Aelita: your next shot glides for 1.8 s over pits, water and gaps |
 | 🛩️ | Overwing | Vehicle: your ball rides Yumi's Overwing straight over everything for 8 units |
 | 🏍️ | Overbike | Vehicle: Ulrich's Overbike, 40% faster, barging straight through monsters |
 | 🛹 | Overboard | Vehicle: Odd's Overboard hovers for 3.5 s over pits, lava and water, with no friction |
-| 🌟 | Hopper's Light | Franz Hopper cleanses every bad effect on you and shields you for 15 s |
+| 🌟 | Hopper's Light | Franz Hopper cleanses every bad effect on you and shields you for 10 s |
 | 🛡️ | Firewall | The next power-up aimed at you bounces back to its sender |
 | 🔱 | Triplicate | Your next shot splits into three balls, and the best one is kept |
-| 🖥️ | Jérémie's Scanner | Shows the full path of your next shot, bounces included |
+| 🖥️ | Jérémie's Scanner | Shows where your next shot goes, up to its first bounce |
 | 💗 | Energy Field | Aelita: a shockwave from your ball pushes every nearby ball away |
 | 🏹 | Laser Arrow | Odd: fire an arrow; the first ball it hits gets launched |
-| 🗡️ | Zweihänder | William: cut a monster or moving obstacle out of the course for 15 s |
-| 🗼 | Activate Tower | XANA: every monster attacks twice as often for 15 s |
+| 🗡️ | Zweihänder | William: cut a monster or moving obstacle out of the course for 25 s |
+| 🗼 | Activate Tower | XANA: for 15 s every monster attacks the others twice as often and leaves you alone |
 | 💔 | Unlovaball | For 10 s, other balls are pushed away from yours |
 | 🌸 | Aelita | Everyone else moves in slow motion for their next shot |
 | 🐜 | Fun Size | Shrinks everyone else's ball |
@@ -173,7 +179,7 @@ Active effects show as chips with a countdown at the top of the screen.
 | 😵 | Stun | Someone's next shot controller goes haywire |
 | 🔮 | Lyoko Guardian | XANA traps someone's ball in a Guardian sphere for 8 s |
 | 💥 | Devirtualize | Sends one player's ball back to the tee (no extra stroke) |
-| 🔴 | Bumper Spawn | Place a bumper that sends balls back where they came from |
+| 🟡 | Bumper Spawn | Place a bumper that sends balls back where they came from |
 | 🕳️ | Black Hole Bumper | A black hole for 20 s: drags passing balls in and flings them out like a bumper |
 | 🪲 | Kankrelat Swarm | Five Kankrelats skitter around a spot for 20 s |
 | ✨ | Aelita's Creativity | Draw a wall to block a lane, or a bridge across a gap (30 s) |
@@ -184,6 +190,7 @@ Active effects show as chips with a countdown at the top of the screen.
 | ⛸️ | Ice Rink | The whole floor freezes |
 | 🌊 | Tsunami | A giant wave sweeps the way you drag |
 | 🐔 | Montapollos | A giant chicken runs around shoving balls |
+| 👾 | XANA's Agent | Take over a monster for 12 s and steer it (WASD/arrows or drag): it fires twice as often at everyone else |
 
 ## The 9 courses
 1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks.
@@ -256,7 +263,6 @@ Debug options:
   - **K:** put the ball near the cup.
   - **L:** log the ball's position.
   - `window.__hio(holeIndex)`: brute-forces hole-in-one shots.
-  - `window.__tuneWarp(holeIndex)`: tunes a hole's secret warp (exit spot and speed gain) to about 8 aces in the search grid.
   - `window.__rampTest()`: flags balls that stop or hover on a ramp.
 
 Pushing to `main` redeploys GitHub Pages. Only the repository owner can push to `main`.

@@ -88,11 +88,9 @@ export default [
   {
     id: 'network-6', name: 'The Hub', sector: 'network', par: 5, time: 170,
     tee: [0, 0, 0], cup: [0, 1, 30],
-    hio: 'A secret warp hides at the end of the first highway. It sends you straight into the Hub.',
     parts: [
       // first highway, then a bend to the right
       { t: 'floor', poly: [[-2, -1.2], [2, -1.2], [2, 8], [9, 8], [9, 13], [8.6, 13], [7.4, 13], [-2, 13]], open: [5] },
-      { t: 'warp', a: [-1.2, 0, 12.2], b: [5.2, 1, 33], dir: [-0.866, -0.5], speed: 0.5, gain: 4.32, r: 0.35 }, // tuned with __tuneWarp: ~8 aces
       { t: 'zone', kind: 'slow', rect: [-1.3, 24.6, 1.3, 27.6], y: 1, mul: 4 }, // corrupted data: sticky
       // holographic bridge up to the Hub
       { t: 'tube', pts: [[8, 0, 12.5], [8, 0.3, 16], [6, 1, 19.5], [3.6, 1, 21.6], [2.2, 1, 23.6]], r: 0.6, color: '#7ac8ff' },

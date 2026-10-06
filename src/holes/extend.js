@@ -3,33 +3,66 @@ import { pointInPoly } from '../course/geometry.js';
 
 // Longer holes. Every hole keeps its own layout, but now you reach it through a winding approach
 // lane: the new tee is at the far end of a dogleg corridor that joins the old start through its
-// back edge. Each lane carries its sector's hazards and monsters, and hides the hole's secret ace
-// route: a warp pipe near the tee that drops you on the old tee, aimed along the old ace line, at
-// the speed you went in with.
+// back edge. Each lane carries its sector's hazards and monsters. There is no shortcut: you play
+// the whole lane.
 
 // Corridor shapes, as points walking BACK from the old start's back edge (local frame: +z is
-// forward into the hole, +x right). Lengths: short ≈ 23, long ≈ 40.
-const SHAPES = {
-  S: [[0, 0], [0, -5], [8, -5], [8, -15]],
-  U: [[0, 0], [0, -8], [9, -8], [9, -2]],
-  Z: [[0, 0], [0, -4], [-6, -10], [-6, -18]],
-  L: [[0, 0], [0, -11], [-11, -11]],
-  zig: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [5, -23]],
-  long: [[0, 0], [0, -5], [9, -5], [9, -14], [0, -14], [0, -25]],
-  hook: [[0, 0], [0, -6], [-8, -6], [-8, -16], [2, -16], [2, -22]],
+// forward into the hole, +x right). Long lanes ≈ 41–55 (holes up to par 4); the short ones (≈ 22–40,
+// suffix 0) go in front of par-5 holes and are the fallback when a long lane doesn't fit.
+export const SHAPES = {
+  S: [[0, 0], [0, -5], [8, -5], [8, -15], [0, -15], [0, -25]],
+  Z: [[0, 0], [0, -4], [-6, -10], [-6, -20], [2, -28], [2, -36]],
+  U: [[0, 0], [0, -6], [-8, -6], [-8, -14], [0, -14], [0, -22], [8, -22], [8, -14]],
+  L: [[0, 0], [0, -11], [-11, -11], [-11, -22], [-1, -22], [-1, -30]],
+  zig: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [0, -24], [5, -29], [5, -35]],
+  hook: [[0, 0], [0, -6], [-8, -6], [-8, -15], [2, -15], [2, -23], [-5, -23], [-5, -30]],
+  S0: [[0, 0], [0, -5], [8, -5], [8, -15]],
+  U0: [[0, 0], [0, -8], [9, -8], [9, -2]],
+  Z0: [[0, 0], [0, -4], [-6, -10], [-6, -18]],
+  L0: [[0, 0], [0, -11], [-11, -11]],
+  zig0: [[0, 0], [0, -4], [5, -9], [0, -14], [5, -19], [5, -23]],
+  hook0: [[0, 0], [0, -6], [-8, -6], [-8, -16], [2, -16], [2, -22]],
+};
+
+// Each sector's typical monsters (its lanes use these; holes/monsterRoll.js mixes in guests each match).
+export const ROSTER = {
+  desert: ['kankrelat', 'tarantula'],
+  forest: ['hornet', 'kankrelat', 'blok'],
+  ice: ['krabe', 'blok'],
+  mountain: ['tarantula', 'manta', 'hornet'],
+  sector5: ['creeper', 'manta'],
+  volcano: ['tarantula', 'krabe', 'blok'],
+  sea: ['shark', 'manta'],
+  network: ['manta', 'creeper'],
 };
 
 // What each sector puts in its lanes: the floor look comes from the theme; these are the extras.
 const FLAVOUR = {
-  desert: { shooters: ['kankrelat', 'kankrelat'], hazard: 'sand', prop: 'sandstone' },
-  forest: { shooters: ['hornet', 'kankrelat'], hazard: 'trees', prop: 'tree' },
-  ice: { shooters: ['krabe', 'blok'], hazard: 'snow', prop: 'ice' },
-  mountain: { shooters: ['tarantula', 'manta'], hazard: 'wind', prop: 'rock' },
-  sector5: { shooters: ['creeper', 'manta'], hazard: 'bumpers', prop: 's5' },
-  volcano: { shooters: ['tarantula', 'krabe'], hazard: 'lava', prop: 'rock' },
-  sea: { shooters: ['shark', 'shark'], hazard: 'current', prop: 'neon' },
-  network: { shooters: ['manta', 'creeper'], hazard: 'bumpers', prop: 'neon' },
+  desert: { hazard: 'sand', prop: 'sandstone' },
+  forest: { hazard: 'trees', prop: 'tree' },
+  ice: { hazard: 'snow', prop: 'ice' },
+  mountain: { hazard: 'wind', prop: 'rock' },
+  sector5: { hazard: 'bumpers', prop: 's5' },
+  volcano: { hazard: 'lava', prop: 'rock' },
+  sea: { hazard: 'current', prop: 'neon' },
+  network: { hazard: 'bumpers', prop: 'neon' },
 };
+
+/**
+ * A lane monster of any type on a lane slot: { a, b } its patrol ends across the lane, y the floor,
+ * k its index (phase). The slot is kept on the spec (lane) so the type can be re-rolled each match.
+ */
+export function laneMonster(type, slot) {
+  const { a, b, y, k } = slot;
+  if (type === 'creeper') return { t: 'monster', type, p: [b[0], y, b[1]], period: 4.2, phase: k * 0.37, lane: slot };
+  const spec = {
+    t: 'monster', type, lane: slot,
+    path: patrol(a, b, type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4),
+  };
+  if (type === 'hornet') spec.aim = 'ball';
+  if (type === 'manta') spec.size = 0.8;
+  return spec;
+}
 const SHOOTERS = new Set(['kankrelat', 'hornet', 'blok', 'krabe', 'tarantula', 'creeper', 'manta', 'shark', 'megatank', 'scyphozoa']);
 
 const len = (pts) => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
@@ -58,6 +91,28 @@ export function corridorPoly(pts, w) {
 }
 const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
 
+const segDist = (x, z, a, b) => {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+  const k = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+  return Math.hypot(x - a[0] - dx * k, z - a[1] - dz * k);
+};
+
+/** Does a point of a new lane (at height y) land on a floor, ramp, tube or bowl of the hole? */
+function laneBlocker(def, y) {
+  const near = (h) => Math.abs(h - y) < 2.5;
+  const tests = [];
+  for (const p of def.parts) {
+    if (p.poly && near(p.y ?? 0)) tests.push((x, z) => pointInPoly(x, z, p.poly));
+    if (p.t === 'ramp' && (near(p.ya) || near(p.yb))) tests.push((x, z) => segDist(x, z, p.a, p.b) < (p.w ?? 3) / 2 + 0.2);
+    if (p.t === 'tube' && p.pts.some((q) => near(q[1]))) {
+      const r = (p.r ?? 0.5) + 0.3;
+      tests.push((x, z) => p.pts.some((q, i) => i > 0 && segDist(x, z, [p.pts[i - 1][0], p.pts[i - 1][2]], [q[0], q[2]]) < r));
+    }
+    if (p.t === 'bowl') tests.push((x, z) => Math.hypot(x - p.c[0], z - p.c[1]) < Math.max(p.r0, p.r1) + 0.3);
+  }
+  return (x, z) => tests.some((f) => f(x, z));
+}
+
 /** The floor the tee stands on, and its back edge (behind the tee, facing −z). */
 function backEdge(def) {
   const [tx, ty, tz] = def.tee;
@@ -77,7 +132,7 @@ function backEdge(def) {
 }
 
 /**
- * Extend a hole with an approach lane. spec: { shape, mirror, extraPar, warp: { dir (deg), at, side } }
+ * Extend a hole with an approach lane. spec: { shape, mirror, extraPar }
  * Returns a new def (the original is untouched), or the original if it can't be extended.
  */
 export function extendHole(def, spec = {}) {
@@ -86,18 +141,24 @@ export function extendHole(def, spec = {}) {
   const fl = FLAVOUR[def.sector] || FLAVOUR.desert;
   const mirror = spec.mirror ? -1 : 1;
   const local = SHAPES[spec.shape || 'S'];
+  if (!local) { console.warn(`[lanes] ${def.id}: unknown lane shape ${spec.shape}`); return def; }
   const w = Math.min(4, Math.max(2.6, be.x1 - be.x0 - 0.01));
   const ex = Math.max(be.x0 + w / 2, Math.min(be.x1 - w / 2, def.tee[0]));
   // path from the new tee to the old start (overlapping it a little so there's no seam)
   const back = local.map(([x, z]) => [ex + x * mirror, be.z + z]);
   const pts = [[back[0][0], be.z + 0.4], ...back.slice(1)].reverse();
-  // refuse if the lane would run through the old hole
-  const others = def.parts.filter((p) => p.t === 'floor');
+  // refuse if the lane (its full width, plus a margin) would run into anything of the old hole
+  const blocked = laneBlocker(def, be.y);
   for (let i = 0; i < pts.length - 1; i++) {
-    for (let k = 0.1; k < 1; k += 0.1) {
-      const x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, z = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k;
-      if (z > be.z - 0.3) continue;
-      if (others.some((p) => Math.abs((p.y ?? 0) - be.y) < 2.5 && pointInPoly(x, z, p.poly))) return def;
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az);
+    const nx = -(bz - az) / L, nz = (bx - ax) / L;
+    for (let u = 0; u <= L; u += 0.5) {
+      const cx = ax + (bx - ax) * u / L, cz = az + (bz - az) * u / L;
+      for (const o of [0, w / 2 + 0.4, -(w / 2 + 0.4)]) {
+        const x = cx + nx * o, z = cz + nz * o;
+        if (z > be.z - 0.3) continue;
+        if (blocked(x, z)) return def;
+      }
     }
   }
   const { poly, endEdge } = corridorPoly(pts, w);
@@ -136,32 +197,21 @@ export function extendHole(def, spec = {}) {
   const shooters = def.parts.filter((p) => p.t === 'monster' && SHOOTERS.has(p.type)).length;
   const want = Math.max(1, 2 - shooters) + (len(pts) > 30 ? 1 : 0);
   const legs = segs.filter((s) => s.L > 4).sort((a, b) => b.L - a.L);
+  const roster = ROSTER[def.sector] || ROSTER.desert;
   for (let k = 0; k < Math.min(want, legs.length); k++) {
-    const s = legs[k], type = fl.shooters[k % fl.shooters.length];
+    const s = legs[k], type = roster[k % roster.length];
     // not right next to the tee: slide along the leg until it's at least 4.5 away
     let u = k === 0 ? 0.55 : 0.4;
     while (u < 0.9 && Math.hypot(at(s, u)[0] - tee[0], at(s, u)[1] - tee[2]) < 4.5 + w * 0.32) u += 0.05;
     const [cx, cz] = at(s, u), nx = -s.d[1], nz = s.d[0], r = w * 0.32;
-    const flying = type === 'manta' || type === 'hornet';
-    if (type === 'creeper') parts.push({ t: 'monster', type, p: [cx + nx * r, y, cz + nz * r], period: 4.2, phase: k * 0.37 });
-    else parts.push({ t: 'monster', type, path: patrol([cx - nx * r, cz - nz * r], [cx + nx * r, cz + nz * r], type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4), ...(type === 'hornet' ? { aim: 'ball' } : {}) });
-    if (flying && type === 'manta') parts[parts.length - 1].size = 0.8;
+    parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
   }
 
-  // the secret ace route: a warp pipe near the tee onto the old tee, along the old ace line
-  const wsp = spec.warp ?? {};
-  const s0 = segs[0], [mx, mz] = at(s0, wsp.at ?? 0.62), side = wsp.side ?? 1;
-  const nx0 = -s0.d[1], nz0 = s0.d[0];
-  const aceYaw = (wsp.dir !== undefined ? wsp.dir * Math.PI / 180 : def.yaw ?? Math.atan2(def.cup[0] - def.tee[0], def.cup[2] - def.tee[2]));
-  parts.push({
-    // the exit keeps the entry speed (min 0.5), so only a narrow band of shots rolls on into the cup
-    t: 'warp', r: wsp.r ?? 0.26, color: '#ff2a2a', speed: wsp.speed ?? 0.5, gain: wsp.gain ?? 1,
-    // 0.9 off the wall: a ball sliding along the wall can't fall in, only a deliberate shot
-    a: [mx + nx0 * (w / 2 - 0.9) * side, y, mz + nz0 * (w / 2 - 0.9) * side],
-    // either a tuned drop point near the cup (aimed at it), or the old tee along the old ace line
-    b: wsp.exit || [def.tee[0], def.tee[1], def.tee[2]],
-    dir: wsp.dirVec || [Math.sin(aceYaw), Math.cos(aceYaw)],
-  });
+  // a dormant Way tower halfway along the longest leg, off to one side (see client.checkWayTowers)
+  if (legs.length) {
+    const s = legs[0], [cx, cz] = at(s, 0.3), side = legs.length % 2 ? 1 : -1;
+    parts.push({ t: 'waytower', p: [cx - s.d[1] * w * 0.28 * side, y, cz + s.d[0] * w * 0.28 * side] });
+  }
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);
   return {

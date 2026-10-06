@@ -24,7 +24,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - PeerJS 1.5.5 (UMD)
 - **Git identity is repo-local:** `huidobroeloy` / `197536980+huidobroeloy@users.noreply.github.com`.
 - **Commit messages** end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- **Every hole needs a hole-in-one that is hard but possible.** Target at least 1 hit and roughly ≤1.5% of the search grid (see below).
+- **No shortcuts.** No warp pipe or other route may skip a hole's lane or drop the ball near the cup (the owner removed
+  the old red secret warps for this). Aces are not required; where one is possible it must stay rare (≤1.5% of the
+  search grid, see below).
 
 ## Running locally
 - **Dev server:** `python tools/devserver.py` (no-cache headers, so ES modules don't go stale). It's served on port 8766; the launch config is "minigolf-dev".
@@ -33,7 +35,6 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__sim(def, {yaw, power, t0, trace})`
   - `__hio(index, opts)`
   - `__hioAll()`, which writes its results to `localStorage['lyokogolf.hio']`
-  - `__tuneWarp(i)`, `__warpEntries(i)`, `__probeWarp(i)`: secret-warp tuning (see Holes)
   - `__rampTest()`: flags balls stopped or hovering on ramps
   - `__cupWalls()`, `__cupTest({ holes })`: cup regression checks (see Physics)
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
@@ -83,14 +84,25 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Courses (`COURSES` in `holes/index.js`): Desert, Forest, Ice, Mountain, Sector 5, Volcano Replika, Digital Sea,
     Network and Fortune Falls Casino, 6 holes each (54). `buildPlan(format)` keeps each course together, in random course order.
     `HOLES` ends with the Kolossus boss (`holes/boss.js`, sector `core`, `BOSS_INDEX`): the World Cup appends it (55 holes).
-  - **Approach lanes** (`holes/extend.js`): every non-Fortune hole under par 5 gets a winding lane in front of its old tee
-    (+1 par, +30 s), hazards per sector, extra shooters (≥2 per hole) and the **secret warp** (its only ace route).
-    Per-hole warp tuning lives in `APPROACH` in `holes/index.js`: `exit`, `dirVec`, `gain` (exit speed = max(entry ×
-    gain, `speed`)). Retune with `__tuneWarp(i)` after changing a hole (it runs the grid, records entry speeds, then
-    picks an exit + gain giving ~8 aces that stays stable when the gain is nudged).
+  - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`): every non-Fortune hole gets a winding
+    lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
+    long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
+    +1 par, +30 s). If a lane would cross the hole, the next shape (or mirror) that fits is used, falling back to the
+    short shapes with a `[lanes]` console warning. forest-3 (round floor) has no lane. `APPROACH` takes per-hole
+    `{ shape, mirror }` overrides. Lanes have **no warps**: the only warps left are sea-3's green pipe maze, which is
+    the hole itself (every exit ≥6 from the cup). Each lane has a **Way tower** (`waytower` part, about 30% along
+    the longest leg): rolling through it turns it white, heals +20 LP once per hole and becomes where you
+    re-virtualize after a devirtualization (`client.checkWayTowers`, `wayPoint`). Per client, reset every hole.
+  - **Monster rosters** (`ROSTER` in `extend.js`): each sector's typical lane monsters. `rollMonsters(def, seed)`
+    (`holes/monsterRoll.js`) re-rolls lane monsters each match (`lane` slot on the spec, `laneMonster`), ~30% guests
+    from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Seeded from the host's hole
+    seed, so every client builds the same monsters in the same order; the client loads `rollMonsters(HOLES[i], seed)`.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
   - `registry.js` holds the 44 power-ups (including one per character) with their weights and catch-up luck.
+    Pickup halo colours: self blue, sabotage amber `#ffc21a`, chaos purple. **Never red** (red is the XANA tower cup).
+  - `lyoko: true` marks the show's power-ups; the room setting `puSet: 'lyoko'` (lobby "Power-up set") spawns only
+    those. It combines with any mode.
   - `hazards.js` covers wind, tornado, volcano, tsunami and the like.
   - `effects.js` holds the per-client effects manager.
   - You can hold up to 3; a 4th is discarded. Pickups respawn, and the host's power-up setting scales how many appear.
@@ -104,9 +116,21 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   from the hole seed and the shared clock), `vehicles.js` (Overbike, Overboard, Overwing meshes).
 - **Modes** (`settings.mode` in the room): `ffa`, `teams` (average total; XANA's player is always on XANA's side),
   `elim` (3+ players; worst course subtotal is eliminated after each course, `p.out`, they spectate).
-- **Special moves:** `SPECIALS` in `registry.js`, one free use per hole from the ★ slot (`client.special`, slot `'S'`).
-- **Life points:** 100 per hole; `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind, t, dmg)`; kind `vaporize`
-  devirtualizes outright.
+- **Special moves:** `SPECIALS` in `registry.js`, one free use **per course** from the ★ slot (`client.special`, slot
+  `'S'`; the room stores the course it was used on in `p.specialUsed`, so reloads and rejoins keep it). Balanced for fairness: Scanner shows only up to the first bounce
+  (≤8 units, no landing ring), Telekinesis ≤1 unit and never within 1.5 of a cup, Sprint ×1.35, Wings 1.8 s, Hopper
+  10 s immunity, Zweihänder 25 s / range 3, Activate Tower spares XANA's own ball (`course.calmUntil`, checked in `canTarget` and `landHit`).
+- **Life points:** cumulative: they carry over from hole to hole (the room keeps `p.lp` from the `st` messages, so
+  reloads keep them) and refill to 100 at each new course. `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind,
+  t, dmg)`; kind `vaporize` devirtualizes outright. `client.showLP` puts `body.lp-critical` (red screen) on when LP ≤
+  `maxHit`, the hole's hardest ordinary hit (one-shot attacks ≥80 don't count).
+- **Power-up modes** (`settings.puMode`): `pickups` (default), `draft` (first hole of each course: the room offers each
+  player 1 of 3, one per category; `draft`/`draftPick`/`drafted` messages, auto-pick after 12 s), `mirror` (one
+  `rollAny` item per hole for everyone in `holeMessage.mirror`, no pickups).
+- **XANA's Agent** (`agent` power-up): takes over a monster for 12 s (`m.agent`, `Monster.at` returns the steered
+  position). The driver's client picks the monster index (`agentTargetAt`), steers it (`steerAgent`) and relays
+  `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
+- **Sector map:** `ui.sectorMap` replaces the course card at each new course (SVG drawn in code, tap to skip).
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
   Never let a monster fire at a ball whose owner is aiming.
 - **Music** (`src/core/music.js` + `soundtrack.js`): a slot (intro, menu, levels, finale, xana) with a loaded file plays it;
@@ -114,7 +138,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.
 
 ## Rules the owner chose
-- **Time limit:** per hole (`time`, 120–170 s by par). Running out scores `max(par, strokes) + 10`.
+- **Time limit:** per hole (`time`, by par). Running out scores `max(par, strokes)` + 1…8 by the share of the track
+  still left (`timeoutScore`/`trackLeft` in `room.js`, along `def.route`), so it always pays to keep playing.
 - **Ties:** never shared — countback (last 3, last hole), most aces, then a closest-to-the-pin playoff.
 - **Players:** everyone plays simultaneously, up to 8.
 - **Power-ups after holing out:** power-ups that affect others can still be used.
@@ -122,23 +147,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Characters:** Ulrich, Odd, Yumi, Aelita, William, Jérémie, Franz Hopper, XANA, one per player, picked in the lobby.
 
 ## Hole-in-one checking
-Common ways a hole gets too many aces (more than ~1.5%): a deterministic funnel (bubble lift, boost or launcher whose
-output doesn't depend on the shot) pointing at the cup; a wall or pillar just behind the cup bouncing overshoots back in;
-a round bank around the cup. Fix with an off-line cup, a lava strip or sinkhole behind the cup, or straight walls.
+Aces are no longer required (the secret warps that were every lengthened hole's ace route are gone). If a change makes
+a hole too easy to ace (more than ~1.5%), the usual causes are: a deterministic funnel (bubble lift, boost or launcher
+whose output doesn't depend on the shot) pointing at the cup; a wall or pillar just behind the cup bouncing overshoots
+back in; a round bank around the cup. Fix with an off-line cup, a lava strip or sinkhole behind the cup, or straight walls.
 
-Run `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })`. That is 2196 simulated shots, about 2–5 minutes per hole.
-
-Last full run (after the cup fix, which raised most counts: shots that used to leak out of the cup now hole): all 50
-non-Fortune holes ace 1–20 times (≤0.91%). The owner's target is ~0.2–0.5% (5–11 hits); most holes are 5–12.
-- **Highest:** sector5-3 20, desert-6 20, ice-5 19, network-1 18. **Lowest:** network-5 and sector5-6 1, forest-6 and
-  mountain-6 2, ice-1 3. All within the rule.
-- Retuned warps: the 32 lengthened holes that went over, plus the par-5s with their own warps (volcano-4, network-6,
-  sea-6: their warp is in the hole file with `speed: 0.5, gain`). volcano-5 keeps the old ace line from the old tee
-  (min exit speed 1.5, mouth r 0.2).
-- Ice holes are the hardest to tune: entries are slow and the ball slides a long way, so the tuner's high-gain picks
-  (~5) can be far off in the real search. Prefer a validated pick with a moderate gain.
-- Not lengthened: par-5 holes, forest-3 (round floor), and Fortune Falls (exempt, luck by design).
-- `__tuneWarp`'s second stage replays every recorded entry at its own speed × gain and entry time; it usually matches
-  `__hio` within a few hits, but not always (network-2, ice-1, ice-3). Always confirm with `__hio`.
-- The searcher's fine pass centres on the closest miss, which can be the wrong region: when it reports 0, trace the
-  intended route with `__sim(def, { yaw, power, t0, trace: true })` before redesigning.
+Check with `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })` (2196 simulated
+shots, about 2–5 minutes per hole). To trace a route use `__sim(def, { yaw, power, t0, trace: true })`.

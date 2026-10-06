@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeJumpPad, makeChevrons } from '../fx/jumppad.js';
 import { makeTowerHolo } from '../fx/towerCup.js';
+import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
 import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly, circlePoly } from './geometry.js';
 import { CUP_R, CUP_DEPTH } from '../physics/ball.js';
@@ -444,6 +445,16 @@ export function buildCourse(def, physics, scene) {
     monster(p) {
       const m = createMonster(p, { group, physics, course, mats });
       if (m) course.monsters.push(m);
+    },
+
+    /** A Way tower: a dormant (red) tower in the lane. Rolling through it is handled by the client. */
+    waytower(p) {
+      const [x, y, z] = p.p;
+      const model = makeTower('#ff2a2a', 1.7, TOWER_BODY[def.sector] || '#d8d6c6', { r: 0.2, wisps: 26, wispSize: 0.3, shadows: false, roots: false });
+      model.position.set(x, y, z);
+      group.add(model);
+      (course.wayTowers ||= []).push({ x, y, z, r: 0.85, model, active: false });
+      course.animators.push((t) => model.userData.animate(t));
     },
 
     deco(p) {

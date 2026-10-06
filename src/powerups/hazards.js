@@ -481,11 +481,13 @@ class EnergyField extends Hazard {
   }
 }
 
-/** XANA activates a tower: monsters get aggressive for a while. */
+/** XANA activates a tower: monsters get aggressive for a while, and leave the one who activated it alone. */
 class TowerActivation extends Hazard {
   constructor(ctx, fx) {
     super(ctx, fx, 15);
-    ctx.course.enrageUntil = this.start + this.dur;
+    // each client's monsters only ever attack its own ball, so this is per player
+    if (fx.from === ctx.myId) ctx.course.calmUntil = this.start + this.dur;
+    else ctx.course.enrageUntil = Math.max(ctx.course.enrageUntil ?? -1, this.start + this.dur);
     sfx.play('jackpot');
   }
   frame() {}

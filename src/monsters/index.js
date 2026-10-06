@@ -867,10 +867,16 @@ const TYPES = {
   kolossusBoss: KolossusBoss,
 };
 
+/** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder']);
+
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];
   if (!T) { console.warn('Unknown monster', spec.type); return null; }
   const m = new T(spec, ctx);
+  // XANA's Agent: while a player drives it, the monster is wherever they steer it
+  const pathAt = m.at.bind(m);
+  m.at = (t) => (m.agent && t < m.agent.until ? m.agent.pos : pathAt(t));
   if (m.guns?.length) {
     const up = m.update.bind(m), fr = m.frame.bind(m), fo = m.force?.bind(m), di = m.dispose.bind(m);
     m.update = (t) => { up(t); if (!m.slashed) for (const g of m.guns) g.update(t); };

@@ -1,4 +1,4 @@
-import { POWERUPS, POWERUP_IDS } from '../powerups/registry.js';
+import { POWERUPS, POWERUP_IDS, CATEGORY_OF } from '../powerups/registry.js';
 import { COLORS } from '../net/room.js';
 import { HOLES, SECTORS, COURSES, SECTOR_NAMES, formatOptions } from '../holes/index.js';
 import { runAd } from './fakeAd.js';
@@ -289,6 +289,10 @@ export class UI {
           <select id="timeMul" ${isHost ? '' : 'disabled'}>${[[0.75, 'Short (×0.75)'], [1, 'Normal'], [1.5, 'Relaxed (×1.5)'], [2, 'Chill (×2)']].map(([v, n]) => `<option value="${v}" ${Number(st.timeMul) === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Power-ups</label>
           <select id="puLevel" ${isHost ? '' : 'disabled'}>${[['off', 'Off'], ['few', 'Few'], ['normal', 'Normal'], ['chaos', 'Chaos 🌪️']].map(([v, n]) => `<option value="${v}" ${(st.puLevel || 'normal') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <label>Power-up set</label>
+          <select id="puSet" ${isHost ? '' : 'disabled'}>${[['all', 'All power-ups'], ['lyoko', 'Lyoko only 🗼']].map(([v, n]) => `<option value="${v}" ${(st.puSet || 'all') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <label>Power-up mode</label>
+          <select id="puMode" ${isHost ? '' : 'disabled'}>${[['pickups', 'Pickups'], ['draft', 'Draft · pick 1 of 3 each course'], ['mirror', 'Mirror match · same item for all']].map(([v, n]) => `<option value="${v}" ${(st.puMode || 'pickups') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Mode</label>
           <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['elim', 'Elimination (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
@@ -317,6 +321,8 @@ export class UI {
         course: s.querySelector('#course').value,
         timeMul: Number(s.querySelector('#timeMul').value),
         puLevel: s.querySelector('#puLevel').value,
+        puSet: s.querySelector('#puSet').value,
+        puMode: s.querySelector('#puMode').value,
         mode: s.querySelector('#mode').value,
       });
       s.querySelectorAll('select, input').forEach((i) => i.addEventListener('change', send));
@@ -444,7 +450,7 @@ export class UI {
     });
     if (special) {
       const d = POWERUPS[special.id];
-      slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per hole): ${esc(d.name)}: ${esc(d.desc)}">
+      slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per course): ${esc(d.name)}: ${esc(d.desc)}">
         <kbd>4 ★</kbd><div class="ic">${d.icon}</div><div class="nm">${special.used ? 'Used' : esc(d.name)}</div></div>`);
     }
     this.$('.hud-inventory').innerHTML = slots.join('');
@@ -606,11 +612,50 @@ export class UI {
   }
 
   /** Big title card when a new course starts. */
-  courseCard(n, total, name, holes) {
-    const c = el(`<div class="course-card"><div class="cc-n">COURSE ${n} / ${total}</div><div class="cc-name">${esc(name)}</div><div class="cc-s">${holes} holes</div></div>`);
+  /**
+   * A new course: Jérémie's supercomputer screen with a map of Lyoko (drawn in code), the next sector
+   * lit up, and the course's numbers. Tap to skip. info: { n, total, sector, name, holes, par, lp, done, puMode }
+   */
+  sectorMap(info) {
+    // abstract layout: four sectors round Sector 5, the Network above, Volcano below, the Digital Sea
+    // all around, the casino off to the side
+    const spots = {
+      sector5: [200, 165, 26], forest: [110, 95, 30], ice: [290, 95, 30], desert: [110, 235, 30], mountain: [290, 235, 30],
+      network: [200, 40, 20], volcano: [200, 292, 20], fortune: [372, 165, 18], core: [200, 165, 12],
+    };
+    const NAMES = { sector5: 'SECTOR 5', forest: 'FOREST', ice: 'ICE', desert: 'DESERT', mountain: 'MOUNTAIN', network: 'NETWORK', volcano: 'VOLCANO', fortune: 'CASINO', core: 'CORE', sea: 'DIGITAL SEA' };
+    const ring = (key) => {
+      const [x, y, r] = spots[key];
+      const cls = key === info.sector ? 'on' : info.done?.includes(key) ? 'done' : '';
+      return `<g class="sm-node ${cls}"><circle cx="${x}" cy="${y}" r="${r}" /><circle class="inner" cx="${x}" cy="${y}" r="${r * 0.55}" />
+        <text x="${x}" y="${y + r + 13}">${NAMES[key]}${cls === 'done' ? ' ✓' : ''}</text></g>`;
+    };
+    const links = ['forest', 'ice', 'desert', 'mountain', 'network', 'volcano'].map((k) => `<line x1="200" y1="165" x2="${spots[k][0]}" y2="${spots[k][1]}" />`).join('');
+    const sea = info.sector === 'sea' ? 'on' : info.done?.includes('sea') ? 'done' : '';
+    const MODE = { pickups: 'Pickups', draft: 'Draft', mirror: 'Mirror match' };
+    const c = el(`<div class="sector-map">
+      <div class="sm-panel">
+        <div class="sm-head">SUPERCOMPUTER · TRANSFER TO ${esc((NAMES[info.sector] || info.name).toUpperCase())}</div>
+        <svg viewBox="0 0 400 330" class="sm-svg">
+          <ellipse class="sm-sea ${sea}" cx="200" cy="168" rx="194" ry="158" />
+          <text class="sm-sea-t ${sea}" x="52" y="306">${NAMES.sea}${sea === 'done' ? ' ✓' : ''}</text>
+          <g class="sm-links">${links}</g>
+          ${['network', 'forest', 'ice', 'desert', 'mountain', 'volcano', 'fortune', 'sector5'].map(ring).join('')}
+          ${info.sector === 'core' ? ring('core') : ''}
+        </svg>
+        <div class="sm-info">
+          <div class="cc-n">COURSE ${info.n} / ${info.total}</div>
+          <div class="cc-name">${esc(info.name)}</div>
+          <div class="sm-stats"><span>⛳ ${info.holes} holes · par ${info.par}</span><span>❤️ ${Math.round(info.lp)} LP</span><span>🎁 ${MODE[info.puMode] || 'Pickups'}</span></div>
+          <div class="small">tap to skip</div>
+        </div>
+      </div>
+    </div>`);
     this.$('#toasts').appendChild(c);
-    setTimeout(() => c.classList.add('fade'), 2800);
-    setTimeout(() => c.remove(), 3500);
+    this.mapOpen = true;
+    const close = () => { if (!c.isConnected) return; this.mapOpen = false; c.classList.add('fade'); setTimeout(() => c.remove(), 500); };
+    c.addEventListener('pointerdown', close);
+    setTimeout(close, 4000);
   }
 
   banner(title, sub) {
@@ -642,7 +687,7 @@ export class UI {
           <tr><td>W S / ↑ ↓ · mouse wheel</td><td>Tilt · zoom</td></tr>
           <tr><td>Space (hold)</td><td>Charge power, release to putt</td></tr>
           <tr><td>1 2 3</td><td>Use power-up (Shift+number discards)</td></tr>
-          <tr><td>4 / ★</td><td>Your character’s special move (once per hole)</td></tr>
+          <tr><td>4 / ★</td><td>Your character’s special move (once per course)</td></tr>
           <tr><td>C · 🎥 button</td><td>Camera: chase → first person → aerial (aerial: wheel/pinch zoom, right-drag or two fingers to look around)</td></tr>
           <tr><td>Placing power-ups</td><td>Click a spot · drag an arrow or line · right-click / Esc cancels</td></tr>
           <tr><td>Tab</td><td>Spectate others after you hole out</td></tr>
@@ -651,7 +696,7 @@ export class UI {
         </table>
         <h2>Rules</h2>
         <p>Everyone plays at the same time. Lowest total strokes wins. Falling into the Digital Sea costs +1.
-        Run out of time and you score <b>max(par, strokes) + 10</b>. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
+        Run out of time and you score <b>max(par, strokes) + up to 8</b>: +8 from the tee, down to +1 next to the cup, so every shot that gets you closer still counts. Fortune Falls pits add a random +1…+5 and drop you somewhere random.</p>
         <h2>Power-ups</h2>
         <div class="pu-grid">${POWERUP_IDS.map((id) => `<div><span>${POWERUPS[id].icon}</span><b>${esc(POWERUPS[id].name)}</b> ${esc(POWERUPS[id].desc)}</div>`).join('')}</div>
         <button class="btn" id="closeHelp">Close</button>
@@ -667,6 +712,26 @@ export class UI {
       </div>`, 'picker');
     o.querySelectorAll('.target').forEach((b) => b.onclick = () => { this.closeOverlay(); cb(b.dataset.id); });
     o.querySelector('#cancelPick').onclick = () => { this.closeOverlay(); cb(null); };
+  }
+
+  /** Draft: pick one of three power-ups (auto-picks one at random when the time runs out). */
+  pickDraft(options, cb, secs = 12) {
+    const o = this.overlay(`
+      <div class="panel picker draft">
+        <h2>🖥️ JÉRÉMIE SENDS YOU A PROGRAM</h2>
+        <div class="small">Pick one for this course · <span class="draft-left">${secs}</span> s</div>
+        <div class="draft-cards">${options.map((id) => `<button class="btn draft-card cat-${CATEGORY_OF(id)}" data-id="${esc(id)}"><span class="ic">${POWERUPS[id].icon}</span><b>${esc(POWERUPS[id].name)}</b><span class="d">${esc(POWERUPS[id].desc)}</span></button>`).join('')}</div>
+      </div>`, 'picker');
+    let done = false;
+    const pick = (id) => { if (done) return; done = true; clearInterval(tick); if (this.$('#overlay').querySelector('.draft')) this.closeOverlay(); cb(id); };
+    let left = secs;
+    const tick = setInterval(() => {
+      left -= 1;
+      const el = o.querySelector('.draft-left');
+      if (el) el.textContent = left;
+      if (left <= 0 || !o.querySelector('.draft')) pick(options[Math.floor(Math.random() * options.length)]);
+    }, 1000);
+    o.querySelectorAll('.draft-card').forEach((b) => b.onclick = () => pick(b.dataset.id));
   }
 
   showAd(secs, rng, fromName) {
@@ -719,7 +784,7 @@ export class UI {
     const cell = (s, i) => {
       if (s === null || s === undefined) return '<td class="na">·</td>';
       const d = s - pars[i];
-      return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 10 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
+      return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 8 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
     };
     const s = this.setScreen(`
       <div class="panel scoreboard${xana ? ' xana-board' : ''}">
@@ -737,7 +802,7 @@ export class UI {
             const r = resultMap.get(p.id);
             const rel = p.total - parSum;
             const subt = (g) => { const v = g.idx.map((i) => p.scores[i]).filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) : '·'; };
-            return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ' ⏰' : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
+            return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ` ⏰${r.left != null ? `<span class="left">${r.left}u left</span>` : ''}` : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
               ${groups.map((g) => g.idx.map((i) => cell(p.scores[i], i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
           }).join('')}</tbody>
         </table></div>
