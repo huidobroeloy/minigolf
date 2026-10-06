@@ -48,6 +48,7 @@ export function canTarget(course, ball, t, { allowResting = false } = {}) {
 
 /** Register a hit (cooldown + status callback + life points). */
 export function landHit(course, kind, t, dmg = 20) {
+  if (t < (course.calmUntil ?? -1)) return; // you activated the tower: nothing of XANA's hurts you
   course.monsterHitAt = t;
   course.onMonsterHit?.(kind, dmg);
 }

@@ -257,7 +257,6 @@ Debug options:
   - **K:** put the ball near the cup.
   - **L:** log the ball's position.
   - `window.__hio(holeIndex)`: brute-forces hole-in-one shots.
-  - `window.__tuneWarp(holeIndex)`: tunes a hole's secret warp (exit spot and speed gain) to about 8 aces in the search grid.
   - `window.__rampTest()`: flags balls that stop or hover on a ramp.
 
 Pushing to `main` redeploys GitHub Pages. Only the repository owner can push to `main`.

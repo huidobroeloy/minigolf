@@ -35,7 +35,6 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__sim(def, {yaw, power, t0, trace})`
   - `__hio(index, opts)`
   - `__hioAll()`, which writes its results to `localStorage['lyokogolf.hio']`
-  - `__tuneWarp(i)`, `__warpEntries(i)`, `__probeWarp(i)`: old secret-warp tuning (unused since the warps were removed)
   - `__rampTest()`: flags balls stopped or hovering on ramps
   - `__cupWalls()`, `__cupTest({ holes })`: cup regression checks (see Physics)
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
@@ -112,9 +111,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Modes** (`settings.mode` in the room): `ffa`, `teams` (average total; XANA's player is always on XANA's side),
   `elim` (3+ players; worst course subtotal is eliminated after each course, `p.out`, they spectate).
 - **Special moves:** `SPECIALS` in `registry.js`, one free use **per course** from the ★ slot (`client.special`, slot
-  `'S'`; it resets when the hole's sector changes). Balanced for fairness: Scanner shows only up to the first bounce
+  `'S'`; the room stores the course it was used on in `p.specialUsed`, so reloads and rejoins keep it). Balanced for fairness: Scanner shows only up to the first bounce
   (≤8 units, no landing ring), Telekinesis ≤1 unit and never within 1.5 of a cup, Sprint ×1.35, Wings 1.8 s, Hopper
-  10 s immunity, Zweihänder 25 s / range 3, Activate Tower spares XANA's own ball (`course.calmUntil`).
+  10 s immunity, Zweihänder 25 s / range 3, Activate Tower spares XANA's own ball (`course.calmUntil`, checked in `canTarget` and `landHit`).
 - **Life points:** 100 per hole; `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind, t, dmg)`; kind `vaporize`
   devirtualizes outright.
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.

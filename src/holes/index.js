@@ -21,13 +21,12 @@ function lengthenOne(h, i) {
   if (h.sector === 'fortune') return h;
   const long = h.par < 5;
   const base = APPROACH[h.id] ?? {};
-  const first = base.shape ?? LANES[i % LANES.length];
   const mirror = base.mirror ?? i % 2 === 1;
-  const names = long ? [first, ...LANES.filter((n) => n !== first)] : [];
-  const tries = [];
-  for (const n of [...names, `${first}0`, ...LANES.filter((n) => n !== first).map((n) => `${n}0`)]) {
-    tries.push({ shape: n, mirror }, { shape: n, mirror: !mirror });
-  }
+  // an override may name a long shape ('S') or a short one ('S0'); either way it is tried first
+  const first = (base.shape ?? LANES[i % LANES.length]).replace(/0$/, '');
+  const order = [first, ...LANES.filter((n) => n !== first)];
+  const names = [...(long && !base.shape?.endsWith('0') ? order : []), ...order.map((n) => `${n}0`)];
+  const tries = names.flatMap((n) => [{ shape: n, mirror }, { shape: n, mirror: !mirror }]);
   for (const t of tries) {
     const short = t.shape.endsWith('0');
     const out = extendHole(h, { ...t, extraPar: short ? 1 : 2 });

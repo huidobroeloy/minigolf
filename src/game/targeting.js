@@ -112,6 +112,8 @@ export class Targeting {
 
   okPoint(p) {
     if (!p || p.offCourse) return false;
+    // Telekinesis: judge the spot the ball would really move to (reach, cup, solid ground)
+    if (this.id === 'telekinesis') return !this.client.telekinesisSpot([p.x, p.y, p.z]).err;
     return this.course.cups.every((c) => Math.hypot(p.x - c.x, p.z - c.z) >= CUP_KEEPOUT);
   }
 
@@ -212,6 +214,7 @@ export class Targeting {
     if (this.aim === 'point') {
       const moved = Math.hypot(e.clientX - this.downScreen[0], e.clientY - this.downScreen[1]);
       if (moved > 12) return;
+      if (this.id === 'telekinesis') { const s = this.client.telekinesisSpot([p.x, p.y, p.z]); if (s.err) return this.client.ui.toast(s.err); }
       if (!this.okPoint(p)) return this.client.ui.toast('Too close to the cup (or off the course)');
       return this.client.finishTargeting({ pos: r3(p) });
     }

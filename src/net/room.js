@@ -122,7 +122,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {},
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null,
     }));
   }
 
@@ -237,6 +237,8 @@ export class HostRoom {
           if (blocked) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Too close to a ball or the tee — place it somewhere else' }); return; }
         }
         this.stat(id, 'used');
+        // a character's special is once per course: the room remembers which course it was used on
+        if (msg.special && !this.playoff) p.specialUsed = HOLES[this.plan[this.holeNo]]?.sector ?? null;
         if (msg.pu === 'switch') {
           const tgt = this.players.get(msg.target);
           if (!tgt || tgt.holed || p.holed || !tgt.pos || !p.pos) { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Switch failed: target unavailable' }); return; }
@@ -245,6 +247,10 @@ export class HostRoom {
         this.broadcast(fx);
         return;
       }
+      case 'specialBack':
+        // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing)
+        if (p) p.specialUsed = null;
+        return;
       case 'reflect': {
         // a Firewall bounced an effect: send it back at the original sender, once
         const f = msg.fx;
@@ -340,7 +346,7 @@ export class HostRoom {
     this.playoff = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;

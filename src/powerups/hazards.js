@@ -487,7 +487,7 @@ class TowerActivation extends Hazard {
     super(ctx, fx, 15);
     // each client's monsters only ever attack its own ball, so this is per player
     if (fx.from === ctx.myId) ctx.course.calmUntil = this.start + this.dur;
-    else ctx.course.enrageUntil = this.start + this.dur;
+    else ctx.course.enrageUntil = Math.max(ctx.course.enrageUntil ?? -1, this.start + this.dur);
     sfx.play('jackpot');
   }
   frame() {}

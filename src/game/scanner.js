@@ -78,7 +78,9 @@ export class Scanner {
       if (b.state === 'idle') { this.result = 'rest'; }
       t += FIXED_DT;
       const p = b.pos, v = b.vel;
-      dist += Math.hypot(p.x - px, p.z - pz); px = p.x; pz = p.z;
+      const step = Math.hypot(p.x - px, p.z - pz);
+      if (step > 0.5) { this.result = 'cut'; break; } // teleported: never show where it comes out
+      dist += step; px = p.x; pz = p.z;
       if (Math.hypot(v.x, v.z) > 0.3) {
         const h = Math.atan2(v.x, v.z);
         if (heading !== null && Math.abs(Math.atan2(Math.sin(h - heading), Math.cos(h - heading))) > BOUNCE) this.result = 'cut';

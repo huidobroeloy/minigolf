@@ -28,6 +28,10 @@ export const EMOTES = ['😂', '😡', '👏', '💀'];
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
 
+// Telekinesis: how far it moves your ball, and how close to a cup it may drop it
+const TK_REACH = 1;
+const TK_CUP = 1.5;
+
 export class GameClient {
   constructor(app, link, me, { debug = false, isHost = false } = {}) {
     this.app = app;
@@ -331,17 +335,18 @@ export class GameClient {
     this.env = this.makeEnv();
     for (const p of this.players.values()) if (p.id !== this.myId && p.connected !== false) this.ghosts.ensure(p);
     this.ui.showHud({ holeNo: m.holeNo, total: m.total, name: def.name, par: def.par, sectorName: SECTOR_NAMES[def.sector] });
-    const prev = this.plan?.[m.holeNo - 1] !== undefined ? HOLES[this.plan[m.holeNo - 1]] : null;
     {
+      const prev = this.plan?.[m.holeNo - 1] !== undefined ? HOLES[this.plan[m.holeNo - 1]] : null;
       setTimeout(() => {
         if (!prev || prev.sector !== def.sector) this.ui.comms.say('courseStart', { sector: SECTOR_NAMES[def.sector] }, { force: true });
         else if (Math.random() < 0.35) this.ui.comms.say('holeStart');
       }, 2600);
     }
-    // your character's special move: one free use per course (it comes back when the next course starts)
+    // your character's special move: one free use per course. The room remembers which course you
+    // used it on, so it stays used through a reload or a rejoin and comes back when a new course starts.
     const sp = SPECIALS[characterByColor(this.me.color)?.id];
-    const sameCourse = this.special?.id === sp && this.special.sector === def.sector && prev?.sector === def.sector;
-    this.special = sp && !this.playoff ? (sameCourse ? this.special : { id: sp, used: false, sector: def.sector }) : null;
+    const mine = m.players?.find((q) => q.id === this.myId);
+    this.special = sp && !this.playoff ? { id: sp, used: mine?.specialUsed === def.sector } : null;
     this.renderInventory();
     this.ui.setHostControls(this.isHost && !this.lobby?.solo);
     this.ui.setStrokes(0, def.par);
@@ -915,23 +920,35 @@ export class GameClient {
   // ---------- Telekinesis ----------
   nudgeBall(pos) {
     const b = this.ball;
-    if (!b || b.state !== 'idle' || !pos) return;
-    const p = b.pos;
-    const dx = pos[0] - p.x, dz = pos[2] - p.z, d = Math.hypot(dx, dz);
-    const k = d > 1 ? 1 / d : 1;
-    const x = p.x + dx * k, z = p.z + dz * k;
-    if (this.nearCup(x, z)) return this.ui.toast('🌀 Too close to the cup for Telekinesis');
-    const y = this.course.floorYAt(x, z);
-    if (y === null) return this.ui.toast('🌀 Telekinesis needs solid ground');
-    b.place(new THREE.Vector3(x, y + b.radius + 0.02, z));
+    const s = this.telekinesisSpot(pos);
+    if (s.err) {
+      // the room already counted the special as used: hand it back
+      if (this.special?.id === 'telekinesis' && this.special.used) { this.special.used = false; this.renderInventory(); this.link.send({ t: 'specialBack' }); }
+      return this.ui.toast(s.err);
+    }
+    b.place(new THREE.Vector3(s.x, s.y + b.radius + 0.02, s.z));
     this.cam.snapTo(b.mesh.position);
     sfx.play('teleport');
     this.ui.toast('🌀 Telekinesis');
     this.sendState(true);
   }
 
-  /** Telekinesis can't drop a ball next to a cup (no free hole-out). */
-  nearCup(x, z) { return this.course.cups.some((cp) => Math.hypot(x - cp.x, z - cp.z) < 1.5); }
+  /**
+   * Where Telekinesis would put your resting ball for a click at q ([x, y, z]): within 1 unit, on
+   * solid ground, and never next to a cup (no free hole-out). Returns { x, y, z } or { err }.
+   */
+  telekinesisSpot(q) {
+    const b = this.ball, p = b?.pos;
+    if (!q || !p || b.state !== 'idle') return { err: '🌀 Your ball has to be resting' };
+    const dx = q[0] - p.x, dz = q[2] - p.z, d = Math.hypot(dx, dz);
+    if (d > TK_REACH + 0.1) return { err: '🌀 Pick a spot within reach of your resting ball' };
+    const k = d > TK_REACH ? TK_REACH / d : 1;
+    const x = p.x + dx * k, z = p.z + dz * k;
+    if (this.course.cups.some((c) => Math.hypot(x - c.x, z - c.z) < TK_CUP)) return { err: '🌀 Too close to the cup for Telekinesis' };
+    const y = this.course.floorYAt(x, z);
+    if (y === null) return { err: '🌀 Telekinesis needs solid ground' };
+    return { x, y, z };
+  }
 
   // ---------- XANA Possession ----------
   /** I'm XANA: aim from my victim's ball and take their next shot. */
@@ -1125,10 +1142,8 @@ export class GameClient {
     if (!t) return;
     if (t.id === 'arrow') { const p = this.ball.pos; params = { ...params, from: [p.x, p.y, p.z] }; }
     if (t.id === 'telekinesis') {
-      const p = this.ball.pos, q = params.pos;
-      if (!q || this.ball.state !== 'idle' || Math.hypot(q[0] - p.x, q[2] - p.z) > 1.1) { this.ui.toast('🌀 Pick a spot within reach of your resting ball'); return; }
-      const d = Math.hypot(q[0] - p.x, q[2] - p.z), k = d > 1 ? 1 / d : 1;
-      if (this.nearCup(p.x + (q[0] - p.x) * k, p.z + (q[2] - p.z) * k)) { this.ui.toast('🌀 Too close to the cup for Telekinesis'); return; }
+      const s = this.telekinesisSpot(params.pos);
+      if (s.err) { this.ui.toast(s.err); return; }
     }
     if (this.slotItem(t.slot) === t.id) {
       this.consumeSlot(t.slot);

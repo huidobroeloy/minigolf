@@ -63,6 +63,28 @@ export function corridorPoly(pts, w) {
 }
 const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
 
+const segDist = (x, z, a, b) => {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+  const k = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+  return Math.hypot(x - a[0] - dx * k, z - a[1] - dz * k);
+};
+
+/** Does a point of a new lane (at height y) land on a floor, ramp, tube or bowl of the hole? */
+function laneBlocker(def, y) {
+  const near = (h) => Math.abs(h - y) < 2.5;
+  const tests = [];
+  for (const p of def.parts) {
+    if (p.poly && near(p.y ?? 0)) tests.push((x, z) => pointInPoly(x, z, p.poly));
+    if (p.t === 'ramp' && (near(p.ya) || near(p.yb))) tests.push((x, z) => segDist(x, z, p.a, p.b) < (p.w ?? 3) / 2 + 0.2);
+    if (p.t === 'tube' && p.pts.some((q) => near(q[1]))) {
+      const r = (p.r ?? 0.5) + 0.3;
+      tests.push((x, z) => p.pts.some((q, i) => i > 0 && segDist(x, z, [p.pts[i - 1][0], p.pts[i - 1][2]], [q[0], q[2]]) < r));
+    }
+    if (p.t === 'bowl') tests.push((x, z) => Math.hypot(x - p.c[0], z - p.c[1]) < Math.max(p.r0, p.r1) + 0.3);
+  }
+  return (x, z) => tests.some((f) => f(x, z));
+}
+
 /** The floor the tee stands on, and its back edge (behind the tee, facing −z). */
 function backEdge(def) {
   const [tx, ty, tz] = def.tee;
@@ -91,18 +113,24 @@ export function extendHole(def, spec = {}) {
   const fl = FLAVOUR[def.sector] || FLAVOUR.desert;
   const mirror = spec.mirror ? -1 : 1;
   const local = SHAPES[spec.shape || 'S'];
+  if (!local) { console.warn(`[lanes] ${def.id}: unknown lane shape ${spec.shape}`); return def; }
   const w = Math.min(4, Math.max(2.6, be.x1 - be.x0 - 0.01));
   const ex = Math.max(be.x0 + w / 2, Math.min(be.x1 - w / 2, def.tee[0]));
   // path from the new tee to the old start (overlapping it a little so there's no seam)
   const back = local.map(([x, z]) => [ex + x * mirror, be.z + z]);
   const pts = [[back[0][0], be.z + 0.4], ...back.slice(1)].reverse();
-  // refuse if the lane would run through the old hole
-  const others = def.parts.filter((p) => p.t === 'floor');
+  // refuse if the lane (its full width, plus a margin) would run into anything of the old hole
+  const blocked = laneBlocker(def, be.y);
   for (let i = 0; i < pts.length - 1; i++) {
-    for (let k = 0.1; k < 1; k += 0.1) {
-      const x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, z = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k;
-      if (z > be.z - 0.3) continue;
-      if (others.some((p) => Math.abs((p.y ?? 0) - be.y) < 2.5 && pointInPoly(x, z, p.poly))) return def;
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az);
+    const nx = -(bz - az) / L, nz = (bx - ax) / L;
+    for (let u = 0; u <= L; u += 0.5) {
+      const cx = ax + (bx - ax) * u / L, cz = az + (bz - az) * u / L;
+      for (const o of [0, w / 2 + 0.4, -(w / 2 + 0.4)]) {
+        const x = cx + nx * o, z = cz + nz * o;
+        if (z > be.z - 0.3) continue;
+        if (blocked(x, z)) return def;
+      }
     }
   }
   const { poly, endEdge } = corridorPoly(pts, w);
