@@ -336,8 +336,6 @@ export class GameClient {
     };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
-    this.wayPoint = null;
-    this.wayHealed = false;
     this.strokes = 0;
     // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
     this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
@@ -853,6 +851,10 @@ export class GameClient {
         this.showLP(0, 100);
         this.vaporize();
         break;
+      case 'mine':
+        this.ui.toast('💣 A Manta mine went off!');
+        this.cam.shake = Math.max(this.cam.shake, 0.6);
+        break;
       case 'shark':
         this.ui.toast('🦈 Rammed by a Shark!');
         sfx.play('wall', 4);
@@ -876,27 +878,6 @@ export class GameClient {
       this.ui.comms.say('lowLP', {}, { force: true });
       sfx.play('beep');
     } else this.ui.comms.say('hit', { lp: this.lp });
-  }
-
-  /**
-   * Way towers: roll through a dormant (red) one to deactivate it. It turns white, heals +20 LP (once
-   * per hole) and becomes where you're re-virtualized after a devirtualization. Your towers only.
-   */
-  checkWayTowers(ball) {
-    for (const w of this.course.wayTowers || []) {
-      if (w.active || Math.hypot(ball.pos.x - w.x, ball.pos.z - w.z) > w.r || Math.abs(ball.pos.y - w.y) > 1) continue;
-      w.active = true;
-      w.model.userData.setColor('#ffffff');
-      this.wayPoint = new THREE.Vector3(w.x, w.y, w.z);
-      for (let i = 0; i < 40; i++) {
-        const a = Math.random() * Math.PI * 2;
-        this.effects.particles?.spawn({ pos: [w.x, w.y + 0.6 + Math.random(), w.z], vel: [Math.cos(a) * 2.2, 1 + Math.random() * 2, Math.sin(a) * 2.2], color: i % 2 ? '#ffffff' : '#bfe6ff', size: 0.12, life: 0.9, gravity: 2 });
-      }
-      sfx.play('teleport');
-      if (!this.wayHealed) { this.wayHealed = true; this.healLP(20); }
-      this.ui.bigToast('🗼 WAY TOWER DEACTIVATED', '+20 LP · you re-virtualize here if devirtualized', 'good');
-      this.stat('waytowers');
-    }
   }
 
   /** The LP bar, plus the red danger screen when one more hit would devirtualize you. */
@@ -937,9 +918,7 @@ export class GameClient {
     setTimeout(() => {
       if (this.ball !== b || fid !== this.fallId) return;
       this.falling = false;
-      // re-virtualized at your Way tower if you deactivated one, else at the last safe spot
-      if (this.wayPoint) b.place(this.wayPoint.clone().add(new THREE.Vector3(0.45, b.radius + 0.05, 0)));
-      else b.respawnAtSafe();
+      b.respawnAtSafe();
       this.lp = 100;
       this.showLP(100);
       this.cam.snapTo(b.mesh.position);
@@ -1658,7 +1637,6 @@ export class GameClient {
     this.stepClones(dt, 'post');
     if (ball.state === 'idle' || ball.state === 'moving') {
       for (const pid of this.pickups.touching(ball.pos, ball.radius)) this.link.send({ t: 'claim', pid });
-      this.checkWayTowers(ball);
       if (ball.teleportCooldown > 0) ball.teleportCooldown -= dt;
       const dest = this.course.checkTeleport(ball, { pick: (a) => a[Math.floor(Math.random() * a.length)] });
       if (dest) {

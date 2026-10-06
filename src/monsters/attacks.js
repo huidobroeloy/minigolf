@@ -25,7 +25,7 @@ export const DAMAGE = {
   krabe: { laser: 20, charged: 40, mixed: 100 },
   tarantula: { rapid: 15, laser: 15 },
   creeper: { laser: 20 },
-  manta: { laser: 40, mine: 100 },
+  manta: { laser: 40, mine: 30 },
   shark: { laser: 25, ram: 25 },
   scyphozoa: { grab: 30 },
   megatank: { beam: 100 },
@@ -283,10 +283,12 @@ export class Gun {
 
 /**
  * Manta energy mines: dropped along its flight path on a seeded rhythm (so everyone sees the same
- * mines), they arm after a second and blow up when a ball rolls close.
+ * mines), they arm after a second and blow up when a ball rolls close: 30 LP and a blast that
+ * throws the ball (never a devirtualization by itself). At most MAX_MINES of a Manta's are live.
  */
+const MAX_MINES = 2;
 export class MineLayer {
-  constructor(monster, { every = [6, 9], life = 14 } = {}) {
+  constructor(monster, { every = [12, 18], life = 16 } = {}) {
     this.m = monster;
     this.ctx = monster.ctx;
     this.rng = seededRng(this.ctx, monster.spec, 'mines');
@@ -299,6 +301,7 @@ export class MineLayer {
   update(t) {
     if (t < this.nextT) return;
     this.nextT = t + this.rng.range(this.every[0], this.every[1]);
+    if (this.mines.filter((mn) => !mn.gone).length >= MAX_MINES || this.m.slashed) return;
     const s = this.m.at(t);
     const y = this.ctx.course.floorYAt(s.x, s.z);
     if (y === null) return;
@@ -339,7 +342,10 @@ export class MineLayer {
       mn.gone = true;
       for (let i = 0; i < 30; i++) this.ctx.particles?.spawn?.({ pos: [mn.x, mn.y + 0.2, mn.z], vel: [(Math.random() - 0.5) * 5, Math.random() * 4, (Math.random() - 0.5) * 5], color: i % 2 ? '#ff2a2a' : '#ffb36a', size: 0.2, life: 0.7, gravity: 6 });
       sfx.play('rumble');
-      landHit(this.ctx.course, 'vaporize', t, 100);
+      // the blast throws the ball away from the mine
+      const k = 520 / (d || 0.3);
+      out.x += dx * k; out.z += dz * k; out.y += 160; out.wake = true;
+      if (canTarget(this.ctx.course, ball, t)) landHit(this.ctx.course, 'mine', t, damageFor('manta', 'mine'));
     }
   }
   dispose() { for (const mn of this.mines) this.ctx.group.remove(mn.g); }

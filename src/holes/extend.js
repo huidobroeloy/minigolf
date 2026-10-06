@@ -207,12 +207,6 @@ export function extendHole(def, spec = {}) {
     parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
   }
 
-  // a dormant Way tower halfway along the longest leg, off to one side (see client.checkWayTowers)
-  if (legs.length) {
-    const s = legs[0], [cx, cz] = at(s, 0.3), side = legs.length % 2 ? 1 : -1;
-    parts.push({ t: 'waytower', p: [cx - s.d[1] * w * 0.28 * side, y, cz + s.d[0] * w * 0.28 * side] });
-  }
-
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);
   return {
     ...def, parts, tee,
