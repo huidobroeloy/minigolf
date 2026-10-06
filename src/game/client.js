@@ -31,6 +31,9 @@ export const EMOTES = ['😂', '😡', '👏', '💀'];
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
 
+// the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
+const WEAK_SPEED = 6;
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian']);
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -880,6 +883,27 @@ export class GameClient {
     } else this.ui.comms.say('hit', { lp: this.lp });
   }
 
+  /**
+   * The XANA eye is every monster's weak point: ram one with a fast ball (over WEAK_SPEED) and it's
+   * devirtualized for 20 s (+5 LP). Your client only, like the monsters' attacks on your ball.
+   */
+  checkWeakPoints(ball) {
+    if (ball.state !== 'moving' || ball.mods.ghost) return;
+    const v = ball.vel;
+    if (Math.hypot(v.x, v.z) < WEAK_SPEED) return;
+    const t = this.course.time ?? 0;
+    for (const m of this.course.monsters) {
+      if (m.slashed || !m.model?.visible || WEAK_PROOF.has(m.spec.type)) continue;
+      const p = m.model.position;
+      if (Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) > 0.95 + ball.radius || Math.abs(ball.pos.y - p.y) > 1.4) continue;
+      this.effects.cutOut(m, t, 20, '#ff2a2a');
+      this.healLP(5);
+      sfx.play('jackpot');
+      this.ui.toast(`🎯 Right in the eye! ${m.spec.type[0].toUpperCase() + m.spec.type.slice(1)} devirtualized · +5 LP`);
+      stats.add('slashed');
+    }
+  }
+
   /** The LP bar, plus the red danger screen when one more hit would devirtualize you. */
   showLP(lp, delta = 0) {
     this.ui.setLP(lp, delta);
@@ -1637,6 +1661,7 @@ export class GameClient {
     this.stepClones(dt, 'post');
     if (ball.state === 'idle' || ball.state === 'moving') {
       for (const pid of this.pickups.touching(ball.pos, ball.radius)) this.link.send({ t: 'claim', pid });
+      this.checkWeakPoints(ball);
       if (ball.teleportCooldown > 0) ball.teleportCooldown -= dt;
       const dest = this.course.checkTeleport(ball, { pick: (a) => a[Math.floor(Math.random() * a.length)] });
       if (dest) {

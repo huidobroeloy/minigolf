@@ -94,7 +94,7 @@ class Kankrelat extends Monster {
     const L = kankrelatLook();
     super(spec, ctx, L.g, { yOff: 0.3, colliders: [[R.ColliderDesc.cuboid(0.4, 0.25, 0.5)]] });
     this.L = L;
-    this.guns.push(new Gun(this, { kind: 'laser', every: [8, 12], charge: 0.8, range: 6, knock: 120, muzzle: () => L.gun.getWorldPosition(new THREE.Vector3()) }));
+    this.guns.push(new Gun(this, { kind: 'laser', every: [6, 9], charge: 0.7, range: 6, knock: 110, muzzle: () => L.gun.getWorldPosition(new THREE.Vector3()) }));
   }
   frame(t) {
     super.frame(t);
@@ -225,13 +225,15 @@ class Megatank extends Monster {
   }
   force(ball, t, out) {
     if (ball.state !== 'idle' && ball.state !== 'moving') return;
-    // running a ball over is as deadly as the beam
+    // running a ball over hurts (50 LP) and flings it aside; only the opened beam devirtualizes
     if (!this.mode && !ball.mods.ghost) {
       const s0 = this.at(t), s1 = this.at(t + 0.1);
       const rolling = Math.hypot(s1.x - s0.x, s1.z - s0.z) > 0.05;
       const bp = ball.pos;
-      if (rolling && Math.hypot(bp.x - s0.x, bp.z - s0.z) < this.r + ball.radius + 0.05 && t - (this.ctx.course.monsterHitAt ?? -99) > 1) {
-        landHit(this.ctx.course, 'vaporize', t, 100);
+      const dx = bp.x - s0.x, dz = bp.z - s0.z, d = Math.hypot(dx, dz);
+      if (rolling && d < this.r + ball.radius + 0.05 && t - (this.ctx.course.monsterHitAt ?? -99) > 1) {
+        out.x += (dx / (d || 1)) * 420; out.z += (dz / (d || 1)) * 420; out.y += 120; out.wake = true;
+        landHit(this.ctx.course, 'megatank', t, damageFor('megatank', 'roll'));
         return;
       }
     }
@@ -261,13 +263,18 @@ class Hornet extends Monster {
     this.guns.push(new Gun(this, { every: [6, 10], range: 9, muzzle: tip, modes: [
       { w: 3, kind: 'laser', charge: 0.8, speed: 10, knock: 160 },
       { w: 2, kind: 'charged', charge: 1.2, speed: 10, knock: 260 },
-      // its strongest ability: a lobbed poison spit that leaves a venomous puddle
+      // its strongest ability: a lobbed acid spit that leaves a slowing, venomous puddle
       { w: 2, kind: 'poison', charge: 1.0, speed: 6, knock: 0, allowResting: true },
+      // a dive: it swoops low and strafes a quick burst
+      { w: 1, kind: 'rapid', charge: 0.9, speed: 14, knock: 70, burst: 3, burstGap: 0.12, dive: true },
     ] }));
+    this.diveT = -9;
   }
+  onCharge(t, cfg) { if (cfg.dive) this.diveT = t; }
   frame(t) {
     const s = this.at(t);
-    this.model.position.set(s.x, s.y + Math.sin(t * 3) * 0.15, s.z);
+    const dive = Math.max(0, 1 - Math.abs(t - this.diveT - 0.9) / 0.9); // down and back up over ~2 s
+    this.model.position.set(s.x, s.y + Math.sin(t * 3) * 0.15 - dive * 1.3, s.z);
     const ball = this.ctx.course.localBall;
     if (ball) this.model.lookAt(ball.mesh.position.x, s.y - 0.6, ball.mesh.position.z);
     this.wings.forEach((w, i) => { w.rotation.z = Math.sin(t * 60 + i * 1.3) * 0.5; });
@@ -311,7 +318,8 @@ class Krabe extends Monster {
     this.guns.push(new Gun(this, { every: [8, 12], range: 8, muzzle: () => this.L.body.localToWorld(new THREE.Vector3(0, -0.15, 0.7)), modes: [
       { w: 3, kind: 'laser', charge: 0.9, knock: 170 },
       { w: 2, kind: 'charged', charge: 1.3, knock: 340 },
-      { w: 1, kind: 'mixed', charge: 1.6, knock: 0, status: 'vaporize', allowResting: true, when: partner },
+      // two Krabes together fire the combined beam: the heaviest hit, but not an instant devirtualization
+      { w: 1, kind: 'mixed', charge: 1.6, knock: 260, allowResting: true, when: partner },
     ] }));
   }
   frame(t) {
@@ -328,7 +336,7 @@ class Tarantula extends Monster {
     super(spec, ctx, L.g, { yOff: 0.9, colliders: [[R.ColliderDesc.cuboid(0.4, 0.5, 0.45)]] });
     this.L = L;
     this.rearT = -9;
-    this.guns.push(new Gun(this, { kind: 'rapid', every: [9, 13], charge: 1.0, range: 8, speed: 14, knock: 80, burst: 6, burstGap: 1 / 6, muzzle: () => this.L.body.localToWorld(new THREE.Vector3(0, 0.12, 0.5)) }));
+    this.guns.push(new Gun(this, { kind: 'rapid', every: [9, 13], charge: 1.25, range: 8, speed: 16, knock: 80, burst: 6, burstGap: 1 / 6, lead: 1, muzzle: () => this.L.body.localToWorld(new THREE.Vector3(0, 0.12, 0.5)) }));
   }
   onCharge(t) { this.rearT = t; }
   frame(t) {
@@ -410,7 +418,10 @@ class Manta extends Monster {
     this.L = L;
     this.prev = this.at(0);
     this.guns.push(new MineLayer(this));
-    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.9, range: 9, speed: 11, knock: 260, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, -0.1, 0.9)) }));
+    this.guns.push(new Gun(this, { every: [9, 13], range: 9, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, -0.1, 0.9)), modes: [
+      { w: 3, kind: 'laser', charge: 0.9, speed: 11, knock: 260 },
+      { w: 2, kind: 'rapid', charge: 0.8, speed: 14, knock: 90, burst: 3, burstGap: 0.15 }, // a strafing pass
+    ] }));
   }
   frame(t) {
     const s = this.at(t);
@@ -739,7 +750,10 @@ class Shark extends Monster {
     this.ram = null; // { t0, from, to }
     this.prev = super.at(0);
     // between rams, Sharks fire their laser (as in the show)
-    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.8, range: 8, speed: 11, knock: 150, ready: () => !this.ram, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0.05, 0.62)) }));
+    this.guns.push(new Gun(this, { every: [9, 13], range: 8, ready: () => !this.ram, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0.05, 0.62)), modes: [
+      { w: 2, kind: 'laser', charge: 0.8, speed: 11, knock: 150 },
+      { w: 2, kind: 'torpedo', charge: 1.0, speed: 4.5, knock: 220, homing: true }, // slow, and it follows you
+    ] }));
   }
   /** The path position, with a ram lunge (telegraph 0.8 s, dash 0.45 s, swim back 1.2 s) on top. */
   at(t) {

@@ -20,15 +20,17 @@ const MIN_RANGE = 8.5;
 /** Life points each attack costs (from the show). 100 = devirtualized outright. */
 export const DAMAGE = {
   kankrelat: { laser: 10 },
-  hornet: { laser: 15, charged: 20, poison: 10 },
-  blok: { laser: 20, ice: 10, firering: 80, rapid: 20 },
-  krabe: { laser: 20, charged: 40, mixed: 100 },
+  hornet: { laser: 15, charged: 20, poison: 10, rapid: 10 },
+  blok: { laser: 20, ice: 10, firering: 40, rapid: 20 },
+  krabe: { laser: 20, charged: 40, mixed: 60 },
   tarantula: { rapid: 15, laser: 15 },
   creeper: { laser: 20 },
-  manta: { laser: 40, mine: 30 },
-  shark: { laser: 25, ram: 25 },
+  manta: { laser: 40, rapid: 15, mine: 30 },
+  shark: { laser: 25, ram: 25, torpedo: 25 },
   scyphozoa: { grab: 30 },
-  megatank: { beam: 100 },
+  megatank: { beam: 100, roll: 50 },
+  ninja: { slash: 25, laser: 15 },
+  kalamar: { ink: 10, laser: 15 },
 };
 export const damageFor = (type, kind) => DAMAGE[type]?.[kind] ?? 20;
 
@@ -58,12 +60,13 @@ export function seededRng(ctx, spec, tag) {
   return new RNG(`${ctx.course?.def?.id ?? 'scene'}:${tag}:${s0.x.toFixed(2)},${s0.z.toFixed(2)}`);
 }
 
-const PROJ_COLORS = { laser: '#ff2a2a', charged: '#ff6a2a', rapid: '#ff4a4a', venom: '#7dff3a', poison: '#7dff3a', firering: '#ff8a1a', ice: '#9fe8ff', mixed: '#ff2a8a' };
+const PROJ_COLORS = { laser: '#ff2a2a', charged: '#ff6a2a', rapid: '#ff4a4a', venom: '#7dff3a', poison: '#7dff3a', firering: '#ff8a1a', ice: '#9fe8ff', mixed: '#ff2a8a', torpedo: '#ffcc55' };
 
 /**
  * A monster's gun. It can have several abilities (cfg.modes, each with a weight `w`); one is picked
  * per attack. Ability fields:
- *   kind      laser | charged | rapid | poison | firering | ice | mixed (the look)
+ *   kind      laser | charged | rapid | poison | firering | ice | mixed | torpedo (the look)
+ *   homing    projectile steers toward your ball while it flies (Shark torpedoes)
  *   every     [min, max] seconds between attacks (gun level)
  *   charge    telegraph seconds
  *   range     max distance to target
@@ -133,7 +136,7 @@ export class Gun {
     const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4 && !(driven && this.m.agent.by === course.myId);
     // a resting ball is only targeted half the time (it can't dodge); a rolling one always
     if (inRange && canTarget(course, ball, t, { allowResting: cfg.allowResting }) && (ball.state === 'moving' || this.rng.next() < 0.5)) {
-      const lead = ball.state === 'moving' ? cfg.charge * 0.5 : 0;
+      const lead = ball.state === 'moving' ? cfg.charge * (cfg.lead ?? 0.5) : 0; // Tarantulas lead their shots fully
       to = new THREE.Vector3(bp.x + ball.vel.x * lead, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * lead);
     } else {
       // not at you (you're aiming, just stopped, out of range…): it still fights, at the
@@ -186,6 +189,9 @@ export class Gun {
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), spot.clone().sub(from).normalize());
     } else if (cfg.kind === 'poison') {
       mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), m);
+    } else if (cfg.kind === 'torpedo') {
+      mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.36, 4, 8), m);
+      mesh.rotation.x = Math.PI / 2;
     } else {
       const big = cfg.kind === 'charged' ? 1.9 : cfg.kind === 'rapid' ? 0.7 : 1;
       mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08 * big, 8, 6), m);
@@ -208,8 +214,14 @@ export class Gun {
       if (k < 0) { s.mesh.visible = false; continue; }
       const beam = s.cfg.kind === 'ice' || s.cfg.kind === 'mixed';
       s.mesh.visible = !s.landed || beam && t - s.t0 < s.dur + 0.25;
+      if (s.cfg.homing && !s.landed && k < 0.85) {
+        // a torpedo bends toward your ball while it travels (gently: you can outrun it)
+        const bp = this.ctx.course.localBall?.pos;
+        if (bp && Math.hypot(bp.x - s.to.x, bp.z - s.to.z) < 4) { s.to.x += (bp.x - s.to.x) * 0.04; s.to.z += (bp.z - s.to.z) * 0.04; s.flash.position.set(s.to.x, s.to.y + 0.03, s.to.z); }
+      }
       if (!beam) {
         s.mesh.position.lerpVectors(s.from, s.to, Math.min(1, k));
+        if (s.cfg.kind === 'torpedo') s.mesh.lookAt(s.to);
         if (s.cfg.kind === 'poison') s.mesh.position.y += Math.sin(Math.min(1, k) * Math.PI) * 0.8; // lobbed
       }
       if (s.cfg.kind === 'firering') { s.mesh.rotation.x = t * 8; s.mesh.scale.setScalar(1 + k * 1.5); }
