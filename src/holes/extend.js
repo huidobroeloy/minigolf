@@ -197,9 +197,13 @@ export function extendHole(def, spec = {}) {
       // the other legs: the volcano lobs magma bombs onto them (telegraphed, 20 LP)
       parts.push({ t: 'monster', type: 'magma', p: [cx, y, cz], a: s.a, b: s.b, w });
     }
-    // the current runs down the middle of a straight leg; the water along the walls is calm, so a ball
-    // can rest there (diagonal legs get none)
-    if (fl.hazard === 'current' && s.L > 5 && straight) parts.push({ t: 'zone', kind: 'current', rect: [Math.min(s.a[0], s.b[0]) - w / 2 + 0.9, Math.min(s.a[1], s.b[1]) - w / 2 + 0.9, Math.max(s.a[0], s.b[0]) + w / 2 - 0.9, Math.max(s.a[1], s.b[1]) + w / 2 - 0.9], dir: [-s.d[0], -s.d[1]], speed: 2, y });
+    // the current runs down the middle of a straight leg; the water along the walls and in the corners is
+    // calm, so a ball can rest there and never rides the current down the whole lane (diagonal legs get none)
+    if (fl.hazard === 'current' && s.L > 5 && straight) {
+      const alongX = Math.abs(s.d[0]) > Math.abs(s.d[1]);
+      const ext = (k) => alongX === (k === 0) ? -0.6 : w / 2 - 0.9; // along the leg: stop short of the corners
+      parts.push({ t: 'zone', kind: 'current', rect: [Math.min(s.a[0], s.b[0]) - ext(0), Math.min(s.a[1], s.b[1]) - ext(1), Math.max(s.a[0], s.b[0]) + ext(0), Math.max(s.a[1], s.b[1]) + ext(1)], dir: [-s.d[0], -s.d[1]], speed: 2, y });
+    }
   });
 
   // monsters: enough shooters so every hole has at least two (the lane always gets one)

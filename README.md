@@ -70,11 +70,12 @@ Each character can only be picked by one player per room.
 
 The aim line **wobbles** a little, and harder shots wobble more. Your putt goes wherever the line points when you release, so time it. Steady Aim removes the wobble.
 On a phone or tablet, drag down from anywhere to putt, and use two fingers to rotate the camera.
-If your ball ever gets wedged somewhere it can't be shot from, a **Reset ball** button appears: it puts you back at your last safe spot for free.
+If your ball is still moving 15 s after a shot (caught in a current, juggled by geysers…), Jérémie **freezes it** where it is so you can play on, or puts it back at your last safe spot if it's over lava or the void. No penalty.
+Each hole opens with a **fly-over** along the track, from the cup back to your tee (tap or press a key to skip).
 
 ## Rules
 - Standard minigolf scoring: the lowest total strokes wins.
-- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, a Manta mine, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
+- **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
 - The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
 - Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
 - Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 1 to 8**, depending on how much of the track you still had left: keep playing until the end, every shot closer counts.
@@ -202,7 +203,7 @@ Active effects show as chips with a countdown at the top of the screen.
 3. **Ice Sector:** almost frictionless floors, a glass bobsled run, crevasses, thin ice and the **Kolossus** in the distance.
 4. **Mountain Sector:** crumbling ledges, avalanches, updraft vents, windy ridge bridges and the summit.
 5. **Sector 5 · Carthage:** sliding bridges, closing walls, the core elevator, a firewall maze and the Core of Lyoko.
-6. **Volcano Replika:** lava rivers with basalt rafts, magma geysers, crumbling basalt, the Replika core and an obsidian maze.
+6. **Volcano Replika:** lava rivers with basalt rafts (their glowing rim means safe to ride), magma geysers (they smoke when you're close, and throw a ball at most twice per shot), crumbling basalt, the Replika core and an obsidian maze. On the lanes, **magma bombs** fall: a ring marks the spot 1.5 s before, and a hit costs 20 LP.
 7. **The Digital Sea:** underwater floaty physics, glass tubes and Mario-style warp pipes, currents, bubble lifts, Sharks and Kongre.
 8. **The Network:** firewall gates, data highways, gravity launchers, the Skid docking bay, packet storms and the Hub.
 9. **The Cortex:** XANA's world in its sphere: blocks that slide across the lane, a bridge that falls away, a data current, rising ground, a Guardian field and the Core itself. Ninjas guard it.
