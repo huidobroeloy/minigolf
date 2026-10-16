@@ -31,6 +31,7 @@ export const DAMAGE = {
   megatank: { beam: 100, roll: 50 },
   ninja: { slash: 25, laser: 15 },
   kalamar: { ink: 10, laser: 15 },
+  magma: { bomb: 20 },
 };
 export const damageFor = (type, kind) => DAMAGE[type]?.[kind] ?? 20;
 

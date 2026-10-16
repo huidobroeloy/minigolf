@@ -91,8 +91,9 @@ export default [
       { t: 'bowl', c: [0, 12], r0: 1.35, r1: 4.5, y0: 1.7, y1: 0, look: '#3a2a26' },
       { t: 'bowl', c: [0, 12], r0: 0.6, r1: 1.35, y0: 1.5, y1: 1.7, look: '#ff6a1a' },
       { t: 'floor', y: 1.5, poly: circlePoly(0, 12, 0.65, 20), walls: false },
-      // four geysers round the foot of the cone throw balls in toward the crater
-      ...[[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dz]) => ({ t: 'zone', kind: 'vent', c: [-dx * 5.6, 12 - dz * 5.6], r: 0.7, y: 0, launch: 13, push: [dx, dz], minSpeed: 2.9 })),
+      // four geysers round the foot of the cone throw balls in toward the crater. They sit a little
+      // way out from the cone, so a ball rolling back down settles before it reaches one.
+      ...[[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dz]) => ({ t: 'zone', kind: 'vent', c: [-dx * 6.3, 12 - dz * 6.3], r: 0.7, y: 0, launch: 13, push: [dx, dz], minSpeed: 3.2 })),
       lava(-8, 16.5, -5, 19.5), lava(5, 4.5, 8, 7.5),
     ],
   },

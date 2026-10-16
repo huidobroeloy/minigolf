@@ -3,7 +3,7 @@ import { makeJumpPad, makeChevrons } from '../fx/jumppad.js';
 import { makeTowerHolo } from '../fx/towerCup.js';
 import { themeMaterials, surfaceMaterial, TEX } from './themes.js';
 import { slabGeometry, prismGeometry, trimeshData, signedArea, pointInPoly, circlePoly } from './geometry.js';
-import { CUP_R, CUP_DEPTH } from '../physics/ball.js';
+import { CUP_R, CUP_DEPTH, MAX_VENT_LAUNCHES } from '../physics/ball.js';
 import { GRAVITY, FIXED_DT } from '../physics/world.js';
 import { createMonster } from '../monsters/index.js';
 import { decorate } from './deco.js';
@@ -692,7 +692,7 @@ export function buildCourse(def, physics, scene) {
         }
       } else if (z.kind === 'vent') {
         // a geyser: fires the ball upward, keeping its own horizontal speed (with a minimum push)
-        if ((ball.ventCool ?? 0) > 0 || p.y - zy > ball.radius + 0.35) continue;
+        if ((ball.ventCool ?? 0) > 0 || (ball.ventLaunches ?? 0) >= MAX_VENT_LAUNCHES || p.y - zy > ball.radius + 0.35) continue;
         const d = z.push || [0, 1];
         const dl = Math.hypot(d[0], d[1]) || 1;
         const ux = d[0] / dl, uz = d[1] / dl;
@@ -704,6 +704,7 @@ export function buildCourse(def, physics, scene) {
         out.wake = true;
         z.pad?.userData.fire(course.time ?? 0);
       } else if (z.kind === 'wind') {
+        if (z.minSpeed && Math.hypot(v.x, v.z) < z.minSpeed) continue; // too slow to catch the wind
         out.x += z.dir[0] * (z.force ?? 4); out.z += z.dir[1] * (z.force ?? 4);
         if (ball.state === 'moving') out.wake = true;
       } else if (z.kind === 'current') {

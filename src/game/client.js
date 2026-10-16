@@ -31,9 +31,11 @@ export const EMOTES = ['😂', '😡', '👏', '💀'];
 const SEND_INTERVAL = 1 / 15;
 const MAX_INV = 3;
 
+// a ball still moving this many seconds after the shot is stopped (see watchStuck)
+const AUTO_STOP = 15;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
-const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian']);
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma']);
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -89,7 +91,6 @@ export class GameClient {
       settings: (s) => this.link.send({ t: 'settings', settings: s }),
       pick: (color) => this.link.send({ t: 'pick', color }),
       skip: () => this.link.send({ t: 'skip' }),
-      unstick: () => this.unstick(),
       tick: () => sfx.play('roulette'),
     });
   }
@@ -860,6 +861,10 @@ export class GameClient {
       case 'ink':
         this.ui.toast('🦑 Kalamar ink! You can barely see, and it\'s thick');
         break;
+      case 'magma':
+        this.ui.toast('🌋 Hit by a magma bomb!');
+        this.cam.shake = Math.max(this.cam.shake, 0.7);
+        break;
       case 'ninja':
         this.ui.toast('🥷 Slashed by a Ninja!');
         sfx.play('wall', 4);
@@ -1527,25 +1532,27 @@ export class GameClient {
     this.ui.toast(`Spectating ${this.nameOf(this.spectate)}`);
   }
 
-  /** Safety net: a ball that has barely moved for a while but still isn't shootable. */
+  /**
+   * Safety net: a ball still moving AUTO_STOP s after the shot (juggled by geysers, drifting in a
+   * current, wedged and jittering…) is stopped where it is, or put back on its last safe spot
+   * (no penalty) when it isn't resting on solid, safe ground, so nobody ever waits on it.
+   */
   watchStuck(dt) {
     const b = this.ball;
+    if (b.state !== 'moving' || this.falling || this.trip || this.possessedBy) { this.movingT = 0; return; }
+    this.movingT = (this.movingT ?? 0) + dt;
+    if (this.movingT < AUTO_STOP) return;
+    this.movingT = 0;
     const p = b.pos;
-    if (b.state !== 'moving' || this.falling) { this.stuck = null; this.ui.showUnstick(false); return; }
-    const s = this.stuck || (this.stuck = { x: p.x, z: p.z, t: 0 });
-    if (Math.hypot(p.x - s.x, p.z - s.z) > 0.5) { s.x = p.x; s.z = p.z; s.t = 0; this.ui.showUnstick(false); return; }
-    s.t += dt;
-    if (s.t > 5) this.ui.showUnstick(true);
-  }
-
-  unstick() {
-    if (!this.ball || this.ball.state !== 'moving') return;
-    this.stuck = null;
-    this.ui.showUnstick(false);
-    this.ball.respawnAtSafe();
-    this.cam.snapTo?.(this.ball.mesh.position);
+    const solid = b.grounded && !b.groundMeta?.mover && !b.groundMeta?.unsafe && !this.course.unsafeAt?.(p) && !this.course.lavaAt?.(p, b);
+    if (solid) {
+      b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      b.state = 'idle';
+      b.restTimer = 0;
+    } else b.respawnAtSafe();
+    this.cam.snapTo?.(b.mesh.position);
     sfx.play('teleport');
-    this.ui.toast('Ball reset to its last safe spot');
+    this.ui.toast('⏸️ Jérémie froze your ball so you can play on');
     this.onRest();
   }
 

@@ -184,14 +184,22 @@ export function extendHole(def, spec = {}) {
       if (fl.hazard === 'trees') parts.push({ t: 'cyl', p: [cx + nx * w * 0.28 * side, y, cz + nz * w * 0.28 * side], r: 0.38, h: 2.2, look: 'tree' });
       else parts.push({ t: 'bumper', p: [cx + nx * w * 0.25 * side, y, cz + nz * w * 0.25 * side], r: 0.36 });
     }
-    if (fl.hazard === 'wind' && s.L > 5) parts.push({ t: 'zone', kind: 'wind', rect: [cx - 1.5, cz - 1.5, cx + 1.5, cz + 1.5], dir: [nx, nz], force: 1.1 });
-    if (fl.hazard === 'lava' && s.L > 5) {
-      // a lava gutter along one side of the leg
-      const side = i % 2 ? 1 : -1, ox = nx * w * 0.36 * side, oz = nz * w * 0.36 * side;
+    // zones are axis-aligned boxes: on a diagonal leg one would fill the whole width of the lane
+    const straight = Math.abs(s.d[0]) < 0.05 || Math.abs(s.d[1]) < 0.05;
+    // a slow ball isn't blown about, so it can always come to rest
+    if (fl.hazard === 'wind' && s.L > 5) parts.push({ t: 'zone', kind: 'wind', rect: [cx - 1.5, cz - 1.5, cx + 1.5, cz + 1.5], dir: [nx, nz], force: 1.1, minSpeed: 0.5 });
+    if (fl.hazard === 'lava' && s.L > 5 && straight && i % 2) {
+      // a lava gutter along one side of a straight leg
+      const ox = nx * w * 0.36, oz = nz * w * 0.36;
       const [ax2, az2] = at(s, 0.25), [bx2, bz2] = at(s, 0.75);
       parts.push({ t: 'zone', kind: 'lava', rect: [Math.min(ax2, bx2) + ox - 0.35, Math.min(az2, bz2) + oz - 0.35, Math.max(ax2, bx2) + ox + 0.35, Math.max(az2, bz2) + oz + 0.35], y });
+    } else if (fl.hazard === 'lava' && s.L > 4) {
+      // the other legs: the volcano lobs magma bombs onto them (telegraphed, 20 LP)
+      parts.push({ t: 'monster', type: 'magma', p: [cx, y, cz], a: s.a, b: s.b, w });
     }
-    if (fl.hazard === 'current' && s.L > 5) parts.push({ t: 'zone', kind: 'current', rect: [Math.min(s.a[0], s.b[0]) - w / 2 + 0.2, Math.min(s.a[1], s.b[1]) - w / 2 + 0.2, Math.max(s.a[0], s.b[0]) + w / 2 - 0.2, Math.max(s.a[1], s.b[1]) + w / 2 - 0.2].map((v, k) => v), dir: [-s.d[0], -s.d[1]], speed: 2, y });
+    // the current runs down the middle of a straight leg; the water along the walls is calm, so a ball
+    // can rest there (diagonal legs get none)
+    if (fl.hazard === 'current' && s.L > 5 && straight) parts.push({ t: 'zone', kind: 'current', rect: [Math.min(s.a[0], s.b[0]) - w / 2 + 0.9, Math.min(s.a[1], s.b[1]) - w / 2 + 0.9, Math.max(s.a[0], s.b[0]) + w / 2 - 0.9, Math.max(s.a[1], s.b[1]) + w / 2 - 0.9], dir: [-s.d[0], -s.d[1]], speed: 2, y });
   });
 
   // monsters: enough shooters so every hole has at least two (the lane always gets one)

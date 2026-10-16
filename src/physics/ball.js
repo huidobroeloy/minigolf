@@ -3,6 +3,8 @@ import { R, GROUP, cg, SURFACES, GRAVITY } from './world.js';
 import { applyCharacter } from '../game/characters.js';
 
 export const BALL_R = 0.18;
+/** Geysers throw a ball at most this often per shot (no endless juggling between geysers). */
+export const MAX_VENT_LAUNCHES = 2;
 export const MAX_SHOT_SPEED = 17;
 export const CUP_R = 0.36;
 export const CUP_DEPTH = 0.42; // real cups (see buildCourse): how deep the hole is
@@ -170,6 +172,7 @@ export class Ball {
     this.restTimer = 0;
     this.pinned = false;
     this.pinT = 0;
+    this.ventLaunches = 0; // geysers may throw the ball at most MAX_VENT_LAUNCHES times per shot
     // the shot itself isn't a wall impact: without this, a ball stuck to a sticky wall would
     // re-stick the moment it's hit away from it
     this.prevVel.set(v.x + pv.x, v.y + pv.y, v.z + pv.z);
@@ -217,6 +220,7 @@ export class Ball {
       this.restTimer = 0;
       this.launchTimer = 0.25;
       this.ventCool = 0.8;
+      this.ventLaunches = (this.ventLaunches ?? 0) + 1;
       this.onEvent('vent', {});
       return;
     }
