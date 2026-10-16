@@ -424,7 +424,68 @@ export class GameClient {
     this.lastBeep = 99;
     this.virtualize(this.ball.mesh.position);
     // a short flyover from the cup back to the tee so everyone can read the layout
-    this.flyover = m.elapsed < 4000 ? { t: 0, dur: 3.2 } : null;
+    this.flyover = m.elapsed < 4000 ? this.makeFlyover(def) : null;
+  }
+
+  /** The hole preview: along the route (cup → lane → tee) when the hole has one, else a plain arc. */
+  makeFlyover(def) {
+    const r = def.route;
+    if (!r || r.length < 2) return { t: 0, dur: 3.2 };
+    const pts = [...r].reverse();
+    // sample the polyline every unit
+    const raw = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az)));
+      for (let k = 0; k < n; k++) raw.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]);
+    }
+    raw.push(pts[pts.length - 1]);
+    const f = { t: 0, dur: 3.5, raw, tries: 0 };
+    this.flyPath(f);
+    return f;
+  }
+
+  /** Lays the flyover path 6 units over the ground. The ground is raycast, which only works once the
+   * physics world has stepped, so until then it's flat and gets rebuilt on the next frames. */
+  flyPath(f) {
+    const def = this.def, raw = f.raw;
+    const top = Math.max(def.tee[1], def.cup[1]) + 30;
+    const ys = raw.map(([x, z]) => {
+      const hit = this.physics.raycastDown({ x, y: top, z }, 80);
+      return hit ? top - hit.dist : NaN;
+    });
+    f.needY = !ys.some(Number.isFinite) && ++f.tries < 30;
+    // smooth the line so the camera glides through the corners and over walls and monsters
+    const avg = (arr, i, w, g) => {
+      let s = 0, c = 0;
+      for (let j = Math.max(0, i - w); j <= Math.min(arr.length - 1, i + w); j++) { const v = g(arr[j]); if (Number.isFinite(v)) { s += v; c++; } }
+      return c ? s / c : NaN;
+    };
+    const fallback = (def.tee[1] + def.cup[1]) / 2;
+    f.path = raw.map((p, i) => {
+      const y = avg(ys, i, 4, (v) => v);
+      return new THREE.Vector3(avg(raw, i, 3, (q) => q[0]), (Number.isFinite(y) ? y : fallback) + 6, avg(raw, i, 3, (q) => q[1]));
+    });
+    let len = 0;
+    f.at = [0];
+    for (let i = 1; i < f.path.length; i++) f.at.push(len += f.path[i].distanceTo(f.path[i - 1]));
+    f.len = len;
+    f.dur = Math.min(6, Math.max(3.5, len / 12));
+  }
+
+  /** A point `s` units along the flyover path. */
+  flyAt(f, s) {
+    const { path, at } = f;
+    if (s <= 0) return path[0].clone();
+    if (s >= f.len) return path[path.length - 1].clone();
+    let i = 1;
+    while (at[i] < s) i++;
+    return path[i - 1].clone().lerp(path[i], (s - at[i - 1]) / (at[i] - at[i - 1] || 1));
+  }
+
+  skipFlyover() {
+    // a tap that closes the sector map card doesn't also skip the preview behind it
+    if (this.flyover && !this.ui.mapOpen && this.flyover.t > 0.3) this.flyover.t = this.flyover.dur;
   }
 
   /** Lyoko-style virtualization: rings sweep down around the ball as it materializes. */
@@ -1373,7 +1434,7 @@ export class GameClient {
     this.disposers.push(inp.on('pointerdown', (e) => {
       sfx.unlock();
       if (this.phase !== 'hole') return;
-      if (this.flyover) { this.flyover.t = this.flyover.dur; return; }
+      if (this.flyover) { this.skipFlyover(); return; }
       if (inp.pointers.size >= 2) {
         this.cancelAim();
         this.rotating = true;
@@ -1469,7 +1530,7 @@ export class GameClient {
 
   onKey(e) {
     sfx.unlock();
-    if (this.flyover && this.phase === 'hole') { this.flyover.t = this.flyover.dur; return; }
+    if (this.flyover && this.phase === 'hole') { this.skipFlyover(); return; }
     if (e.code === 'KeyH') return this.ui.toggleHelp();
     if (e.code === 'KeyM') return this.app.toggleMute();
     if (e.code === 'Escape') {
@@ -1700,17 +1761,29 @@ export class GameClient {
     }
     if (this.flyover) {
       const f = this.flyover;
-      f.t += dt;
+      if (!this.ui.mapOpen) f.t += dt; // hold on the first frame while the sector map card is up
       const u = Math.min(1, f.t / f.dur);
       const k = u * u * (3 - 2 * u);
       const cup = new THREE.Vector3(this.course.cup.x, this.course.cup.y, this.course.cup.z);
       const ball = this.ball.mesh.position;
       const d = this.cam.dir;
-      const from = cup.clone().addScaledVector(d, 4).add(new THREE.Vector3(0, 6, 0));
       const to = ball.clone().addScaledVector(d, -Math.cos(this.cam.pitch) * this.cam.dist).add(new THREE.Vector3(0, Math.sin(this.cam.pitch) * this.cam.dist + 0.25, 0));
-      const mid = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, Math.max(this.course.size.x, this.course.size.z) * 0.45, 0));
-      const pos = from.clone().multiplyScalar((1 - k) * (1 - k)).addScaledVector(mid, 2 * k * (1 - k)).addScaledVector(to, k * k);
-      const look = cup.clone().lerp(ball.clone().addScaledVector(d, 1.6), k);
+      const end = ball.clone().addScaledVector(d, 1.6);
+      let pos, look;
+      if (f.needY) this.flyPath(f);
+      if (f.path) {
+        // glide along the route, looking a few units ahead, then settle behind the ball
+        const s = k * f.len;
+        pos = this.flyAt(f, s);
+        look = this.flyAt(f, s + 7).add(new THREE.Vector3(0, -5, 0));
+        const b = Math.max(0, (u - 0.8) / 0.2), e = b * b * (3 - 2 * b);
+        if (e > 0) { pos.lerp(to, e); look.lerp(end, e); }
+      } else {
+        const from = cup.clone().addScaledVector(d, 4).add(new THREE.Vector3(0, 6, 0));
+        const mid = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, Math.max(this.course.size.x, this.course.size.z) * 0.45, 0));
+        pos = from.clone().multiplyScalar((1 - k) * (1 - k)).addScaledVector(mid, 2 * k * (1 - k)).addScaledVector(to, k * k);
+        look = cup.clone().lerp(end, k);
+      }
       this.renderer.camera.position.copy(pos);
       this.renderer.camera.lookAt(look);
       if (u >= 1) { this.flyover = null; this.cam.snapTo(ball); }
