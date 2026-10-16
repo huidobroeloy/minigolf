@@ -260,6 +260,17 @@ export class UI {
       <button class="btn" id="cancel">Cancel</button></div>`).querySelector('#cancel').onclick = () => this.h.leave?.();
   }
 
+  /** The host's room registration (hostPeer): 'open' or 'reconnecting'. */
+  setRoomStatus(s) {
+    this.roomStatus = s;
+    const el = this.$('.room-status');
+    if (el) { el.textContent = this.roomStatusText(); el.classList.toggle('warn', s === 'reconnecting'); }
+  }
+
+  roomStatusText() {
+    return this.roomStatus === 'reconnecting' ? '🟠 Reconnecting the room…' : '🟢 Room open · keep this screen on while friends join';
+  }
+
   showLobby(lobby, myId) {
     this.hideHud();
     const me = lobby.players.find((p) => p.id === myId);
@@ -273,11 +284,12 @@ export class UI {
         <div class="code-box">
           <div class="lbl">ROOM CODE</div>
           <div class="code">${esc(lobby.code)}</div>
-          <button class="btn tiny" id="copy">Copy invite link</button>
+          <button class="btn tiny" id="copy">${navigator.share ? 'Share invite' : 'Copy invite link'}</button>
+          ${isHost && !lobby.solo ? `<div class="room-status ${this.roomStatus === 'reconnecting' ? 'warn' : ''}">${this.roomStatusText()}</div>` : ''}
         </div>
         <div class="cs-host"></div>
         <div class="players-list">
-          ${lobby.players.map((p) => { const ch = characterByColor(p.color); const tm = st.mode === 'teams' ? (ch?.id === 'xana' || p.team === 'xana' ? ' 👁️' : p.team === 'lyoko' ? ' 🛡️' : ' ❔') : ''; return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${tm}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
+          ${lobby.players.map((p) => { const ch = characterByColor(p.color); const tm = st.mode === 'teams' ? (ch?.id === 'xana' || p.team === 'xana' ? ' 👁️' : p.team === 'lyoko' ? ' 🛡️' : ' ❔') : ''; return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${tm}${p.relay ? ' <span class="as" title="Connected through the relay">📡</span>' : ''}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
           <div class="small">${lobby.players.length}/8 players</div>
         </div>
         <div class="settings ${isHost ? '' : 'readonly'}">
@@ -311,7 +323,13 @@ export class UI {
       selected: me?.color, taken, compact: true,
       onPick: (c) => { this.prefs.color = c; savePrefs(this.prefs); this.h.pick?.(c); },
     });
-    s.querySelector('#copy').onclick = () => { navigator.clipboard?.writeText(url); this.toast('Invite link copied'); };
+    s.querySelector('#copy').onclick = async () => {
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Lyoko Minigolf', text: `Join my Lyoko Minigolf room: ${lobby.code}`, url }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+      }
+      navigator.clipboard?.writeText(url);
+      this.toast('Invite link copied');
+    };
     s.querySelectorAll('[data-team]').forEach((b) => { b.onclick = () => this.h.team?.(b.dataset.team); });
     s.querySelector('#leave').onclick = () => this.h.leave?.();
     if (isHost) {

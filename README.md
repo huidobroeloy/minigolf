@@ -10,16 +10,24 @@ Fan-made for private fun among friends. Not affiliated with Code Lyoko or Moonsc
 
 ## How to play with friends
 1. One person opens the game and clicks **Create room**.
-2. They share the 5-letter code, or the invite link from the lobby.
+2. They share the 5-letter code, or tap **Share invite** in the lobby (on a computer it copies the link).
 3. Friends click **Join** with that code. Up to 8 players can join.
 4. The host picks the format, timer and power-ups, then clicks **Start**.
 
 The host's browser runs the room, so the host has to keep the tab open.
 Connections are peer-to-peer (WebRTC via PeerJS), so there's no server to run.
 
+**Hosting on a phone:** the lobby keeps the screen on, and it's fine to switch to WhatsApp to send the code. When you come
+back, the room re-opens with the same code by itself: the lobby shows 🟢 *Room open*, or 🟠 *Reconnecting…* for a moment.
+Friends can only join while the host has the game on screen.
+
 If a friend's connection drops or they reload the page, they're put straight back into the room with their scores kept.
 If the host leaves, the room ends.
-For friends behind strict networks, the game uses PeerJS's free relay. For more reliable relaying, add your own free TURN credentials to `src/net/ice.js`.
+**Phones on mobile data** often can't link directly. If a friend's direct link isn't up after 6 s, the game also tries a
+free public relay (an MQTT broker over secure WebSockets), and whichever connects first wins. A relayed friend shows 📡 in
+the lobby. It works the same, a bit laggier, and hears the built-in music instead of the host's soundtrack. Game messages
+pass through that public server, so don't put anything private in your player name. You can still add your own TURN
+credentials to `src/net/ice.js` for a faster direct link.
 
 ## Formats
 - **World Cup:** all 9 courses, 6 holes each, then the Kolossus finale (55 holes). The courses come in a random order, and you play all 6 holes of a course before moving on.
@@ -241,7 +249,7 @@ The built-in music is a procedural synth, made in code. Under **Settings → Sou
 The files stay in your browser (IndexedDB). They're never uploaded and never part of this repository. When you host, the game streams your tracks to the friends in your room, so everyone hears the same music.
 
 ## Development
-No build step is needed: it's plain ES modules, with Three.js, Rapier and PeerJS loaded from jsDelivr. Run the bundled no-cache dev server, which makes edited modules always reload:
+No build step is needed: it's plain ES modules, with Three.js, Rapier, PeerJS and (only when the relay is needed) MQTT.js loaded from jsDelivr. Run the bundled no-cache dev server, which makes edited modules always reload:
 
 ```bash
 python tools/devserver.py 8000

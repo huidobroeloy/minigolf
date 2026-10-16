@@ -178,8 +178,9 @@ class App {
       const code = makeCode();
       const room = new HostRoom(code);
       try {
-        this.peer = await hostPeer(room, code);
+        this.peer = await hostPeer(room, code, (s) => this.ui.setRoomStatus(s));
         this.room = room;
+        this.keepAwake(true);
         this.shareTracks();
         this.link = new LocalLink(room, 'host');
         this.startClient(this.link, me, { isHost: true });
@@ -195,7 +196,7 @@ class App {
   async join(code, me) {
     this.ui.showConnecting(`Joining room ${code}…`);
     try {
-      this.link = await joinPeer(code);
+      this.link = await joinPeer(code, (s) => this.ui.showConnecting(`Room ${code} · ${s}`));
       this.joined = { code, me };
       this.saveSession({ code });
       history.replaceState(null, '', `${location.pathname}?room=${code}${this.debug ? '&debug=1' : ''}`);
@@ -217,7 +218,7 @@ class App {
     for (let attempt = 1; attempt <= 3; attempt++) {
       this.ui.showConnecting(`Connection lost — reconnecting to ${code} (${attempt}/3)…`);
       try {
-        this.link = await joinPeer(code);
+        this.link = await joinPeer(code, (s) => this.ui.showConnecting(`Connection lost — reconnecting to ${code} (${attempt}/3) · ${s}`));
         this.reconnecting = false;
         this.startClient(this.link, me, {});
         return;
@@ -227,6 +228,22 @@ class App {
     }
     this.reconnecting = false;
     this.leave('Could not reconnect to the host');
+  }
+
+  /** Hosting on a phone: keep the screen on, or the tab sleeps and friends can't join. */
+  async keepAwake(on) {
+    if (!on) {
+      this.awake = false;
+      try { await this.wakeLock?.release(); } catch { /* ignore */ }
+      this.wakeLock = null;
+      return;
+    }
+    this.awake = true;
+    if (!this.awakeHooked) {
+      this.awakeHooked = true;
+      document.addEventListener('visibilitychange', () => { if (this.awake && document.visibilityState === 'visible') this.keepAwake(true); });
+    }
+    try { if (!this.wakeLock || this.wakeLock.released) this.wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported or denied */ }
   }
 
   loadToken() {
@@ -260,6 +277,7 @@ class App {
     this.room = null;
     try { this.peer?.destroy(); } catch { /* ignore */ }
     this.peer = null;
+    this.keepAwake(false);
     if (this.params.has('hole')) history.replaceState(null, '', location.pathname + (this.debug ? '?debug=1' : ''));
     this.showMenu(reason);
   }
