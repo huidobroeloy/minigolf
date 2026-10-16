@@ -258,6 +258,17 @@ export function buildCourse(def, physics, scene) {
       meta.unsafe = true;
       mesh.position.set(s0.x, s0.y, s0.z);
       mesh.quaternion.copy(q0);
+      if (p.safeRim) {
+        // a raft you can ride over lava: a glowing rim round its top says "safe to stand on"
+        const rimMat = new THREE.MeshBasicMaterial({ color: '#ffb347' });
+        const t = 0.07;
+        for (const [sx, sz, px, pz] of [[w, t, 0, d / 2 - t / 2], [w, t, 0, -d / 2 + t / 2], [t, d, w / 2 - t / 2, 0], [t, d, -w / 2 + t / 2, 0]]) {
+          const e = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.02, sz), rimMat);
+          e.position.set(px, h / 2 + 0.012, pz);
+          mesh.add(e);
+        }
+        course.animators.push((tt) => { rimMat.color.setHSL(0.09, 1, 0.55 + 0.12 * Math.sin(tt * 3)); });
+      }
       course.movers.push(mover);
       expand(s0.x, s0.y, s0.z, Math.max(w, d));
       if (p.extent) for (const e of p.extent) expand(e[0], s0.y, e[1]);
@@ -529,12 +540,15 @@ export function buildCourse(def, physics, scene) {
       col.position.set(cx, y + (z.height ?? 3) / 2, cz);
       group.add(col);
       // a spring pad with "up" chevrons and the throw arc, so the jump is obvious
-      const pad = makeJumpPad({ r, color: mats.theme.flag, dir: z.push || [0, 1], launch: z.launch ?? 10.5, minSpeed: z.minSpeed ?? 2.8 });
+      const pad = makeJumpPad({ r, color: mats.theme.flag, dir: z.push || [0, 1], launch: z.launch ?? 10.5, minSpeed: z.minSpeed ?? 2.8, smoke: def.sector === 'volcano' });
       pad.position.set(cx, y, cz);
       group.add(pad);
       z.pad = pad;
       course.animators.push((t) => {
         col.rotation.y = t * 2; col.material.opacity = 0.1 + 0.05 * Math.sin(t * 6);
+        // glows hotter as your ball comes near (the geyser is about to throw it)
+        const bp = course.localBall?.pos;
+        pad.userData.setNear?.(bp ? Math.max(0, 1 - Math.hypot(bp.x - cx, bp.z - cz) / (r + 1.5)) : 0);
         pad.userData.animate(t, course.camera);
       });
     }
@@ -613,6 +627,18 @@ export function buildCourse(def, physics, scene) {
     if (!b) { console.warn('Unknown part', part.t); continue; }
     b(part);
   }
+
+  // ---------- lava glow ----------
+  // the biggest lava pools cast a flickering orange light (at most 3: phones pay for every light)
+  const pools = course.zones.filter((z) => z.kind === 'lava' && z.rect)
+    .map((z) => ({ z, area: Math.abs((z.rect[2] - z.rect[0]) * (z.rect[3] - z.rect[1])) }))
+    .sort((a, b) => b.area - a.area).slice(0, def.sector === 'volcano' ? 3 : 0);
+  pools.forEach(({ z, area }, i) => {
+    const light = new THREE.PointLight('#ff5a1a', 6, 4 + Math.sqrt(area) * 1.5, 1.5);
+    light.position.set((z.rect[0] + z.rect[2]) / 2, (z.y ?? 0) + 0.9, (z.rect[1] + z.rect[3]) / 2);
+    group.add(light);
+    course.animators.push((t) => { light.intensity = 5 + 1.6 * Math.sin(t * 7 + i * 2) + 0.8 * Math.sin(t * 13 + i); });
+  });
 
   // ---------- tee + cup ----------
   const teePad = addMesh(new THREE.BoxGeometry(1.1, 0.04, 1.1), new THREE.MeshStandardMaterial({ color: '#2b2b2b', roughness: 0.9 }), { cast: false });

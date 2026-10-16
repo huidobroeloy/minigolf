@@ -44,8 +44,8 @@ export default [
       { t: 'floor', poly: [[-6, 13], [-1.5, 13], [1.5, 13], [6, 13], [6, 32], [-6, 32]], open: [1] },
       lava(-6, 19, 6, 23.6),
       // basalt rafts that ferry you across (riding a raft over lava is safe)
-      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([-3, -0.15, 18.1], [-3, -0.15, 24.5], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock' },
-      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([3, -0.15, 24.5], [3, -0.15, 18.1], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock' },
+      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([-3, -0.15, 18.1], [-3, -0.15, 24.5], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock', safeRim: true },
+      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([3, -0.15, 24.5], [3, -0.15, 18.1], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock', safeRim: true },
       { t: 'zone', kind: 'vent', c: [0, 16.4], r: 0.75, y: 0, launch: 8.5, push: [0, 1], minSpeed: 4.6 },
       { t: 'cyl', p: [-4.5, 0, 27], r: 0.5, h: 1.2, look: 'rock' },
       { t: 'cyl', p: [3.8, 0, 29.5], r: 0.45, h: 1.1, look: 'rock' },
