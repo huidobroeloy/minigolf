@@ -41,8 +41,9 @@ export function makeChevrons(color = '#7dffb0', size = 0.6, count = 3) {
  *   color  theme accent
  *   dir    [dx, dz] push direction
  *   launch upward speed, minSpeed horizontal push (for the arc preview)
+ *   smoke  volcanic geyser: smoke puffs, a glow that builds as a ball comes near, an eruption burst
  */
-export function makeJumpPad({ r = 0.8, color = '#7dffb0', dir = [0, 1], launch = 10.5, minSpeed = 3 } = {}) {
+export function makeJumpPad({ r = 0.8, color = '#7dffb0', dir = [0, 1], launch = 10.5, minSpeed = 3, smoke = false } = {}) {
   const g = new THREE.Group();
   const metal = new THREE.MeshStandardMaterial({ color: '#c9d2dc', metalness: 0.8, roughness: 0.3 });
   const glow = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.8, roughness: 0.4 });
@@ -84,17 +85,52 @@ export function makeJumpPad({ r = 0.8, color = '#7dffb0', dir = [0, 1], launch =
   arc.computeLineDistances();
   g.add(arc);
 
+  // a volcanic geyser smokes, glows as a ball comes near, and erupts when it fires
+  const puffs = [], burst = [];
+  let near = 0;
+  if (smoke) {
+    const smokeMat = new THREE.MeshBasicMaterial({ color: '#4a3a36', transparent: true, opacity: 0.4, depthWrite: false });
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r * 0.35, 10, 8), smokeMat.clone());
+      g.add(m);
+      puffs.push({ m, ph: i / 6, a: i * 2.1 });
+    }
+    const hot = new THREE.MeshBasicMaterial({ color: '#ff8a2a', transparent: true, opacity: 0, depthWrite: false });
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r * 0.22, 8, 6), hot.clone());
+      m.visible = false;
+      g.add(m);
+      burst.push({ m, a: (i / 10) * Math.PI * 2, up: 3 + (i % 3) });
+    }
+  }
+
   let firedAt = -10;
   g.userData = {
     fire(t) { firedAt = t; },
+    /** 0…1: how close a ball is (a volcanic geyser glows hotter as you come near). */
+    setNear(k) { near = k; },
     animate(t, cam) {
       // compress → spring up after each launch, otherwise a gentle "ready" bob
       const k = t - firedAt;
       const squash = k < 0.12 ? 1 - k / 0.12 * 0.6 : k < 0.5 ? 0.4 + Math.sin(((k - 0.12) / 0.38) * Math.PI) * 0.9 : 1 + Math.sin(t * 4) * 0.04;
       spring.scale.y = Math.max(0.35, squash);
       plate.position.y = 0.08 + h * Math.max(0.35, squash);
-      glow.emissiveIntensity = 0.6 + (k < 0.5 ? 1.2 * (1 - k / 0.5) : 0.2 * Math.sin(t * 3));
+      glow.emissiveIntensity = 0.6 + near * 1.4 * (0.75 + 0.25 * Math.sin(t * 14)) + (k < 0.5 ? 1.2 * (1 - k / 0.5) : 0.2 * Math.sin(t * 3));
       chev.userData.animate(t, cam);
+      for (const p of puffs) {
+        const u = (t * (0.35 + near * 0.5) + p.ph) % 1;
+        p.m.position.set(Math.cos(p.a + t * 0.4) * r * 0.3 * u, 0.3 + u * (1.6 + near), Math.sin(p.a + t * 0.4) * r * 0.3 * u);
+        p.m.scale.setScalar(0.6 + u * 1.6);
+        p.m.material.opacity = (0.25 + near * 0.3) * Math.sin(u * Math.PI);
+      }
+      // eruption: a spray of glowing lava blobs for 0.8 s after each launch
+      const e = k / 0.8;
+      for (const b of burst) {
+        b.m.visible = e < 1;
+        if (e >= 1) continue;
+        b.m.position.set(Math.cos(b.a) * r * (0.3 + e * 1.4), 0.3 + b.up * e - 4 * e * e, Math.sin(b.a) * r * (0.3 + e * 1.4));
+        b.m.material.opacity = 0.9 * (1 - e);
+      }
     },
   };
   return g;

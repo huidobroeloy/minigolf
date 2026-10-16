@@ -77,8 +77,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `src/course/builder.js` turns the data into meshes and colliders.
   - Motion helpers are in `holes/helpers.js`: patrol, orbit, spin, elevator, shuttle, loop, kicker.
   - Zones: conveyor (clamps speed to the belt), boost (`align` option), vent (geyser launch; keeps the ball's own speed with a
-    minimum), wind, slow, current (pushes along its flow only), bubble (steady lift, `push` near the top), lava (a fall).
-    Add `hidden: true` for no visual.
+    minimum; at most `MAX_VENT_LAUNCHES` = 2 per shot, `ball.ventLaunches`), wind (`minSpeed`: slower balls are left alone),
+    slow, current (pushes along its flow only), bubble (steady lift, `push` near the top), lava (a fall).
+    Add `hidden: true` for no visual. Floor movers take `safeRim: true` (pulsing orange rim: volcano-2's rafts). Volcano vents
+    smoke and glow as the local ball nears (`setNear`); the biggest volcano lava rects get flickering PointLights (≤3).
   - Parts: `warp` (exit speed is max(entry, `speed`)), `tube` (glass duct), `bowl` (cone ring). `def.water` gives floaty air.
   - Extra finishing cups: `cups: [[x,y,z],…]`. Use `course.nearestCup(p)` and `ball.sinkCup` instead of `course.cup` when the cup that was hit matters.
   - Courses (`COURSES` in `holes/index.js`): Desert, Forest, Ice, Mountain, Sector 5, Volcano Replika, Digital Sea,
@@ -93,6 +95,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     short shapes with a `[lanes]` console warning. forest-3 (round floor) has no lane. `APPROACH` takes per-hole
     `{ shape, mirror }` overrides. Lanes have **no warps**: the only warps left are sea-3's green pipe maze, which is
     the hole itself (every exit ≥6 from the cup). (Way towers were tried and removed at the owner's request.)
+    Lane lava gutters and water currents only go on straight legs (a diagonal leg's box would cover the whole bend);
+    currents stop 0.9 short of the walls and 0.6 short of each corner, so they never chain down the whole lane;
+    lane winds have `minSpeed: 0.5`. Volcano legs without a gutter get a `magma` monster (`MagmaBombs`: a seeded bomb
+    every 6–9 s, ring telegraph 1.5 s, 20 LP + knock, `canTarget` rules).
   - **Monster rosters** (`ROSTER` in `extend.js`): each sector's typical lane monsters. `rollMonsters(def, seed)`
     (`holes/monsterRoll.js`) re-rolls lane monsters each match (`lane` slot on the spec, `laneMonster`), ~30% guests
     from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Ninjas only appear in the Cortex,
@@ -108,6 +114,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `effects.js` holds the per-client effects manager.
   - You can hold up to 3; a 4th is discarded. Pickups respawn, and the host's power-up setting scales how many appear.
 - **Game client** (`src/game/client.js`): aiming, the power drag, aerial targeting, celebrations, the camera and the HUD hooks.
+  - **Auto-stop** (`watchStuck`, `AUTO_STOP` 15 s): a ball still moving 15 s after the shot is frozen in place if it's
+    grounded on safe, still floor, else `respawnAtSafe()`, no penalty. There is no Reset button any more.
+  - **Hole preview** (`makeFlyover`/`flyPath`): on holes with a `def.route` the camera flies from the cup back along the
+    route to the tee, 6 over the raycast ground (rebuilt each frame until the physics world has stepped), 3.5–6 s, then
+    blends behind the ball. It holds while `ui.mapOpen`; `skipFlyover` ignores the tap that closes the map card.
 - **Other `src/game` files:**
   - `characters.js`: the 8 characters (ball textures and colours).
   - `finale.js`: the winner animation, where Aelita reaches the tower. `xanaFinale.js`: the catastrophe when XANA wins.
@@ -137,7 +148,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
   two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens
   for the blade beam (the only devirtualizing attack left besides grabs/fists), running a ball over costs 50; Manta laser
-  strafes and mines (30 LP + blast, every 12–18 s, max 2 live); Shark laser, ram and slow homing torpedoes; Ninja
+  strafes and mines (30 LP + blast, every 12–18 s, max 2 live), and its wing gust only pushes moving balls (≥0.6), one
+  0.3 s gust per pass; Shark laser, ram and slow homing torpedoes; Ninja
   (Cortex) dash + sword slash (25) and palm laser; Kalamar (Sea) laser and ink clouds that blind and slow; Guardian a
   drifting prison sphere (4 s trap). **XANA-eye weak point:** a ball faster than `WEAK_SPEED` (6) hitting a monster
   devirtualizes it for 20 s (+5 LP) via `effects.cutOut` (client.js `checkWeakPoints`, not bosses/Kongre/Guardians).
@@ -162,3 +174,9 @@ back in; a round bank around the cup. Fix with an off-line cup, a lava strip or 
 
 Check with `__hio(i, { yawRange: 60, yawStep: 2, pMin: 0.12, pMax: 1, pStep: 0.05, t0s: [0, 2.1] })` (2196 simulated
 shots, about 2–5 minutes per hole). To trace a route use `__sim(def, { yaw, power, t0, trace: true })`.
+
+## Stuck-ball probe
+Balls never wedge; the old "stuck" bug was balls that never stop (geyser juggling, Manta gusts, lane currents
+and winds). After changing zones, vents or monsters that push, roll random shots from points along the track with
+`__sim` and count shots still moving after 20 s: aim for 0 on Volcano and Mountain and ≤1 per hole elsewhere
+(the 15 s auto-stop covers the rest in game).

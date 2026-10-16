@@ -436,7 +436,13 @@ class Manta extends Monster {
     const s = this.at(t), s2 = this.at(t + 0.05);
     const p = ball.pos;
     const d = Math.hypot(p.x - s.x, p.z - s.z);
+    // the wings only catch a ball that's already rolling, and only in one short gust per pass:
+    // otherwise its patrol shoves a ball to and fro forever and it can never be played
+    const v = ball.vel;
+    if (ball.state !== 'moving' || Math.hypot(v.x, v.z) < 0.6) return;
     if (d < 1.3 && p.y < s.y + 0.5) {
+      if (t - (this.gustT ?? -9) > 2) this.gustT = t;
+      if (t - this.gustT > 0.3) return;
       const vx = (s2.x - s.x) / 0.05, vz = (s2.z - s.z) / 0.05;
       const sp = Math.hypot(vx, vz) || 1;
       out.x += (vx / sp) * 14; out.z += (vz / sp) * 14;
@@ -1018,14 +1024,84 @@ class Guardian extends Monster {
   }
 }
 
+// ---------- Magma bombs (Volcano lanes): the volcano lobs a bomb onto the leg every few seconds.
+// A red ring marks the landing spot 1.5 s ahead; a ball caught under it takes 20 LP and a knock.
+// Spots and timing come from a seeded rhythm on the shared hole clock, so everyone sees the same bombs.
+const BOMB_WARN = 1.5;
+class MagmaBombs extends Monster {
+  constructor(spec, ctx) {
+    super(spec, ctx, new THREE.Group());
+    this.rng = seededRng(ctx, spec, 'magma');
+    this.period = this.rng.range(6, 9);
+    this.phase = this.rng.range(0, this.period);
+    this.seedBase = `${ctx.course?.def?.id ?? 'x'}:${spec.p[0].toFixed(2)},${spec.p[2].toFixed(2)}`;
+    const glow = new THREE.MeshBasicMaterial({ color: '#ff3b1f', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.8, 32), glow);
+    this.ring.rotation.x = -Math.PI / 2;
+    this.bomb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshStandardMaterial({ color: '#3a1408', emissive: '#ff5a14', emissiveIntensity: 1.1, roughness: 0.5 }));
+    this.flash = new THREE.Mesh(new THREE.CircleGeometry(1, 28), new THREE.MeshBasicMaterial({ color: '#ffb36a', transparent: true, opacity: 0.8, depthWrite: false }));
+    this.flash.rotation.x = -Math.PI / 2;
+    for (const m of [this.ring, this.bomb, this.flash]) { m.visible = false; ctx.group.add(m); }
+    this.hitK = -1;
+  }
+  /** Which bomb this is (k) and how far into its cycle we are (u, seconds). */
+  cycle(t) {
+    const s = t - this.phase;
+    const k = Math.floor(s / this.period);
+    return { k, u: s - k * this.period };
+  }
+  /** Where bomb k lands: somewhere along the middle 80% of the leg, off the centre line by up to 0.6 of the half-width. */
+  spot(k) {
+    const r = new RNG(`${this.seedBase}:${k}`);
+    const { a, b, w } = this.spec;
+    const u = r.range(0.1, 0.9), dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    const off = r.range(-0.6, 0.6) * Math.max(0, w / 2 - 0.5);
+    const x = a[0] + dx * u - (dz / L) * off, z = a[1] + dz * u + (dx / L) * off;
+    return { x, y: this.ctx.course.floorYAt(x, z) ?? this.spec.p[1], z };
+  }
+  force(ball, t, out) {
+    const { k, u } = this.cycle(t);
+    if (u < BOMB_WARN || u > BOMB_WARN + 0.15 || this.hitK === k || this.slashed) return;
+    this.hitK = k;
+    const s = this.spot(k), p = ball.pos;
+    const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
+    if (d > 0.8 + ball.radius || Math.abs(p.y - ball.radius - s.y) > 0.8) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    out.x += (dx / (d || 1)) * 260; out.z += (dz / (d || 1)) * 260; out.y += 140; out.wake = true;
+    landHit(this.ctx.course, 'magma', t, damageFor('magma', 'bomb'));
+  }
+  frame(t) {
+    const { k, u } = this.cycle(t);
+    const s = this.spot(k);
+    const warn = u < BOMB_WARN, falling = u > BOMB_WARN - 0.45 && u < BOMB_WARN, boom = u >= BOMB_WARN && u < BOMB_WARN + 0.45;
+    this.ring.visible = warn && !this.slashed;
+    if (warn) {
+      this.ring.position.set(s.x, s.y + 0.03, s.z);
+      this.ring.scale.setScalar(1.3 - 0.3 * (u / BOMB_WARN));
+      this.ring.material.opacity = 0.4 + 0.5 * Math.abs(Math.sin(u * 10));
+    }
+    this.bomb.visible = falling && !this.slashed;
+    if (falling) { const f = (BOMB_WARN - u) / 0.45; this.bomb.position.set(s.x, s.y + 0.28 + f * f * 7, s.z); }
+    this.flash.visible = boom && !this.slashed;
+    if (boom) {
+      const f = (u - BOMB_WARN) / 0.45;
+      this.flash.position.set(s.x, s.y + 0.04, s.z);
+      this.flash.scale.setScalar(0.4 + f * 1.1);
+      this.flash.material.opacity = 0.85 * (1 - f);
+      if (this.boomK !== k) { this.boomK = k; sfx.play('rumble'); }
+    }
+  }
+  dispose() { super.dispose(); for (const m of [this.ring, this.bomb, this.flash]) this.ctx.group.remove(m); }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
-  kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian,
+  kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian, magma: MagmaBombs,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];

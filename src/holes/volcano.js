@@ -44,8 +44,8 @@ export default [
       { t: 'floor', poly: [[-6, 13], [-1.5, 13], [1.5, 13], [6, 13], [6, 32], [-6, 32]], open: [1] },
       lava(-6, 19, 6, 23.6),
       // basalt rafts that ferry you across (riding a raft over lava is safe)
-      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([-3, -0.15, 18.1], [-3, -0.15, 24.5], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock' },
-      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([3, -0.15, 24.5], [3, -0.15, 18.1], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock' },
+      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([-3, -0.15, 18.1], [-3, -0.15, 24.5], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock', safeRim: true },
+      { t: 'mover', kind: 'floor', s: [1.7, 0.3, 1.7], path: shuttle([3, -0.15, 24.5], [3, -0.15, 18.1], 6, 0, 0.35), mat: 'basalt', sideLook: 'rock', safeRim: true },
       { t: 'zone', kind: 'vent', c: [0, 16.4], r: 0.75, y: 0, launch: 8.5, push: [0, 1], minSpeed: 4.6 },
       { t: 'cyl', p: [-4.5, 0, 27], r: 0.5, h: 1.2, look: 'rock' },
       { t: 'cyl', p: [3.8, 0, 29.5], r: 0.45, h: 1.1, look: 'rock' },
@@ -91,8 +91,9 @@ export default [
       { t: 'bowl', c: [0, 12], r0: 1.35, r1: 4.5, y0: 1.7, y1: 0, look: '#3a2a26' },
       { t: 'bowl', c: [0, 12], r0: 0.6, r1: 1.35, y0: 1.5, y1: 1.7, look: '#ff6a1a' },
       { t: 'floor', y: 1.5, poly: circlePoly(0, 12, 0.65, 20), walls: false },
-      // four geysers round the foot of the cone throw balls in toward the crater
-      ...[[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dz]) => ({ t: 'zone', kind: 'vent', c: [-dx * 5.6, 12 - dz * 5.6], r: 0.7, y: 0, launch: 13, push: [dx, dz], minSpeed: 2.9 })),
+      // four geysers round the foot of the cone throw balls in toward the crater. They sit a little
+      // way out from the cone, so a ball rolling back down settles before it reaches one.
+      ...[[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dz]) => ({ t: 'zone', kind: 'vent', c: [-dx * 6.3, 12 - dz * 6.3], r: 0.7, y: 0, launch: 13, push: [dx, dz], minSpeed: 3.2 })),
       lava(-8, 16.5, -5, 19.5), lava(5, 4.5, 8, 7.5),
     ],
   },

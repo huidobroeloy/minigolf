@@ -58,7 +58,6 @@ export class UI {
         <div class="hud-power hidden"><div class="power-fill"></div><div class="power-lbl">POWER</div></div>
         <div class="hud-hint"></div>
         <button class="btn target-cancel hidden" data-act="cancelTarget">✖ Cancel</button>
-        <button class="btn unstick hidden" data-act="unstick">↺ Ball stuck? Reset it (no penalty)</button>
         <div class="hud-buttons">
           <button class="icon-btn" data-act="cam" title="Camera: chase / first person / aerial (C)">🎥</button>
           <button class="icon-btn" data-act="spec" title="Spectate next player (Tab)">👁️</button>
@@ -83,7 +82,6 @@ export class UI {
     this.comms = new Comms(root);
     this.$ = (s) => root.querySelector(s);
     this.$('.target-cancel').addEventListener('click', () => this.h.cancelTarget?.());
-    this.$('.unstick').addEventListener('click', () => this.h.unstick?.());
     this.$('.hud-buttons').addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.act;
       if (a === 'cam') this.h.toggleCam?.();
@@ -482,7 +480,6 @@ export class UI {
   }
 
   setHint(text) { this.$('.hud-hint').innerHTML = text; }
-  showUnstick(on) { this.$('.unstick').classList.toggle('hidden', !on); }
   setCamButton(view) {
     const b = this.$('[data-act="cam"]');
     if (b) b.textContent = { chase: '🎥', pov: '🔭', aerial: '🛰️' }[view] || '🎥';
