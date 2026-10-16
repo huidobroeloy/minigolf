@@ -22,6 +22,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Three.js 0.186.1
   - Rapier3d-compat 0.21.0
   - PeerJS 1.5.5 (UMD)
+  - MQTT.js 5.10.1 (ESM, imported by `src/net/relay.js` only when the relay is used)
 - **Git identity is repo-local:** `huidobroeloy` / `197536980+huidobroeloy@users.noreply.github.com`.
 - **Commit messages** end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **No shortcuts.** No warp pipe or other route may skip a hole's lane or drop the ball near the cup (the owner removed
@@ -49,6 +50,21 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Networking** (`src/net`):
   - `HostRoom` runs in the host's browser and is authoritative for the room, scores, pickups and power-ups.
   - Remote players connect over PeerJS. `ice.js` lists the STUN servers plus the public PeerJS TURN server.
+  - **Relay fallback** (`relay.js`): phones on mobile data often can't link directly (carrier NAT, unreliable public
+    TURN). `joinPeer` (`transport.js`) tries the direct link, and after `RELAY_AFTER` (6 s), or once ICE fails, also
+    `joinRelay`; the first to open wins (whole join `JOIN_TIMEOUT` 30 s, one retry on `peer-unavailable`).
+    - The host's `hostRelay` listens on every broker in `BROKERS`: shiftr.io public on 443 first, then EMQX and HiveMQ.
+      Topics are `lyokogolf-v1/<CODE>/h` (guest → host, `{f, k: hello|m|ping|bye, m}`) and `/g/<id>` (host → guest).
+    - Relayed ids start with `r-`; the room keeps them in `room.relayed` (`relay` flag in the player list, 📡 in the
+      lobby) and doesn't stream the soundtrack to them. The host drops a relayed guest after 20 s of silence.
+  - **Host keep-alive** (`hostPeer`): a phone suspends the tab when the host switches apps, which drops the PeerJS
+    server link (the server forgets the code after ~1 min: guests got "not found"). On `disconnected`/errors and on
+    `visibilitychange`/`online`/`pageshow` it calls `peer.reconnect()` with backoff; if that isn't open within 5 s, a new
+    Peer takes the same code and the old one stays alive (`ctl.old`) for guests already linked. The lobby shows
+    `ui.setRoomStatus` (🟢 open / 🟠 reconnecting). `app.keepAwake` holds a screen Wake Lock while hosting.
+  - Test it headless with two browser contexts through the agent proxy: a normal join, a guest with `RTCPeerConnection`
+    forced to a dead relay-only TURN (it must join through the relay and play), and the host's socket closed or its
+    peer disconnected (it must re-open the same code).
   - `LocalLink` is used for solo play and for the host's own client.
   - Each client simulates only its own ball and broadcasts it at 15 Hz. Other balls are ghosts, with no ball-to-ball collision.
   - Global hazards are deterministic from a seed plus a start time.

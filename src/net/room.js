@@ -98,6 +98,7 @@ export class HostRoom {
     this.code = code;
     this.solo = solo;
     this.links = new Map();       // id -> send(msg)
+    this.relayed = new Set();     // friends connected through the public relay (relay.js)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
     this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', puMode: 'pickups', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko · puMode: pickups | draft | mirror
@@ -107,7 +108,10 @@ export class HostRoom {
   }
 
   // ---------- connections ----------
-  addClient(id, send) { this.links.set(id, send); }
+  addClient(id, send, { relay = false } = {}) {
+    this.links.set(id, send);
+    if (relay) this.relayed.add(id); else this.relayed.delete(id);
+  }
 
   // ---------- the host's soundtrack, streamed to friends ----------
   /** The host loaded (or changed) its own music: keep the chunks and send them to everyone. */
@@ -120,7 +124,7 @@ export class HostRoom {
   /** Paced so the music never crowds out the game's own messages (about 2 MB/s). */
   streamTracks(id) {
     const msgs = this.tracks;
-    if (!msgs?.length) return;
+    if (!msgs?.length || this.relayed.has(id)) return; // too heavy for the public relay: they hear the built-in music
     const gen = this.trackGen;
     let i = 0;
     const pump = () => {
@@ -133,6 +137,7 @@ export class HostRoom {
 
   removeClient(id) {
     this.links.delete(id);
+    this.relayed.delete(id);
     const p = this.players.get(id);
     if (!p) return;
     if (this.phase === 'lobby') this.players.delete(id);
@@ -151,6 +156,7 @@ export class HostRoom {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
       scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, lp: p.lp ?? 100,
+      relay: this.relayed.has(p.id),
     }));
   }
 
@@ -336,6 +342,7 @@ export class HostRoom {
     const oldId = old.id;
     this.players.delete(oldId);
     this.links.delete(oldId);
+    this.relayed.delete(oldId);
     old.id = id;
     old.connected = true;
     this.players.set(id, old);
