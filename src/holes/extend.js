@@ -55,7 +55,16 @@ const FLAVOUR = {
  */
 export function laneMonster(type, slot) {
   const { a, b, y, k } = slot;
-  if (type === 'creeper') return { t: 'monster', type, p: [b[0], y, b[1]], period: 4.2, phase: k * 0.37, lane: slot };
+  if (type === 'creeper') {
+    // it climbs the lane's side wall and crawls along the top, firing down into the lane
+    const dx = b[0] - a[0], dz = b[1] - a[1], d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+    const wx = b[0] + ux * d * 0.28, wz = b[1] + uz * d * 0.28; // the wall: d = 0.64 of the lane width
+    const along = [-uz, ux];
+    return {
+      t: 'monster', type, lane: slot, period: 7, phase: k * 0.37,
+      wall: { a: [wx - along[0] * 1.6, wz - along[1] * 1.6], b: [wx + along[0] * 1.6, wz + along[1] * 1.6], y, face: Math.atan2(-ux, -uz) },
+    };
+  }
   const spec = {
     t: 'monster', type, lane: slot,
     path: patrol(a, b, type === 'krabe' ? 5.5 : 3.6, y + (type === 'manta' ? 1.4 : type === 'hornet' ? 2.3 : 0), k * 0.4),
@@ -218,6 +227,16 @@ export function extendHole(def, spec = {}) {
     while (u < 0.9 && Math.hypot(at(s, u)[0] - tee[0], at(s, u)[1] - tee[2]) < 4.5 + w * 0.32) u += 0.05;
     const [cx, cz] = at(s, u), nx = -s.d[1], nz = s.d[0], r = w * 0.32;
     parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
+  }
+
+  // the sector's creeping hazard, on a leg of its own: the Marabounta (Forest, Sector 5) or Kongre's mouth (Sea)
+  const creep = { forest: 'marabounta', sector5: 'marabounta', sea: 'kongreMouth' }[def.sector];
+  const spare = segs.filter((s, i) => i > 0 && s.L > 4 && !legs.slice(0, want).includes(s));
+  if (creep && spare.length) {
+    const s = spare[spare.length - 1];
+    const [cx, cz] = at(s, 0.78), nx = -s.d[1], nz = s.d[0]; // clear of the leg's prop at its middle
+    if (creep === 'marabounta') parts.push({ t: 'monster', type: creep, p: [cx, y, cz], r: Math.min(1.7, w * 0.4) });
+    else parts.push({ t: 'monster', type: creep, p: [cx + nx * w * 0.18, y, cz + nz * w * 0.18] });
   }
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);

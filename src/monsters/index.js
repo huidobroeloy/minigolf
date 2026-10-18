@@ -5,7 +5,8 @@ import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
 import { Gun, MineLayer, canTarget, landHit, seededRng, damageFor } from './attacks.js';
-import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook, ninjaLook, kalamarLook, guardianLook } from './looks.js';
+import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook, ninjaLook, kalamarLook, guardianLook, kongreMouthLook, marabountaLook } from './looks.js';
+import { patrol } from '../holes/helpers.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
 // client sees them in the same place; attacks are aimed at whoever is looking (your own ball).
@@ -373,9 +374,13 @@ class Boulder extends Monster {
   }
 }
 
-// ---------- Creeper: pops out of the floor ----------
+// ---------- Creeper: pops out of the floor, or (spec.wall) crawls along the top of a wall ----------
+// spec.wall: { a: [x,z], b: [x,z], y, face } – it patrols a→b on the wall top (y + wall height),
+// facing `face` (towards the lane), and fires its charged laser down at you, as in the show.
+const CREEPER_WALL_TOP = 0.38;
 class Creeper extends Monster {
   constructor(spec, ctx) {
+    if (spec.wall) return new WallCreeper(spec, ctx);
     const g = new THREE.Group();
     const L = creeperLook();
     const neck = L.g; // the whole creature rises out of its hole
@@ -411,6 +416,38 @@ class Creeper extends Monster {
     this.neck.rotation.y = Math.sin(t * 2) * 0.6;
     this.L.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * 3 + i * Math.PI) * 0.15; });
     this.L.body.forEach((b, i) => { b.rotation.z = Math.sin(t * 2 + i * 0.7) * 0.12; });
+  }
+}
+
+class WallCreeper extends Monster {
+  constructor(spec, ctx) {
+    const W = spec.wall;
+    const top = (W.y ?? 0) + CREEPER_WALL_TOP;
+    const L = creeperLook();
+    const g = new THREE.Group();
+    g.add(L.g);
+    L.g.scale.setScalar(0.8);
+    super({ ...spec, path: patrol(W.a, W.b, spec.period ?? 7, top, spec.phase ?? 0) }, ctx, g,
+      { colliders: [[R.ColliderDesc.cylinder(0.6, 0.3).setTranslation(0, 0.6, 0), 0.8]] });
+    this.L = L;
+    this.face = W.face ?? 0;
+    this.guns.push(new Gun(this, { every: [6, 9], range: 8, speed: 10, muzzle: () => this.L.head.localToWorld(new THREE.Vector3(0, -0.05, 0.45)), modes: [
+      { w: 2, kind: 'laser', charge: 0.8, knock: 180 },
+      { w: 1, kind: 'charged', charge: 1.2, knock: 300 },
+    ] }));
+  }
+  update(t) {
+    const s = this.at(t);
+    if (!s) return;
+    this.body.setNextKinematicTranslation({ x: s.x, y: s.y, z: s.z });
+  }
+  frame(t) {
+    const s = this.at(t);
+    this.model.position.set(s.x, s.y, s.z);
+    this.model.rotation.y = this.face;
+    this.L.head.rotation.x = 0.35; // peering down into the lane
+    this.L.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * 6 + i * Math.PI) * 0.25; });
+    this.L.body.forEach((b, i) => { b.rotation.z = Math.sin(t * 3 + i * 0.7) * 0.15; });
   }
 }
 
@@ -490,12 +527,15 @@ class Scyphozoa extends Monster {
     this.L.tentMat.emissiveIntensity = this.grabbing(t) ? 0.9 : 0.35;
   }
   force(ball, t, out) {
-    if (!this.grabbing(t) || ball.state === 'holed') return;
+    if (!this.grabbing(t) || ball.state === 'holed' || this.slashed) return;
     const s = this.at(t);
     const p = ball.pos;
     if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 && p.y < s.y) {
+      if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+      // it grabs the ball, drops it back near the entrance and keeps one of your power-ups
       out.teleport = this.spec.grab;
-      if (t - (this.ctx.course.monsterHitAt ?? -99) > 4) landHit(this.ctx.course, 'xanafy', t, damageFor('scyphozoa', 'grab'));
+      out.tpBy = 'scyphozoa';
+      landHit(this.ctx.course, 'xanafy', t, damageFor('scyphozoa', 'grab'));
     }
   }
 }
@@ -1112,14 +1152,143 @@ class MagmaBombs extends Monster {
   dispose() { super.dispose(); for (const m of [this.ring, this.bomb, this.flash]) this.ctx.group.remove(m); }
 }
 
+// ---------- Kongre's mouth (Digital Sea): surfaces beside a lane every ~12 s and swallows a ball ----------
+// A purple ring warns 1.2 s ahead; while the jaws are open (2.4 s) a ball rolling over it is swallowed
+// (15 LP) and spat out 2 s later a little way off, somewhere safe and never closer to the cup.
+const MOUTH_RISE = 1.2, MOUTH_OPEN = 2.4, MOUTH_SINK = 0.8;
+class KongreMouth extends Monster {
+  constructor(spec, ctx) {
+    const L = kongreMouthLook();
+    super(spec, ctx, L.g);
+    this.L = L;
+    this.rng = seededRng(ctx, spec, 'mouth');
+    this.period = spec.period ?? this.rng.range(11, 14);
+    this.phase = this.rng.range(0, this.period);
+    this.warn = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 32), new THREE.MeshBasicMaterial({ color: '#b04aff', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+    this.warn.rotation.x = -Math.PI / 2;
+    ctx.group.add(this.warn);
+    this.lastK = null;
+  }
+  /** k: which surfacing, u: seconds into it; h: how far up (0 = surfaced), open: jaws open. */
+  pose(t) {
+    const s = t + this.phase, k = Math.floor(s / this.period), u = s - k * this.period;
+    let h = -1.4, open = false, warn = 0;
+    if (u < MOUTH_RISE) { warn = u / MOUTH_RISE; h = -1.4 + 1.4 * warn * warn; }
+    else if (u < MOUTH_RISE + MOUTH_OPEN) { h = 0; open = true; }
+    else if (u < MOUTH_RISE + MOUTH_OPEN + MOUTH_SINK) h = -1.4 * ((u - MOUTH_RISE - MOUTH_OPEN) / MOUTH_SINK);
+    return { k, u, h, open, warn, up: h > -1.35 };
+  }
+  update() {}
+  frame(t) {
+    const s = this.at(t), p = this.pose(t);
+    this.model.position.set(s.x, s.y + p.h * 0.3 + 0.05, s.z);
+    this.model.visible = p.up && !this.slashed;
+    const jaw = p.open ? 0.9 + Math.sin(t * 8) * 0.15 : 0.2;
+    for (const tooth of this.L.teeth) tooth.rotation.set(Math.cos(tooth.userData.a) * jaw, 0, -Math.sin(tooth.userData.a) * jaw);
+    this.L.mat.emissiveIntensity = p.open ? 0.8 : 0.35;
+    this.warn.visible = p.warn > 0 && !this.slashed;
+    this.warn.position.set(s.x, s.y + 0.03, s.z);
+    this.warn.material.opacity = 0.2 + 0.5 * p.warn * Math.abs(Math.sin(t * 9));
+  }
+  /** Where the ball comes back out: a safe spot ~2.6 away that's not closer to any cup than `ball`. */
+  spitPoint(k, ball) {
+    const course = this.ctx.course, s = this.at(0);
+    const cupD = (x, z) => { const c = course.nearestCup({ x, y: s.y, z }); return Math.hypot(x - c.x, z - c.z); };
+    const d0 = cupD(ball.pos.x, ball.pos.z);
+    const r = new RNG(`${course.def?.id ?? 'x'}:spit:${s.x.toFixed(2)},${s.z.toFixed(2)}:${k}`);
+    const start = r.next() * Math.PI * 2, ok = [];
+    for (let i = 0; i < 12; i++) {
+      const a = start + (i / 12) * Math.PI * 2, x = s.x + Math.sin(a) * 2.6, z = s.z + Math.cos(a) * 2.6;
+      const y = course.floorYAt(x, z);
+      if (y === null || Math.abs(y - s.y) > 0.6) continue;
+      const q = { x, y: y + 0.2, z };
+      if (course.unsafeAt?.(q) || course.lavaAt?.(q, ball) || cupD(x, z) < d0) continue;
+      ok.push({ x, y, z, a });
+    }
+    if (!ok.length) return null;
+    return ok[0];
+  }
+  force(ball, t, out) {
+    const p = this.pose(t);
+    if (!p.open || this.slashed || this.lastK === p.k || (ball.state !== 'idle' && ball.state !== 'moving')) return;
+    const s = this.at(t), b = ball.pos;
+    if (Math.hypot(b.x - s.x, b.z - s.z) > 0.95 || Math.abs(b.y - ball.radius - s.y) > 0.6) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    this.lastK = p.k;
+    const sp = this.spitPoint(p.k, ball);
+    if (!sp) return; // nowhere safe to spit it: it lets this one go
+    out.teleport = [sp.x, sp.y + ball.radius + 0.05, sp.z];
+    out.tpBy = 'kongre';
+    out.tpDir = [Math.sin(sp.a), Math.cos(sp.a)];
+    landHit(this.ctx.course, 'kongre', t, damageFor('kongre', 'swallow'));
+  }
+  dispose() { super.dispose(); this.ctx.group.remove(this.warn); }
+}
+
+// ---------- Marabounta (season 3): a creeping plant mass that spreads over the floor and recedes ----------
+// spec: { p: [x,y,z], r }. Seeded cycle: grows for 8 s, holds 6 s, recedes 6 s, gone 6 s. Inside it a
+// rolling ball is heavily slowed, and a ball resting in it loses 5 LP a second.
+const MARA_GROW = 8, MARA_HOLD = 6, MARA_SHRINK = 6, MARA_GONE = 6;
+class Marabounta extends Monster {
+  constructor(spec, ctx) {
+    const maxR = spec.r ?? 1.8;
+    const L = marabountaLook(maxR);
+    super(spec, ctx, L.g);
+    this.L = L;
+    this.maxR = maxR;
+    this.rng = seededRng(ctx, spec, 'marabounta');
+    this.period = MARA_GROW + MARA_HOLD + MARA_SHRINK + MARA_GONE;
+    this.phase = this.rng.range(0, this.period);
+    this.m4 = new THREE.Matrix4(); this.q4 = new THREE.Quaternion(); this.e4 = new THREE.Euler(); this.v4 = new THREE.Vector3(); this.s4 = new THREE.Vector3();
+    this.drainT = -9;
+  }
+  radius(t) {
+    const u = (((t + this.phase) % this.period) + this.period) % this.period;
+    if (u < MARA_GROW) return this.maxR * (u / MARA_GROW);
+    if (u < MARA_GROW + MARA_HOLD) return this.maxR;
+    if (u < MARA_GROW + MARA_HOLD + MARA_SHRINK) return this.maxR * (1 - (u - MARA_GROW - MARA_HOLD) / MARA_SHRINK);
+    return 0;
+  }
+  update() {}
+  frame(t) {
+    const s = this.at(t), R0 = this.radius(t);
+    this.model.position.set(s.x, s.y, s.z);
+    this.model.visible = R0 > 0.05 && !this.slashed;
+    this.L.veins.scale.setScalar(Math.max(0.01, R0 * 1.05));
+    this.L.mat.emissiveIntensity = 0.35 + 0.25 * Math.abs(Math.sin(t * 2));
+    const mesh = this.L.mesh;
+    this.L.spots.forEach((sp, i) => {
+      const k = Math.max(0, Math.min(1, (R0 - sp.r) / 0.4)); // shoots near the edge are still sprouting
+      this.e4.set(sp.tilt + Math.sin(t * 1.7 + i) * 0.08, i, 0);
+      this.q4.setFromEuler(this.e4);
+      this.s4.setScalar(Math.max(0.001, k * sp.s));
+      this.m4.compose(this.v4.set(sp.x, 0, sp.z), this.q4, this.s4);
+      mesh.setMatrixAt(i, this.m4);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+  force(ball, t, out) {
+    if (this.slashed || (ball.state !== 'idle' && ball.state !== 'moving')) return;
+    const s = this.at(t), p = ball.pos, R0 = this.radius(t);
+    if (R0 < 0.1 || Math.hypot(p.x - s.x, p.z - s.z) > R0 || Math.abs(p.y - ball.radius - s.y) > 0.4) return;
+    if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 4; out.z -= v.z * 4; return; }
+    // it gnaws at a ball left in it
+    if (t - this.drainT >= 1 && canTarget(this.ctx.course, ball, t, { allowResting: true })) {
+      this.drainT = t;
+      landHit(this.ctx.course, 'marabounta', t, damageFor('marabounta', 'drain'));
+    }
+  }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
   kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian, magma: MagmaBombs,
+  kongreMouth: KongreMouth, marabounta: Marabounta,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'kongreMouth', 'marabounta']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];

@@ -560,3 +560,41 @@ export function guardianLook(r = 0.8) {
   const rings = [0, 1, 2].map((i) => add(g, new THREE.TorusGeometry(r * 1.06, 0.02, 6, 48), new THREE.MeshBasicMaterial({ color: '#ff2a2a' }), [0, r, 0], [Math.PI / 2 + i * 0.7, i * 0.9, 0]));
   return { g, shell, rings };
 }
+
+// ---------- Kongre's mouth: a ring of hooked teeth that surfaces from the deep beside a lane ----------
+export function kongreMouthLook() {
+  const g = new THREE.Group();
+  const mat = std('#2a1d4a', { emissive: '#5a2cbf', emissiveIntensity: 0.35, roughness: 0.45 });
+  const tooth = std('#f2e6ff', { emissive: '#b48cff', emissiveIntensity: 0.25 });
+  const lip = add(g, new THREE.TorusGeometry(0.95, 0.26, 10, 28), mat, [0, 0, 0], [Math.PI / 2, 0, 0]);
+  const throat = add(g, new THREE.CircleGeometry(0.9, 28), new THREE.MeshBasicMaterial({ color: '#05010d' }), [0, -0.05, 0], [-Math.PI / 2, 0, 0]);
+  const teeth = [];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const t = add(g, new THREE.ConeGeometry(0.08, 0.34, 6), tooth, [Math.sin(a) * 0.82, 0.12, Math.cos(a) * 0.82]);
+    t.userData.a = a;
+    teeth.push(t);
+  }
+  return { g, mat, lip, throat, teeth };
+}
+
+// ---------- Marabounta (season 3): a dark creeping plant mass that spreads over the floor ----------
+export function marabountaLook(maxR, count = 140) {
+  const geo = new THREE.ConeGeometry(0.09, 0.32, 5);
+  geo.translate(0, 0.16, 0);
+  const mat = std('#141a12', { emissive: '#3a0606', emissiveIntensity: 0.5, roughness: 0.95, flatShading: true });
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  mesh.castShadow = false;
+  // a sunflower spiral of shoots out to maxR; each knows its distance so the patch grows from the middle
+  const spots = [];
+  for (let i = 0; i < count; i++) {
+    const r = maxR * Math.sqrt((i + 0.5) / count), a = i * 2.39996;
+    spots.push({ x: Math.sin(a) * r, z: Math.cos(a) * r, r, tilt: (i % 7) * 0.13 - 0.4, s: 0.7 + (i % 5) * 0.12 });
+  }
+  const veins = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: '#0d120b', transparent: true, opacity: 0.85, depthWrite: false }));
+  veins.rotation.x = -Math.PI / 2;
+  veins.position.y = 0.015;
+  const g = new THREE.Group();
+  g.add(mesh, veins);
+  return { g, mesh, spots, veins, mat };
+}
