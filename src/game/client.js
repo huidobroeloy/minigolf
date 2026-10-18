@@ -933,6 +933,12 @@ export class GameClient {
   // ---------- XANA's monsters ----------
   onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
+    if (this.coreShield && (dmg > 0 || kind === 'vaporize' || kind === 'freeze' || kind === 'guardian' || kind === 'xanafy' || kind === 'venom')) {
+      this.coreShield = false;
+      this.ui.bigToast('💠 CORE SHIELD', 'it absorbed the hit', 'good');
+      sfx.play('bumper');
+      return;
+    }
     if (['venom', 'freeze', 'xanafy', 'shark'].includes(kind)) this.ui.comms.say(kind);
     if (kind !== 'vaporize' && dmg > 0) this.damageLP(dmg);
     switch (kind) {

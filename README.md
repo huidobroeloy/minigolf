@@ -30,8 +30,8 @@ pass through that public server, so don't put anything private in your player na
 credentials to `src/net/ice.js` for a faster direct link.
 
 ## Formats
-- **World Cup:** all 9 courses, 6 holes each, then the Kolossus finale (55 holes). The courses come in a random order, and you play all 6 holes of a course before moving on.
-- **Cup of N:** the host picks 1–9 courses, still in random order.
+- **World Cup:** all 11 courses, 6 holes each, then the Kolossus finale (67 holes). The courses come in a random order, and you play all 6 holes of a course before moving on.
+- **Cup of N:** the host picks 1–11 courses, still in random order.
 - **🎰 Feeling Lucky:** the Fortune Falls Casino on its own (6 holes of pure luck). The casino isn't part of the World Cup or the random cups.
 - **Single course** or **single hole**, for practice. The boss hole can be played on its own too.
 
@@ -207,6 +207,10 @@ Active effects show as chips with a countdown at the top of the screen.
 | 🌊 | Tsunami | A giant wave sweeps the way you drag |
 | 🐔 | Montapollos | A giant chicken runs around shoving balls |
 | 👾 | XANA's Agent | Take over a monster for 12 s and steer it (WASD/arrows or drag): it fires twice as often at everyone else |
+| 🚀 | Skid Torpedo | A homing torpedo from the Skidbladnir knocks one player's ball off its spot (15 LP) |
+| 💠 | Core Shield | The next monster hit on you does nothing |
+| 💫 | Core Quake | Every ball on the course, yours too, gets a random shove |
+| 🌱 | Marabounta Seed | Plant a Marabounta where you click: for 20 s it spreads, drags balls to a crawl and gnaws resting ones |
 
 ## The courses
 1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks.
@@ -218,7 +222,9 @@ Active effects show as chips with a countdown at the top of the screen.
 7. **The Digital Sea:** underwater floaty physics, glass tubes and Mario-style warp pipes, currents, bubble lifts, Sharks and Kongre.
 8. **The Network:** firewall gates, data highways, gravity launchers, the Skid docking bay, packet storms and the Hub.
 9. **The Cortex:** XANA's world in its sphere: blocks that slide across the lane, a bridge that falls away, a data current, rising ground, a Guardian field and the Core itself. Ninjas guard it.
-10. **Fortune Falls Casino** (Feeling Lucky only): pachinko, roulette, a slot machine, neon pinball, a dice table and cyberpunk rooftops. Every cup carries its own stroke bonus or penalty.
+10. **Carthage · The Core:** the white halls deep in Sector 5: data streams across the hall, spinning wall rings, two lift shafts, zig-zag walls with Creepers crawling along the tops, the Guardian vault and the Core chamber with its spinning shield.
+11. **Skidbladnir · The Depths:** from the Skid's hangar into the deep sea: a launch over the drop, tow currents in a trench, the orbital hold that ferries you across the void, Kongre's gullet, the Kalamar reef and the Replika gateway.
+12. **Fortune Falls Casino** (Feeling Lucky only): pachinko, roulette, a slot machine, neon pinball, a dice table and cyberpunk rooftops. Every cup carries its own stroke bonus or penalty.
 
 Plus the finale, **Sector 5 Core**, against the Kolossus.
 

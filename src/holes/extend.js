@@ -35,6 +35,8 @@ export const ROSTER = {
   sea: ['shark', 'manta', 'kalamar'],
   cortex: ['ninja', 'krabe', 'tarantula', 'manta'],
   network: ['manta', 'creeper'],
+  carthage: ['creeper', 'blok', 'manta'],
+  skid: ['shark', 'kalamar', 'manta'],
 };
 
 // What each sector puts in its lanes: the floor look comes from the theme; these are the extras.
@@ -47,6 +49,8 @@ const FLAVOUR = {
   volcano: { hazard: 'lava', prop: 'rock' },
   sea: { hazard: 'current', prop: 'neon' },
   network: { hazard: 'bumpers', prop: 'neon' },
+  carthage: { hazard: 'bumpers', prop: 's5' },
+  skid: { hazard: 'current', prop: 'neon' },
 };
 
 /**
@@ -230,7 +234,7 @@ export function extendHole(def, spec = {}) {
   }
 
   // the sector's creeping hazard, on a leg of its own: the Marabounta (Forest, Sector 5) or Kongre's mouth (Sea)
-  const creep = { forest: 'marabounta', sector5: 'marabounta', sea: 'kongreMouth' }[def.sector];
+  const creep = { forest: 'marabounta', sector5: 'marabounta', carthage: 'marabounta', sea: 'kongreMouth', skid: 'kongreMouth' }[def.sector];
   const spare = segs.filter((s, i) => i > 0 && s.L > 4 && !legs.slice(0, want).includes(s));
   if (creep && spare.length) {
     const s = spare[spare.length - 1];

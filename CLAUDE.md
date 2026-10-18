@@ -103,10 +103,13 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - Parts: `warp` (exit speed is max(entry, `speed`)), `tube` (glass duct), `bowl` (cone ring). `def.water` gives floaty air.
   - Extra finishing cups: `cups: [[x,y,z],…]`. Use `course.nearestCup(p)` and `ball.sinkCup` instead of `course.cup` when the cup that was hit matters.
   - Courses (`COURSES` in `holes/index.js`): Desert, Forest, Ice, Mountain, Sector 5, Volcano Replika, Digital Sea,
-    Network, the Cortex (`holes/cortex.js`) and Fortune Falls Casino, 6 holes each (60). `buildPlan(format)` keeps each
+    Network, the Cortex (`holes/cortex.js`), Carthage · The Core (`holes/carthage.js`, sector `carthage`), Skidbladnir ·
+    The Depths (`holes/skid.js`, sector `skid`, all `water`) and Fortune Falls Casino, 6 holes each (72). `buildPlan(format)` keeps each
     course together, in random course order. **Fortune Falls (`LUCKY`) is not in the World Cup or the random cups**: it
     only plays in the `lucky` format ("Feeling Lucky"). `HOLES` ends with the Kolossus boss (`holes/boss.js`, sector
-    `core`, `BOSS_INDEX`): the World Cup is the 9 other courses + the boss (`worldCupLength()`, 55 holes).
+    `core`, `BOSS_INDEX`): the World Cup is the 11 other courses + the boss (`worldCupLength()`, 67 holes). A new course
+    needs entries in `themes.js`, `ROSTER`/`FLAVOUR` (`extend.js`), music `STYLES`, the sector map (`ui.sectorMap`) and the
+    per-sector colour tables (`lyoko.js`, `builder.js` slow zones, `renderer.js` sea, `post.js` bloom).
   - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`): every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
     long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
@@ -125,7 +128,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     seed, so every client builds the same monsters in the same order; the client loads `rollMonsters(HOLES[i], seed)`.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
-  - `registry.js` holds the 44 power-ups (including one per character) with their weights and catch-up luck.
+  - `registry.js` holds the 48 power-ups (including one per character) with their weights and catch-up luck. From the new
+    courses: `torpedo` (one: homing knock + 15 LP after 1 s), `coreshield` (self: `client.coreShield` absorbs the next
+    monster hit in `onMonsterHit`), `quake` (global: each client shoves its own ball, seeded per player), `maraseed` (place:
+    a 20 s Marabounta in `effects.swarms` with `creep: true`, whose force runs in `effects.forces`).
     Pickup halo colours: self blue, sabotage amber `#ffc21a`, chaos purple. **Never red** (red is the XANA tower cup).
   - `lyoko: true` marks the show's power-ups; the room setting `puSet: 'lyoko'` (lobby "Power-up set") spawns only
     those. It combines with any mode.

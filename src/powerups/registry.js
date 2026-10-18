@@ -60,6 +60,11 @@ export const POWERUPS = {
   icerink:     { name: 'Ice Rink',          icon: '⛸️', kind: 'global', tier: 2, desc: 'The floor freezes for 20s. Everything slides.' },
   tsunami:     { name: 'Tsunami',           icon: '🌊', kind: 'global', tier: 3, aim: 'dir', desc: 'A giant wave sweeps the course the way you drag.' },
   agent:       { name: 'XANA\'s Agent',     icon: '👾', kind: 'place',  tier: 3, lyoko: true, aim: 'point', range: 2.5, desc: 'Take over a monster for 12 s: steer it with WASD/arrows or by dragging, and it fires twice as often at everyone else. Works after you hole out.' },
+  // from the new courses: the Skidbladnir, the Core and the Marabounta
+  torpedo:     { lyoko: true, name: 'Skid Torpedo',      icon: '🚀', kind: 'one',    tier: 2, desc: 'The Skidbladnir fires a homing torpedo at one player: it knocks their ball off its spot (15 LP).' },
+  coreshield:  { lyoko: true, name: 'Core Shield',       icon: '💠', kind: 'self',   tier: 1, desc: 'A shard of the Core shields you: the next monster hit on you does nothing.' },
+  quake:       { name: 'Core Quake',        icon: '💫', kind: 'global', tier: 2, desc: 'The Core shudders: every ball on the course, yours too, gets a random shove.' },
+  maraseed:    { lyoko: true, name: 'Marabounta Seed',   icon: '🌱', kind: 'place',  tier: 2, aim: 'point', range: 2, desc: 'Plant a Marabounta where you click: for 20 s it spreads, drags passing balls to a crawl and gnaws resting ones.' },
   montapollos: { name: 'Montapollos',       icon: '🐔', kind: 'global', tier: 3, aim: 'point', range: 1.8, desc: 'A giant chicken spawns where you click and runs around shoving balls.' },
 };
 
@@ -86,6 +91,7 @@ export const WEIGHTS = {
   gas: 6, freeze: 5, stun: 6, guardian: 4, sprint: 3, telekinesis: 4, wings: 3, overwing: 3, overbike: 3, overboard: 3, hopper: 3,
   energyfield: 6, arrow: 3, zweihander: 3, tower: 2,
   bumper: 7, blackhole: 5, swarm: 5, creativity: 6, stickywalls: 4, wind: 6, tornado: 4, volcano: 4, icerink: 4, tsunami: 3, montapollos: 3, agent: 2,
+  torpedo: 5, coreshield: 5, quake: 4, maraseed: 4,
 };
 
 // Category mix for pickups.

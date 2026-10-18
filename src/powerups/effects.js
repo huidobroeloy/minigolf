@@ -133,6 +133,7 @@ export class EffectManager {
         if (fx.pu === 'firewall') { this.setShield(true); c.ui.bigToast('🛡️ Firewall up', 'the next attack on you bounces back', 'good'); break; }
         if (fx.pu === 'hopper') { this.cleanse(); break; }
         if (fx.pu === 'telekinesis') { c.nudgeBall(fx.params.pos); break; }
+        if (fx.pu === 'coreshield') { c.coreShield = true; c.ui.bigToast('💠 Core Shield', 'the next monster hit on you does nothing', 'good'); sfx.play('use'); break; }
         this.pending[fx.pu] = true;
         this.applyBallMods();
         break;
@@ -159,7 +160,19 @@ export class EffectManager {
         this.place(fx);
         break;
       case 'global':
-        if (fx.pu === 'stickywalls') {
+        if (fx.pu === 'quake') {
+          // every client shoves its own ball, each in its own seeded direction
+          const r = new RNG(`${fx.seed}:${me}`), a = r.next() * Math.PI * 2, sp = r.range(2.6, 4);
+          if (myBallActive && !c.ball.frozen && !c.swallowed) {
+            c.ball.state = 'moving';
+            c.ball.restTimer = 0;
+            const v = c.ball.body.linvel();
+            c.ball.body.setLinvel({ x: v.x + Math.cos(a) * sp, y: v.y + 1.2, z: v.z + Math.sin(a) * sp }, true);
+          }
+          c.cam.shake = Math.max(c.cam.shake, 1.0);
+          sfx.play('rumble');
+          c.ui.bigToast(label, isMe ? 'you shook the Core' : `the Core shudders · ${fromName}`, isMe ? 'good' : 'bad');
+        } else if (fx.pu === 'stickywalls') {
           this.stickyWalls = true;
           c.ui.bigToast('🪤 Sticky Walls!', 'until the hole ends', 'bad');
         } else {
@@ -219,6 +232,28 @@ export class EffectManager {
         if (!active) return;
         c.devirtualize(fromName);
         break;
+      case 'torpedo': {
+        if (!active) return;
+        // the torpedo homes in from the sender's ball for a moment, then hits
+        const from = c.positionOf(fx.from), to = c.ball.mesh.position.clone();
+        if (from) for (let i = 0; i < 24; i++) {
+          const k = i / 24;
+          setTimeout(() => this.particles?.spawn({ pos: [from.x + (to.x - from.x) * k, Math.max(from.y, to.y) + 0.6 + Math.sin(k * Math.PI) * 1.5, from.z + (to.z - from.z) * k], vel: [0, 0.3, 0], color: i % 2 ? '#ffcc55' : '#ffffff', size: 0.16, life: 0.5, gravity: 0 }), i * 40);
+        }
+        c.ui.bigToast('🚀 TORPEDO!', `${fromName} fired the Skid's torpedo at you`, 'bad');
+        setTimeout(() => {
+          const b = c.ball;
+          if (!b || b.state === 'holed' || b.state === 'sinking' || b.frozen || c.swallowed) return;
+          const r = new RNG(`${fx.seed}:torpedo`), a = r.next() * Math.PI * 2, sp = r.range(4, 5.5);
+          b.state = 'moving';
+          b.restTimer = 0;
+          b.body.setLinvel({ x: Math.cos(a) * sp, y: 2, z: Math.sin(a) * sp }, true);
+          c.damageLP(15);
+          c.cam.shake = Math.max(c.cam.shake, 0.8);
+          sfx.play('wall', 4);
+        }, 1000);
+        break;
+      }
       case 'ad': {
         // a meme video over most of the screen for 20 s: annoying, but you can still play
         const rng = new RNG(fx.seed);
@@ -300,6 +335,14 @@ export class EffectManager {
     const p = fx.params.pos;
     if (!p) return;
     if (fx.pu === 'swarm') return this.spawnSwarm(fx);
+    if (fx.pu === 'maraseed') {
+      // a Marabounta patch that starts growing now and is gone 20 s later (grow 8, hold 6, shrink 6)
+      const start = fx.at / 1000;
+      const m = createMonster({ type: 'marabounta', p: p, r: 1.5 }, { group: this.group, physics: this.physics, course: this.course });
+      if (m) { m.phase = ((-start % m.period) + m.period) % m.period; this.swarms.push({ monsters: [m], until: start + 20, icon: '🌱', creep: true }); }
+      sfx.play('debuff');
+      return;
+    }
     if (fx.pu === 'bumper') {
       const r = 0.5;
       const model = makeSpawnBumper(r);
@@ -500,6 +543,8 @@ export class EffectManager {
   forces(ball, out, t) {
     const myId = this.client.myId;
     for (const h of this.hazards) h.force(ball, t, out);
+    // a planted Marabounta drags and gnaws like the course's own
+    for (const s of this.swarms) if (s.creep) for (const m of s.monsters) m.force?.(ball, t, out);
     // magnet toward cup
     if (ball.mods.magnet && ball.state === 'moving') {
       const p = ball.pos, cup = this.course.nearestCup(p);
@@ -699,10 +744,11 @@ export class EffectManager {
   chips(t) {
     const out = [];
     for (const h of this.hazards) out.push({ icon: POWERUPS[h.fx.pu].icon, text: `${Math.max(0, Math.ceil(h.dur - h.local(t)))}s` });
-    for (const s of this.swarms) out.push({ icon: '🪲', text: `${Math.max(0, Math.ceil(s.until - t))}s` });
+    for (const s of this.swarms) out.push({ icon: s.icon || '🪲', text: `${Math.max(0, Math.ceil(s.until - t))}s` });
     for (const c of this.creations) out.push({ icon: '✨', text: `${Math.max(0, Math.ceil(c.until - t))}s` });
     if (this.stickyWalls) out.push({ icon: '🪤', text: 'all hole' });
     if (this.shield) out.push({ icon: '🛡️', text: 'ready', good: true });
+    if (this.client.coreShield) out.push({ icon: '💠', text: 'ready', good: true });
     const mine = this.auras.find((a) => a.from === this.client.myId && t - a.start <= a.dur);
     if (mine) out.push({ icon: '💔', text: `${Math.ceil(mine.dur - (t - mine.start))}s`, good: true });
     return out;

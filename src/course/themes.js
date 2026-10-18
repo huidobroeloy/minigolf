@@ -285,6 +285,22 @@ export const THEMES = {
     wallTex: null, wallColor: '#1a1030', wallTrim: '#9a6bff', wallEmissive: '#7a4bff',
     sideColor: '#2a1a50', particles: 'cubes', flag: '#9a6bff',
   },
+  carthage: {
+    name: 'Carthage · The Core',
+    sky: ['#0a0418', '#2a1060'], fog: '#1a0c3c', fogDensity: 0.015,
+    sun: { color: '#f2ecff', intensity: 1.9, dir: [0.2, 1, 0.3] }, hemi: ['#e8e0ff', '#0c0620', 1.2],
+    floorMat: 's5', floorTex: 's5', floorColor: '#f4f0ff',
+    wallTex: null, wallColor: '#f7f4ff', wallTrim: '#ff3a5a', wallEmissive: '#ff1a4a',
+    sideColor: '#d8d0f0', particles: 'cubes', flag: '#ff3a5a',
+  },
+  skid: {
+    name: 'Skidbladnir · The Depths',
+    sky: ['#000412', '#04204a'], fog: '#021634', fogDensity: 0.036,
+    sun: { color: '#9fd8ff', intensity: 0.95, dir: [0.2, 1, 0.3] }, hemi: ['#6fc6ff', '#010814', 0.7],
+    floorMat: 'seabed', floorTex: 'seabed', floorColor: '#cfe6ff',
+    wallTex: null, wallColor: '#0a2e58', wallTrim: '#7affe0', wallEmissive: '#3fffd0', wallGlass: true,
+    sideColor: '#041a36', particles: 'bubbles', flag: '#7affe0', underwater: true,
+  },
   core: {
     name: 'Sector 5 · Core',
     sky: ['#12020a', '#4a0a1e'], fog: '#26061a', fogDensity: 0.016,
