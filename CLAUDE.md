@@ -167,6 +167,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **XANA's Agent** (`agent` power-up): takes over a monster for 12 s (`m.agent`, `Monster.at` returns the steered
   position). The driver's client picks the monster index (`agentTargetAt`), steers it (`steerAgent`) and relays
   `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
+- **Boss events** (`holes/bossEvent.js`): `rollBoss(def, seed)` gives ~1 hole in 6 (not Fortune or the boss hole) a
+  boss at 20 s: `kolossus` (`kolossusRoam`, stomp every 7–9 s, ring 1.5 s, r 2.6, 25 LP + knock, solid feet),
+  `scyphozoa` (the Scyphozoa at `scale` 1.8, drops the ball at the old tee) or `megatanks` (3). `client.spawnBoss` walks it
+  on a seeded `loop` over the green (the floor holding the cup), with waypoints ≥3 and every segment ≥2.5 from any cup,
+  via `course.addMonster`. Pure client-side and deterministic from the hole seed and clock; no room messages.
 - **Sector map:** `ui.sectorMap` replaces the course card at each new course (SVG drawn in code, tap to skip).
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
   **What you see is what you hit:** every visible monster has a collider that matches its model and follows it

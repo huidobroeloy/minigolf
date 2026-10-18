@@ -50,6 +50,7 @@ const LINES = {
   bogey: ['Well… the tower’s deactivated. Eventually.', 'We got there. Let’s not tell Aelita how many strokes.'],
   tower: ['Tower deactivated!', 'Good job! That tower’s clean.'],
   lastPlace: ['You’re last… but there’s still time to turn it around.', 'Don’t give up! XANA wants you to give up.'],
+  boss: ['XANA’s sending a {boss} into your hole! Keep away from it!', 'Huge reading… it’s a {boss}! Finish fast!'],
   xanaAttack: ['XANA’s launching an attack! Hang on!', 'Activated tower detected! Everything’s going crazy!'],
   targeted: ['Someone used {power} on you!', '{power}! Somebody doesn’t like you.'],
 };

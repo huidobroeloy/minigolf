@@ -11,6 +11,10 @@ import { POWERUPS, SPECIALS } from '../powerups/registry.js';
 import { DAMAGE } from '../monsters/attacks.js';
 import { AGENT_PROOF } from '../monsters/index.js';
 import { rollMonsters } from '../holes/monsterRoll.js';
+import { rollBoss } from '../holes/bossEvent.js';
+import { pointInPoly } from '../course/geometry.js';
+import { loop } from '../holes/helpers.js';
+import { RNG } from '../core/rng.js';
 import { scoreName, savePrefs } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
@@ -35,7 +39,7 @@ const MAX_INV = 3;
 const AUTO_STOP = 15;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
-const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma', 'kongreMouth', 'marabounta']);
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma', 'kongreMouth', 'marabounta', 'kolossusRoam']);
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -316,6 +320,8 @@ export class GameClient {
     // this match's monsters: the sector's typical ones plus a few guests, the same on every client
     const def = rollMonsters(HOLES[m.index], m.seed ?? 1);
     this.def = def;
+    // ~1 hole in 6: XANA sends a boss in after 20 s (the same boss, path and timing on every client)
+    this.bossEvent = m.playoff ? null : rollBoss(def, m.seed ?? 1);
     this.holeMsg = m;
     this.phase = 'hole';
     this.playoff = m.playoff || null;
@@ -587,6 +593,45 @@ export class GameClient {
       this.ui.bigToast('SCYPHOZOA!', `dropped your ball back and stole your ${POWERUPS[id].icon} ${POWERUPS[id].name}`, 'bad');
     } else this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad');
     this.cam.snapTo(this.ball.mesh.position);
+  }
+
+  /** Boss event: the boss walks in on a seeded loop round the green (never within 3 of a cup). */
+  spawnBoss() {
+    const ev = this.bossEvent, co = this.course, def = this.def;
+    ev.spawned = true;
+    const rng = new RNG(ev.seed);
+    const cups = [def.cup, ...(def.cups || [])];
+    const farFromCups = (x, z) => cups.every((c) => Math.hypot(x - c[0], z - c[2]) >= 3);
+    const clearOfCups = (a, b2) => cups.every((c) => {
+      const dx = b2[0] - a[0], dz = b2[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const k = Math.max(0, Math.min(1, ((c[0] - a[0]) * dx + (c[2] - a[1]) * dz) / L2));
+      return Math.hypot(c[0] - a[0] - dx * k, c[2] - a[1] - dz * k) >= 2.5;
+    });
+    // the green: the floor the cup is on
+    const green = co.floors.find((f) => pointInPoly(def.cup[0], def.cup[2], f.poly) && Math.abs(f.y - def.cup[1]) < 0.6) || co.floors[0];
+    const pts = [];
+    for (let tries = 0; tries < 400 && pts.length < 5; tries++) {
+      const xs = green.poly.map((p) => p[0]), zs = green.poly.map((p) => p[1]);
+      const x = rng.range(Math.min(...xs), Math.max(...xs)), z = rng.range(Math.min(...zs), Math.max(...zs));
+      if (!pointInPoly(x, z, green.poly) || !farFromCups(x, z)) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oz]) => !pointInPoly(x + ox, z + oz, green.poly))) continue;
+      if (pts.length && !clearOfCups(pts[pts.length - 1], [x, z])) continue; // it walks straight between them
+      pts.push([x, z]);
+    }
+    while (pts.length > 2 && !clearOfCups(pts[pts.length - 1], pts[0])) pts.pop(); // and back to the start
+    if (pts.length < 2 || !clearOfCups(pts[pts.length - 1], pts[0])) return; // nowhere to walk on this green: XANA keeps it home
+    const y = green.y, name = { kolossus: 'Kolossus', scyphozoa: 'giant Scyphozoa', megatanks: 'Megatank swarm' }[ev.kind];
+    if (ev.kind === 'kolossus') co.addMonster({ type: 'kolossusRoam', path: loop(pts, 0.8, y), boss: true });
+    if (ev.kind === 'scyphozoa') {
+      const r = def.route, g = r && r.length >= 2 ? r[r.length - 2] : [def.tee[0], def.tee[2]];
+      const gy = co.floorYAt(g[0], g[1]) ?? def.tee[1];
+      co.addMonster({ type: 'scyphozoa', path: loop(pts, 1.0, y + 3.4), scale: 1.8, period: 6, grab: [g[0], gy + 0.3, g[1]], boss: true });
+    }
+    if (ev.kind === 'megatanks') for (let k = 0; k < 3; k++) co.addMonster({ type: 'megatank', path: loop(pts, 1.1, y, k / 3), boss: true });
+    sfx.play('siren');
+    this.cam.shake = Math.max(this.cam.shake, 0.8);
+    this.ui.bigToast('⚠️ XANA ATTACK', `a ${name} is coming onto the green!`, 'bad');
+    this.ui.comms.say('boss', { boss: name }, { force: true });
   }
 
   /** Kongre spits the swallowed ball back out. */
@@ -970,6 +1015,10 @@ export class GameClient {
         break; // the swallow has its own banner (onGrabbed)
       case 'marabounta':
         if (!this.maraToastT || this.simTime - this.maraToastT > 6) { this.maraToastT = this.simTime; this.ui.toast('🌿 The Marabounta is eating your ball! Get it out'); }
+        break;
+      case 'stomp':
+        this.ui.toast('🗿 The Kolossus stomped you!');
+        this.cam.shake = Math.max(this.cam.shake, 1.0);
         break;
       case 'magma':
         this.ui.toast('🌋 Hit by a magma bomb!');
@@ -1780,6 +1829,7 @@ export class GameClient {
   step(dt) {
     const ball = this.ball;
     if (this.swallowed && this.simTime >= this.swallowed.until) this.spitOut();
+    if (this.bossEvent && !this.bossEvent.spawned && this.simTime >= this.bossEvent.at) this.spawnBoss();
     this.course.update(this.simTime, dt);
     this.effects.update(this.simTime);
     ball.preStep(dt, this.env);

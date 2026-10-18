@@ -506,8 +506,11 @@ class Manta extends Monster {
 class Scyphozoa extends Monster {
   constructor(spec, ctx) {
     const L = scyphozoaLook();
-    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.ball(0.6).setTranslation(0, 0.35, 0), 0.6]] });
+    const k = spec.scale ?? 1; // the boss version is a giant
+    L.g.scale.setScalar(k);
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.ball(0.6 * k).setTranslation(0, 0.35 * k, 0), 0.6]] });
     this.L = L;
+    this.k = k;
     this.bell = L.bell;
     this.period = spec.period ?? 7;
   }
@@ -530,7 +533,7 @@ class Scyphozoa extends Monster {
     if (!this.grabbing(t) || ball.state === 'holed' || this.slashed) return;
     const s = this.at(t);
     const p = ball.pos;
-    if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 && p.y < s.y) {
+    if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 * this.k && p.y < s.y) {
       if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
       // it grabs the ball, drops it back near the entrance and keeps one of your power-ups
       out.teleport = this.spec.grab;
@@ -1152,6 +1155,77 @@ class MagmaBombs extends Monster {
   dispose() { super.dispose(); for (const m of [this.ring, this.bomb, this.flash]) this.ctx.group.remove(m); }
 }
 
+// ---------- Roaming Kolossus (boss event): walks the green and stomps ----------
+// Every 7–9 s (seeded) a red ring marks where it will stamp 1.5 s ahead (where it will be standing);
+// a ball inside takes 25 LP and is flung away by the shockwave. Its feet are solid.
+const STOMP_WARN = 1.5, STOMP_R = 2.6;
+class RoamingKolossus extends Monster {
+  constructor(spec, ctx) {
+    const g = makeKolossus();
+    const sc = spec.scale ?? 0.45;
+    g.scale.setScalar(sc);
+    const feet = [-1, 1].map((side) => [R.ColliderDesc.cuboid(1.6 * sc, 0.8 * sc + 0.4, 2.1 * sc).setTranslation(3.4 * sc * side, 0.4, 0.5 * sc), 0.5]);
+    super(spec, ctx, g, { colliders: feet });
+    this.rng = seededRng(ctx, spec, 'stomp');
+    this.period = this.rng.range(7, 9);
+    this.phase = this.rng.range(0, this.period);
+    this.tellMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+    this.tell = new THREE.Mesh(new THREE.RingGeometry(STOMP_R - 0.14, STOMP_R, 48), this.tellMat);
+    this.tell.rotation.x = -Math.PI / 2;
+    this.waveMat = new THREE.MeshBasicMaterial({ color: '#ffb36a', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+    this.wave = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48), this.waveMat);
+    this.wave.rotation.x = -Math.PI / 2;
+    for (const m of [this.tell, this.wave]) { m.visible = false; ctx.group.add(m); }
+    this.hitK = -1;
+  }
+  cycle(t) { const s = t - this.phase, k = Math.floor(s / this.period); return { k, u: s - k * this.period }; }
+  frame(t) {
+    const s = this.at(t);
+    this.place(this.model, s);
+    this.model.visible = !this.ctx.course.tactical;
+    const { k, u } = this.cycle(t);
+    const warn = this.period - u; // seconds to the next stomp
+    this.model.userData.slam?.(warn < STOMP_WARN ? THREE.MathUtils.lerp(0.77, 0, 1 - warn / STOMP_WARN) : u < 0.3 ? 1 : 0.77);
+    this.model.userData.breathe?.(t);
+    this.model.position.y = s.y + Math.abs(Math.sin(t * 2.2)) * 0.06;
+    const at = this.at(t + warn);
+    this.tell.visible = warn < STOMP_WARN;
+    if (this.tell.visible) {
+      this.tell.position.set(at.x, at.y + 0.03, at.z);
+      this.tellMat.opacity = 0.35 + 0.45 * Math.abs(Math.sin(t * (8 + (STOMP_WARN - warn) * 8)));
+    }
+    this.wave.visible = u < 0.9;
+    if (this.wave.visible) {
+      const w = this.at(t - u);
+      this.wave.position.set(w.x, w.y + 0.05, w.z);
+      this.wave.scale.setScalar(0.6 + (u / 0.9) * STOMP_R);
+      this.waveMat.opacity = 0.8 * (1 - u / 0.9);
+    }
+  }
+  update(t) {
+    super.update(t);
+    const { k, u } = this.cycle(t);
+    if (u < 0.15 && this.hitK !== k && t > 1) {
+      this.hitK = k;
+      sfx.play('rumble');
+      this.ctx.course.onShake?.(1.0);
+      const ball = this.ctx.course.localBall, s = this.at(t);
+      if (!ball) return;
+      const p = ball.pos, dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
+      if (d < STOMP_R + ball.radius && Math.abs(p.y - ball.radius - s.y) < 1 && canTarget(this.ctx.course, ball, t, { allowResting: true })) {
+        this.pendingKnock = { x: (dx / (d || 1)) * 320, z: (dz / (d || 1)) * 320 };
+        landHit(this.ctx.course, 'stomp', t, damageFor('kolossusRoam', 'stomp'));
+      }
+    }
+  }
+  force(ball, t, out) {
+    if (!this.pendingKnock) return;
+    out.x += this.pendingKnock.x; out.z += this.pendingKnock.z; out.y += 160; out.wake = true;
+    this.pendingKnock = null;
+  }
+  dispose() { super.dispose(); this.ctx.group.remove(this.tell); this.ctx.group.remove(this.wave); }
+}
+
 // ---------- Kongre's mouth (Digital Sea): surfaces beside a lane every ~12 s and swallows a ball ----------
 // A purple ring warns 1.2 s ahead; while the jaws are open (2.4 s) a ball rolling over it is swallowed
 // (15 LP) and spat out 2 s later a little way off, somewhere safe and never closer to the cup.
@@ -1284,11 +1358,11 @@ const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
   kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian, magma: MagmaBombs,
-  kongreMouth: KongreMouth, marabounta: Marabounta,
+  kongreMouth: KongreMouth, marabounta: Marabounta, kolossusRoam: RoamingKolossus,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'kongreMouth', 'marabounta']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'kongreMouth', 'marabounta', 'kolossusRoam']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];

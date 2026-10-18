@@ -34,6 +34,7 @@ export const DAMAGE = {
   magma: { bomb: 20 },
   kongre: { swallow: 15 },
   marabounta: { drain: 5 },
+  kolossusRoam: { stomp: 25 },
 };
 export const damageFor = (type, kind) => DAMAGE[type]?.[kind] ?? 20;
 
