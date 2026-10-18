@@ -11,7 +11,8 @@ export default [
     id: 'cortex-1', name: 'Shifting Grid', sector: 'cortex', par: 3, time: 120,
     tee: [0, 0, 0], cup: [1.4, 0, 21],
     parts: [
-      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 23], [-3, 23]] },
+      // green: the grid has holes into the void behind and beside the cup
+      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 23], [-3, 23]], holes: [{ c: [1.4, 22.3], r: 0.5 }, { c: [-0.5, 21.4], r: 0.45 }, { c: [2.75, 20.4], r: 0.4 }] },
       // the terrain rearranges itself: blocks slide across the lane
       block([-3.8, 7], [3.8, 7], 4.2),
       block([3.8, 12], [-3.8, 12], 3.6, 0.3),

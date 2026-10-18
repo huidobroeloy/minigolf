@@ -96,6 +96,8 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
 - Holes are long, with doglegs: every hole starts with a winding approach lane (about 41–55 units in front of par 2–4 holes, a shorter one in front of par 5s) full of its sector's hazards and monsters. There are no shortcuts: you play the whole lane.
 
 ## XANA's monsters
+
+Every monster is solid: your ball bounces off whatever you can see (it rolls under a Krabe's or Tarantula's belly, between the legs), and a walking monster shoves a resting ball aside.
 Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
 **The XANA eye is their weak point:** ram a monster with a fast ball and it's devirtualized for 20 s (+5 LP). Not the Kolossus, Kongre or Guardians.
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:

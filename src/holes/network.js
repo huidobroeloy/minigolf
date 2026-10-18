@@ -13,7 +13,9 @@ export default [
     tee: [0, 0, 0], cup: [0, 0, 15],
     hio: 'Straight through the firewall’s moving gap. Time it.',
     parts: [
-      { t: 'floor', poly: rect(-3, -1.2, 3, 18) },
+      // green: data sinks either side behind the cup, and a packet sliding across in front of it
+      { t: 'floor', poly: rect(-3, -1.2, 3, 18), holes: [{ c: [-1.4, 16.5], r: 0.6 }, { c: [1.4, 16.5], r: 0.6 }] },
+      { t: 'mover', kind: 'obst', s: [1.1, 0.4, 0.3], path: patrol([-2.2, 13.7], [2.2, 13.7], 3.8), look: 'holo' },
       // the firewall: two slabs that slide together, leaving a gap that drifts across the lane
       { t: 'mover', kind: 'obst', s: [2.6, 0.6, 0.3], path: patrol([-3.6, 8], [-1.4, 8], 3.2), look: 'holo' },
       { t: 'mover', kind: 'obst', s: [2.6, 0.6, 0.3], path: patrol([-0.4, 8], [1.8, 8], 3.2), look: 'holo' },
