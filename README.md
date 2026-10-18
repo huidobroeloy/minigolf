@@ -121,6 +121,9 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 | Marabounta | A dark creeping plant on Forest and Sector 5 lanes: it spreads, holds and recedes. It drags a rolling ball almost to a stop and gnaws 5 LP a second off a ball left in it |
 | Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
 
+### XANA boss events
+On about one hole in six, a siren goes off ~20 s in and XANA sends a boss onto the green: a **roaming Kolossus** (a red ring marks where it stamps, 25 LP and a shockwave), a **giant Scyphozoa** (it grabs balls, drops them back at the start of the hole and keeps a power-up) or a **Megatank swarm** (three of them). You can't beat it: keep clear and finish the hole. It never comes within a few units of the cup, Activate Tower calms it, and everyone gets the same boss at the same moment.
+
 ### The Kolossus finale
 The **Sector 5 Core** hole is a boss fight. The Kolossus stands at the edge of the arena and slams its fist down every 7 s: a red ring shrinks on the floor for 2 s, then the fist lands, and a ball under it is devirtualized. A XANA gate seals the corridor to the core cup. Hit the Kolossus's **glowing ankle** three times with your ball: it kneels, and the gate drops for 15 s (on your screen; everyone has to stun it themselves).
 

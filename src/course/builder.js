@@ -656,6 +656,13 @@ export function buildCourse(def, physics, scene) {
   course.decoration = decorate(def.sector, course, group, decoRng);
 
   // ---------- runtime ----------
+  /** A monster that joins mid-hole (boss events). */
+  course.addMonster = (spec) => {
+    const m = createMonster(spec, { group, physics, course, mats });
+    if (m) course.monsters.push(m);
+    return m;
+  };
+
   course.randomFloorPoint = (rng) => {
     for (let tries = 0; tries < 200; tries++) {
       const f = rng.pick(course.floors);

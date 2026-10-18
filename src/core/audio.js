@@ -82,6 +82,10 @@ class Sfx {
   play(name, k = 1) {
     if (!this.ctx || this.muted) return;
     switch (name) {
+      case 'siren':
+        // XANA alarm: two tones, back and forth
+        for (let i = 0; i < 4; i++) this.tone({ type: 'square', f0: i % 2 ? 620 : 880, dur: 0.22, vol: 0.12, delay: i * 0.24 });
+        break;
       case 'putt':
         this.tone({ type: 'triangle', f0: 900, f1: 300, dur: 0.08, vol: 0.25 + 0.3 * k });
         this.hiss({ dur: 0.05, vol: 0.2 * k, freq: 3000 });
