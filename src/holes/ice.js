@@ -73,8 +73,8 @@ export default [
     parts: [
       { t: 'floor', y: 3, poly: [[-2, -1.2], [2, -1.2], [2, 4], [0.6, 4], [-0.6, 4], [-2, 4]], open: [3] },
       { t: 'tube', pts: [[0, 3, 3.6], [0, 2.7, 7], [-3, 2, 10], [-3.2, 1.2, 13.5], [-0.6, 0.4, 16.5], [-0.6, 0, 19.2]], r: 0.5, color: '#cfefff', ring: '#ffffff' },
-      { t: 'floor', poly: [[-5, 18], [-1.4, 18], [0.2, 18], [5, 18], [5, 34], [-5, 34]], open: [1] },
-      { t: 'zone', kind: 'slow', c: [-1.2, 30], r: 2, mul: 6 },
+      { t: 'floor', poly: [[-5, 18], [-1.4, 18], [0.2, 18], [5, 18], [5, 34], [-5, 34]], open: [1], holes: [{ c: [-1.2, 31.5], r: 0.55 }, { c: [0.4, 30.5], r: 0.42 }, { c: [-2.8, 29.4], r: 0.42 }] },
+      { t: 'zone', kind: 'slow', c: [-1.2, 30], r: 1.0, mul: 3 },
       { t: 'zone', kind: 'slow', rect: [-5, 32.6, 5, 34], mul: 12 },
       { t: 'zone', kind: 'slow', rect: [2.6, 18, 5, 34], mul: 9 },
       { t: 'cyl', p: [1.6, 0, 25], r: 0.4, h: 1.4, look: 'ice' },
@@ -89,12 +89,11 @@ export default [
     parts: [
       {
         t: 'floor', poly: rect(-5, -1.2, 5, 30),
-        holes: [{ c: [-2.4, 7], r: 1.1 }, { c: [1.8, 10.5], r: 1.2 }, { c: [-1.3, 14.5], r: 0.95 }, { c: [3, 18], r: 1.1 }, { c: [-3, 21], r: 1.2 }, { c: [1.2, 23.4], r: 0.8 }],
+        holes: [{ c: [-2.4, 7], r: 1.1 }, { c: [1.8, 10.5], r: 1.2 }, { c: [-1.3, 14.5], r: 0.95 }, { c: [3, 18], r: 1.1 }, { c: [-3, 21], r: 1.2 }, { c: [1.2, 23.4], r: 0.8 }, { c: [0, 28.5], r: 0.5 }, { c: [-1.6, 27.5], r: 0.42 }],
       },
       { t: 'zone', kind: 'slow', rect: [-5, 28.4, 5, 30], mul: 12 },
       { t: 'zone', kind: 'slow', c: [-3.6, 12], r: 1.2, mul: 8 },
       { t: 'zone', kind: 'slow', c: [3.6, 25.5], r: 1.2, mul: 8 },
-      { t: 'zone', kind: 'slow', c: [0, 27], r: 1.4, mul: 5 },
       { t: 'monster', type: 'krabe', path: patrol([-4.2, 16.8], [4.2, 16.8], 6.5) },
       { t: 'monster', type: 'krabe', path: patrol([4, 4], [-4, 4], 5.5, 0, 0.4) },
       { t: 'monster', type: 'kolossus', p: [40, -30, 14], ry: -Math.PI / 2, phase: 0.8 },
@@ -106,9 +105,8 @@ export default [
     hio: 'Straight across the thin-ice bridge, firm enough that it never breaks under you.',
     parts: [
       // a wide glacier with a deep crevasse cut into the left side; the safe way round is on the right
-      { t: 'floor', poly: [[-2.5, -1.2], [7, -1.2], [7, 31], [-2.5, 31], [-2.5, 16], [2.5, 16], [2.5, 10], [-2.5, 10]], open: [4, 6] },
+      { t: 'floor', poly: [[-2.5, -1.2], [7, -1.2], [7, 31], [-2.5, 31], [-2.5, 16], [2.5, 16], [2.5, 10], [-2.5, 10]], open: [4, 6], holes: [{ c: [0, 28.5], r: 0.5 }, { c: [1.6, 27.4], r: 0.42 }, { c: [-1.5, 26.2], r: 0.4 }] },
       ...[10.75, 12.25, 13.75, 15.25].map((z) => ({ t: 'crumble', p: [0, 0, z], s: [1.5, 1.5], hits: 1, kindLook: 'thinice' })),
-      { t: 'zone', kind: 'slow', c: [0, 27], r: 1.8, mul: 6 },
       { t: 'zone', kind: 'slow', rect: [-2.5, 29.6, 7, 31], mul: 12 },
       { t: 'zone', kind: 'slow', rect: [4.6, 3, 7, 22], mul: 6 },
       { t: 'cyl', p: [4.8, 0, 13], r: 0.5, h: 1.4, look: 'ice' },

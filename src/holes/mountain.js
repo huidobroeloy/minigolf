@@ -53,8 +53,8 @@ export default [
     parts: [
       { t: 'floor', y: 3, poly: rect(-2.5, -1.2, 2.5, 4), open: [2] },
       { t: 'ramp', a: [0, 4], b: [0, 16], w: 5, ya: 3, yb: 0 },
-      { t: 'floor', poly: [[-4, 16], [-2.5, 16], [2.5, 16], [4, 16], [4, 25], [-4, 25]], open: [1], holes: [{ c: [1.6, 23.2], r: 0.55 }] }, // overshoot the cup and you're in the crevasse
-      rock(-2.6, 20.5, 0.6), rock(3.0, 18.4, 0.5, 1.2), rock(-0.6, 23.4, 0.45, 1.1), rock(1.0, 19.6, 0.38, 1.0),
+      { t: 'floor', poly: [[-4, 16], [-2.5, 16], [2.5, 16], [4, 16], [4, 25], [-4, 25]], open: [1], holes: [{ c: [1.6, 23.2], r: 0.55 }, { c: [3.0, 21.2], r: 0.45 }, { c: [-0.1, 22.4], r: 0.45 }] }, // miss the cup and you're in a crevasse
+      rock(-2.6, 20.5, 0.6), rock(3.0, 18.4, 0.5, 1.2), rock(-0.6, 23.4, 0.45, 1.1), rock(1.3, 19.3, 0.42, 1.0),
       { t: 'zone', kind: 'slow', rect: [-4, 23.8, 4, 25], mul: 3 },
       { t: 'monster', type: 'boulder', path: avalanche(-1.4, 4.4, 16, 3, 0, 19.5, 5.5, 0.0) },
       { t: 'monster', type: 'boulder', path: avalanche(1.3, 4.4, 16, 3, 0, 18.5, 5.5, 0.5) },
@@ -91,7 +91,7 @@ export default [
       ...[9, 13, 17].map((z) => ({ t: 'floor', poly: rect(-1.8, z - 0.5, 1.8, z + 0.5), walls: false })),
       { t: 'zone', kind: 'wind', rect: [-3, 7, 3, 11], dir: [1, 0], force: 1.4 },
       { t: 'zone', kind: 'wind', rect: [-3, 15, 3, 19], dir: [-1, 0], force: 1.4 },
-      { t: 'floor', poly: [[-4, 20], [4, 20], [4, 29], [-4, 29]], open: [0] },
+      { t: 'floor', poly: [[-4, 20], [4, 20], [4, 29], [-4, 29]], open: [0], holes: [{ c: [0, 27.4], r: 0.5 }, { c: [-1.6, 26.4], r: 0.4 }, { c: [1.7, 25.6], r: 0.4 }] },
       rock(-2.4, 23, 0.5), rock(2.6, 24.5, 0.45, 1.1),
       { t: 'monster', type: 'tarantula', path: patrol([-3, 27.6], [3, 27.6], 6) },
     ],

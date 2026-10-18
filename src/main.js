@@ -77,6 +77,8 @@ class App {
     window.__app = this;
     if (this.debug) {
       import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__cupWalls = m.cupWalls; window.__cupTest = m.cupTest; window.__holes = HOLES; });
+      import('./dev/monsters.js').then((m) => { window.__monsterAudit = m.monsterAudit; });
+      import('./dev/greens.js').then((m) => { window.__greenAudit = m.greenAudit; window.__puttAudit = m.puttAudit; });
     }
   }
 

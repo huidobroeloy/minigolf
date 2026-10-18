@@ -66,7 +66,9 @@ export default [
       { t: 'zone', kind: 'boost', rect: [1.9, 1, 3.3, 5], dir: [0, 1], speed: 14, align: 3 },
       { t: 'ramp', a: [2.6, 6], b: [2.6, 10.5], w: 1.4, ya: 0, yb: 2.4 },
       { t: 'zone', kind: 'boost', rect: [1.9, 6.4, 3.3, 10.2], dir: [0, 1], speed: 7.5, hidden: true }, // keeps you climbing
-      { t: 'floor', y: 2.4, poly: [[-4, 9.1], [-2.6, 9.1], [0.6, 9.1], [1.9, 9.1], [1.9, 10.5], [3.3, 10.5], [4, 10.5], [4, 21], [-4, 21]], open: [1, 4] },
+      { t: 'floor', y: 2.4, poly: [[-4, 9.1], [-2.6, 9.1], [0.6, 9.1], [1.9, 9.1], [1.9, 10.5], [3.3, 10.5], [4, 10.5], [4, 21], [-4, 21]], open: [1, 4], holes: [{ c: [2, 19.9], r: 0.5 }, { c: [3.4, 18.2], r: 0.4 }] },
+      // green: a data gate slides across the line from the boost ramp to the cup
+      { t: 'mover', kind: 'obst', s: [1.3, 0.4, 0.3], path: patrol([0.6, 16.9], [3.4, 16.9], 4.2, 2.4), look: 's5' },
       { t: 'mover', kind: 'obst', s: [3.4, 0.4, 0.3], path: spin(1, 2.6, 14.5, 4.5), look: 's5' },
       { t: 'monster', type: 'creeper', p: [-2.4, 2.4, 18], period: 4, phase: 0.3 },
       { t: 'monster', type: 'manta', path: patrol([-3.5, 3], [3.5, 3], 6.5, 1.0, 0.2) },

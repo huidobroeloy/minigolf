@@ -83,12 +83,13 @@ export default [
     parts: [
       {
         t: 'floor', poly: rect(-5, -1.2, 5, 16),
-        holes: [{ c: [-1.9, 8.6], r: 1.25 }, { c: [1.9, 8.6], r: 1.25 }, { c: [0, 13.6], r: 0.9 }, { c: [-3.6, 12.4], r: 0.8 }, { c: [3.6, 12.4], r: 0.8 }],
+        holes: [{ c: [-1.9, 8.6], r: 1.25 }, { c: [1.9, 8.6], r: 1.25 }, { c: [0, 13.6], r: 0.9 }, { c: [-3.6, 12.4], r: 0.8 }, { c: [3.6, 12.4], r: 0.8 }, { c: [1.3, 11.9], r: 0.4 }, { c: [-1.3, 11.9], r: 0.4 }],
       },
       { t: 'zone', kind: 'slow', rect: [-5, 4, -3, 7], mul: 3 },
       { t: 'zone', kind: 'slow', rect: [3, 4, 5, 7], mul: 3 },
       { t: 'cyl', p: [-3, 0, 2.5], r: 0.45, h: 1.1, look: 'sandstone' },
       { t: 'cyl', p: [3, 0, 2.5], r: 0.45, h: 1.1, look: 'sandstone' },
+      { t: 'cyl', p: [0, 0, 10.1], r: 0.3, h: 0.9, look: 'sandstone' }, // through the gap, then round the post
       { t: 'monster', type: 'tumbleweed', path: loop([[-4, 5], [4, 5], [4, 6.5], [-4, 6.5]], 2.2) },
       { t: 'monster', type: 'kankrelat', path: patrol([-4, 14.8], [4, 14.8], 5) },
     ],

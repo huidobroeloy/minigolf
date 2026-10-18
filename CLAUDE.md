@@ -38,6 +38,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__hioAll()`, which writes its results to `localStorage['lyokogolf.hio']`
   - `__rampTest()`: flags balls stopped or hovering on ramps
   - `__cupWalls()`, `__cupTest({ holes })`: cup regression checks (see Physics)
+  - `__monsterAudit()`: rolls balls at every monster type and parks a resting ball in a walker's path (see Monsters)
+  - `__greenAudit({ holes })`, `__puttAudit({ holes })`: how easy each hole is from where its lane joins it, and
+    how guarded each cup is (putts from 3 units)
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
   `canvas.toBlob` → `fetch('/__shot?name=x', {method:'POST', body})`; the dev server saves `.local/shots/x.png`.
 - **Ace searches are CPU-heavy:** 3–4 tabs in parallel make the shell and ripgrep time out; use Read/Edit meanwhile.
@@ -160,6 +163,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
 - **Sector map:** `ui.sectorMap` replaces the course card at each new course (SVG drawn in code, tap to skip).
 - **Monsters** (`src/monsters`): `attacks.js` has the shared telegraphed guns, mines, hit cooldown and resting-ball grace.
+  **What you see is what you hit:** every visible monster has a collider that matches its model and follows it
+  (bob and dive included, `kind: 'obst', monster: true` in the physics meta); a ball always bounces off it and a walking
+  monster pushes a resting ball. By design: Krabe and Tarantula let a ball roll under the belly between their solid
+  legs, Scyphozoa's tentacles grab (its bell is solid), Kongre's arm sweeps with a force. `__monsterAudit()` must report
+  `ok` for every type.
   Never let a monster fire at a ball whose owner is aiming. Show-faithful kits: Kankrelat weak frequent laser; Hornet
   laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
   two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens

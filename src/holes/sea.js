@@ -109,7 +109,7 @@ export default [
       coral(-3, 22), coral(3.5, 32),
       // the bubble lift back up to the final deck
       { t: 'zone', kind: 'bubble', c: [0, 33], r: 0.9, height: 4.4, lift: 1.8, push: [0, 2.2] },
-      { t: 'floor', poly: rect(-3, 34, 3, 44), open: [0], holes: [{ c: [-0.4, 43], r: 0.8 }, { c: [-2.2, 42.6], r: 0.55 }, { c: [2.4, 43.3], r: 0.55 }] },
+      { t: 'floor', poly: rect(-3, 34, 3, 44), open: [0], holes: [{ c: [-0.4, 43], r: 0.8 }, { c: [-2.2, 42.6], r: 0.55 }, { c: [2.4, 43.3], r: 0.55 }, { c: [0.6, 41.3], r: 0.36 }, { c: [2.6, 39.9], r: 0.36 }] },
       { t: 'box', p: [0, -1.5, 34.1], s: [6, 3, 0.2], kind: 'wall', look: '#123a6a' },
       { t: 'monster', type: 'shark', path: orbit([0, 38], 2.2, 9), range: 3.5 },
     ],

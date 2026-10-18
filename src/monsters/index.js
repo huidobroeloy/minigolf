@@ -40,7 +40,7 @@ function kinematic(physics, pos) {
 function collider(physics, body, desc, restitution = 0.6) {
   desc.setFriction(0).setRestitution(restitution).setCollisionGroups(physics.groupFor('monster'));
   const c = physics.world.createCollider(desc, body);
-  physics.meta.set(c.handle, { kind: 'obst', collider: c, body });
+  physics.meta.set(c.handle, { kind: 'obst', monster: true, collider: c, body });
   return c;
 }
 
@@ -256,7 +256,7 @@ class Megatank extends Monster {
 class Hornet extends Monster {
   constructor(spec, ctx) {
     const L = hornetLook();
-    super(spec, ctx, L.g);
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.ball(0.36).setTranslation(0, -0.14, 0), 0.6]] });
     this.L = L;
     this.wings = L.wings;
     const tip = () => this.L.sting.localToWorld(new THREE.Vector3(0, 0.42, 0));
@@ -271,10 +271,15 @@ class Hornet extends Monster {
     this.diveT = -9;
   }
   onCharge(t, cfg) { if (cfg.dive) this.diveT = t; }
+  /** Bob and dive: the model and its body are both placed from this. */
+  lift(t) { return Math.sin(t * 3) * 0.15 - Math.max(0, 1 - Math.abs(t - this.diveT - 0.9) / 0.9) * 1.3; }
+  update(t) {
+    const s = this.at(t);
+    if (s) this.body.setNextKinematicTranslation({ x: s.x, y: s.y + this.lift(t), z: s.z });
+  }
   frame(t) {
     const s = this.at(t);
-    const dive = Math.max(0, 1 - Math.abs(t - this.diveT - 0.9) / 0.9); // down and back up over ~2 s
-    this.model.position.set(s.x, s.y + Math.sin(t * 3) * 0.15 - dive * 1.3, s.z);
+    this.model.position.set(s.x, s.y + this.lift(t), s.z);
     const ball = this.ctx.course.localBall;
     if (ball) this.model.lookAt(ball.mesh.position.x, s.y - 0.6, ball.mesh.position.z);
     this.wings.forEach((w, i) => { w.rotation.z = Math.sin(t * 60 + i * 1.3) * 0.5; });
@@ -333,7 +338,9 @@ class Krabe extends Monster {
 class Tarantula extends Monster {
   constructor(spec, ctx) {
     const L = tarantulaLook();
-    super(spec, ctx, L.g, { yOff: 0.9, colliders: [[R.ColliderDesc.cuboid(0.4, 0.5, 0.45)]] });
+    const cols = [[1, 1], [-1, 1], [1, 0], [-1, 0], [1, -1], [-1, -1]].map(([lx, lz]) => [R.ColliderDesc.cylinder(0.5, 0.07).setTranslation(lx * 1.05, 0, lz * 0.95), 0.6]);
+    cols.push([R.ColliderDesc.cuboid(0.4, 0.5, 0.45).setTranslation(0, 0.4, 0)]);
+    super(spec, ctx, L.g, { yOff: 0.5, colliders: cols });
     this.L = L;
     this.rearT = -9;
     this.guns.push(new Gun(this, { kind: 'rapid', every: [9, 13], charge: 1.25, range: 8, speed: 16, knock: 80, burst: 6, burstGap: 1 / 6, lead: 1, muzzle: () => this.L.body.localToWorld(new THREE.Vector3(0, 0.12, 0.5)) }));
@@ -413,7 +420,7 @@ class Manta extends Monster {
     const L = mantaLook();
     const g = L.g;
     const body = L.body;
-    super(spec, ctx, g);
+    super(spec, ctx, g, { colliders: [[R.ColliderDesc.cuboid(1.4, 0.1, 0.7), 0.6]] });
     this.body3d = body;
     this.L = L;
     this.prev = this.at(0);
@@ -422,6 +429,13 @@ class Manta extends Monster {
       { w: 3, kind: 'laser', charge: 0.9, speed: 11, knock: 260 },
       { w: 2, kind: 'rapid', charge: 0.8, speed: 14, knock: 90, burst: 3, burstGap: 0.15 }, // a strafing pass
     ] }));
+  }
+  update(t) {
+    const s = this.at(t), s2 = this.at(t + 0.05);
+    if (!s) return;
+    this.body.setNextKinematicTranslation({ x: s.x, y: s.y + Math.sin(t * 2.5) * 0.25, z: s.z });
+    const dx = s2.x - s.x, dz = s2.z - s.z;
+    if (Math.hypot(dx, dz) > 1e-4) { this.q.setFromAxisAngle(UP, Math.atan2(dx, dz)); this.body.setNextKinematicRotation(this.q); }
   }
   frame(t) {
     const s = this.at(t);
@@ -455,12 +469,16 @@ class Manta extends Monster {
 class Scyphozoa extends Monster {
   constructor(spec, ctx) {
     const L = scyphozoaLook();
-    super(spec, ctx, L.g);
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.ball(0.6).setTranslation(0, 0.35, 0), 0.6]] });
     this.L = L;
     this.bell = L.bell;
     this.period = spec.period ?? 7;
   }
   grabbing(t) { const u = ((t / this.period) % 1 + 1) % 1; return u > 0.72 && u < 0.86; }
+  update(t) {
+    const s = this.at(t);
+    if (s) this.body.setNextKinematicTranslation({ x: s.x, y: s.y + Math.sin(t * 1.3) * 0.2, z: s.z });
+  }
   frame(t) {
     const s = this.at(t);
     this.model.position.set(s.x, s.y + Math.sin(t * 1.3) * 0.2, s.z);
@@ -946,7 +964,7 @@ class Ninja extends Monster {
 class Kalamar extends Monster {
   constructor(spec, ctx) {
     const L = kalamarLook();
-    super(spec, ctx, L.g, { yOff: 0.6, colliders: [[R.ColliderDesc.ball(0.4), 0.7]] });
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.cuboid(0.36, 0.48, 0.62).setTranslation(0, 0.48, 0.25), 0.7]] });
     this.L = L;
     this.rng = seededRng(ctx, spec, 'ink');
     this.nextInk = 4 + this.rng.range(0, 6);
@@ -1004,7 +1022,7 @@ class Kalamar extends Monster {
 class Guardian extends Monster {
   constructor(spec, ctx) {
     const L = guardianLook(spec.r ?? 0.8);
-    super(spec, ctx, L.g);
+    super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.ball(spec.r ?? 0.8).setTranslation(0, spec.r ?? 0.8, 0), 0.5]] });
     this.L = L;
     this.r = spec.r ?? 0.8;
     this.lastT = -99;
@@ -1012,7 +1030,7 @@ class Guardian extends Monster {
   force(ball, t, out) {
     if (t - this.lastT < 6 || ball.frozen || this.slashed) return;
     const s = this.at(t), p = ball.pos;
-    if (Math.hypot(p.x - s.x, p.z - s.z) > this.r + ball.radius || Math.abs(p.y - s.y - this.r) > this.r + 0.3) return;
+    if (Math.hypot(p.x - s.x, p.z - s.z) > this.r + ball.radius + 0.08 || Math.abs(p.y - s.y - this.r) > this.r + 0.3) return;
     if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
     this.lastT = t;
     landHit(this.ctx.course, 'guardian', t, 0);
