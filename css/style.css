@@ -581,3 +581,8 @@ body.lp-critical #ui::before { content: ''; position: fixed; inset: 0; pointer-e
 .draft-card.cat-self { border-color: #3da5ff; }
 .draft-card.cat-sabotage { border-color: #ffc21a; }
 .draft-card.cat-chaos { border-color: #b04dff; }
+
+/* XANA hunter: the energy bar next to the tools */
+.hud-inventory .energy { position: relative; align-self: center; width: 120px; height: 18px; border-radius: 9px; background: rgba(0,0,0,0.45); overflow: hidden; border: 1px solid rgba(255,42,42,0.5); }
+.hud-inventory .energy > div { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7a0010, #ff2a2a); }
+.hud-inventory .energy > span { position: relative; display: block; text-align: center; font-size: 11px; line-height: 18px; color: #fff; font-weight: 700; }

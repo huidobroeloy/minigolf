@@ -152,7 +152,18 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Other `src/fx` files:** `towerCup.js` (tower hologram over cups + the trip inside), `weather.js` (seeded per sector
   from the hole seed and the shared clock), `vehicles.js` (Overbike, Overboard, Overwing meshes).
 - **Modes** (`settings.mode` in the room): `ffa`, `teams` (average total; XANA's player is always on XANA's side),
-  `elim` (3+ players; worst course subtotal is eliminated after each course, `p.out`, they spectate).
+  `elim` (3+ players; worst course subtotal is eliminated after each course, `p.out`, they spectate),
+  `relay` (teams, one ball each: `room.turns[team] = { order, shooter, pos, strokes }` in `holeMessage.relay`; the
+  shooter's `st` sets the whole team's strokes/pos; at rest the client sends `relayRest` and the room's `passTurn`
+  broadcasts `turn`; waiting players hide their ball (`state 'gone'`, `client.relayWaiting`) and watch the shooter; a holed
+  shot holes the team; standings like `teams`) and `hunter` (3+ players: `p.hunter` rotates per course, XANA's player
+  first; the hunter has no ball, `client.hunter.energy` (8/s, max 100) pays for `HUNTER_TOOLS` agent 60 / creativity 25 /
+  volcano 35 / swarm 40 as slots `H:id`, keys 1–4; the room refunds traps within 3 of a cup or tee (`refund` with
+  `hunter: true`); `golfers()` excludes the hunter; the hunter's hole score = round(mean of the others) − min(3,
+  floor(their damage taken / 40)), damage tracked from `st` LP drops in `p.dmg`).
+- **Return to the Past** (all modes): one free rewind per course in the ⏪ slot (`'R'`, key 5): `fireShot` snapshots
+  `preShot` (pos, safe spot, strokes, LP, inventory) and `rewindShot` restores it all; the room stores the course in
+  `p.rewindUsed` (like `specialUsed`). The `returnpast` power-up still exists (it keeps the stroke).
 - **Special moves:** `SPECIALS` in `registry.js`, one free use **per course** from the ★ slot (`client.special`, slot
   `'S'`; the room stores the course it was used on in `p.specialUsed`, so reloads and rejoins keep it). Balanced for fairness: Scanner shows only up to the first bounce
   (≤8 units, no landing ring), Telekinesis ≤1 unit and never within 1.5 of a cup, Sprint ×1.35, Wings 1.8 s, Hopper

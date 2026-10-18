@@ -39,6 +39,8 @@ The host also picks a **mode**:
 - **Everyone for themselves** (the default).
 - **Teams · Lyoko vs XANA:** pick your side in the lobby (whoever plays XANA is always on XANA's side; undecided players even the teams out). The team with the lowest **average** total wins.
 - **Elimination** (3+ players): after each course, the worst player on that course is devirtualized and spectates. The match ends early when only one warrior is left.
+- **Team relay:** Lyoko vs XANA again, but each team has **one ball**: teammates take turns, and when your shot stops, the next teammate plays it from there. The team with the lowest total wins.
+- **XANA hunter** (3+ players): each course one player (whoever plays XANA goes first) has no ball. Instead they spend XANA's energy (it refills over time) on possessing a monster 👾, drawing a wall ✨, erupting magma 🌋 or loosing a Kankrelat swarm 🪲 (never within 3 units of a cup or the tee). Their hole score is the others' average, minus up to 3 for the damage the others took.
 
 A title card opens each course, and the scoreboard shows a subtotal per course plus the grand total.
 
@@ -69,6 +71,7 @@ Each character can only be picked by one player per room.
 | C / 🎥 | Switch camera: **chase**, **first-person (POV)**, **aerial** (wheel or pinch to zoom, drag to pan) |
 | 1 2 3 | Use a power-up (Shift + number discards it) |
 | 4 / ★ slot | Your character's **special move**, once per course |
+| 5 / ⏪ slot | **Return to the Past**, once per course: your last shot never happened (ball, stroke, life points and power-ups all go back) |
 | Tab / 👁️ | Spectate others after you hole out |
 | 7 8 9 0 | Emotes 😂 😡 👏 💀 |
 | Esc / ⚙️ | Settings: music, sound effects, mutes, graphics, intro, your soundtrack |

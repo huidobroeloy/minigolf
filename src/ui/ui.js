@@ -95,7 +95,7 @@ export class UI {
     this.$('.hud-inventory').addEventListener('click', (e) => {
       const slot = e.target.closest('.slot');
       if (!slot || slot.classList.contains('empty')) return;
-      const i = slot.dataset.i === 'S' ? 'S' : Number(slot.dataset.i);
+      const i = /^(S|R|H:.*)$/.test(slot.dataset.i) ? slot.dataset.i : Number(slot.dataset.i);
       if (e.target.closest('.discard')) this.h.discard?.(i);
       else this.h.use?.(i);
     });
@@ -289,7 +289,7 @@ export class UI {
         </div>
         <div class="cs-host"></div>
         <div class="players-list">
-          ${lobby.players.map((p) => { const ch = characterByColor(p.color); const tm = st.mode === 'teams' ? (ch?.id === 'xana' || p.team === 'xana' ? ' 👁️' : p.team === 'lyoko' ? ' 🛡️' : ' ❔') : ''; return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${tm}${p.relay ? ' <span class="as" title="Connected through the relay">📡</span>' : ''}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
+          ${lobby.players.map((p) => { const ch = characterByColor(p.color); const tm = st.mode === 'teams' || st.mode === 'relay' ? (ch?.id === 'xana' || p.team === 'xana' ? ' 👁️' : p.team === 'lyoko' ? ' 🛡️' : ' ❔') : ''; return `<div class="pl"><i class="ball" style="background:${ch ? characterCss(ch) : p.color}"></i>${esc(p.name)} <span class="as">as ${esc(ch?.name || '')}</span>${tm}${p.relay ? ' <span class="as" title="Connected through the relay">📡</span>' : ''}${p.host ? ' <b>HOST</b>' : ''}${p.id === myId ? ' <em>(you)</em>' : ''}</div>`; }).join('')}
           <div class="small">${lobby.players.length}/8 players</div>
         </div>
         <div class="settings ${isHost ? '' : 'readonly'}">
@@ -304,9 +304,9 @@ export class UI {
           <label>Power-up mode</label>
           <select id="puMode" ${isHost ? '' : 'disabled'}>${[['pickups', 'Pickups'], ['draft', 'Draft · pick 1 of 3 each course'], ['mirror', 'Mirror match · same item for all']].map(([v, n]) => `<option value="${v}" ${(st.puMode || 'pickups') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
           <label>Mode</label>
-          <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['elim', 'Elimination (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <select id="mode" ${isHost ? '' : 'disabled'}>${[['ffa', 'Everyone for themselves'], ['teams', 'Teams · Lyoko vs XANA'], ['relay', 'Team relay · one ball per team'], ['elim', 'Elimination (3+ players)'], ['hunter', 'XANA hunter (3+ players)']].map(([v, n]) => `<option value="${v}" ${(st.mode || 'ffa') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>
-        ${st.mode === 'teams' ? `<div class="team-pick">
+        ${st.mode === 'teams' || st.mode === 'relay' ? `<div class="team-pick">
           <div class="lbl">YOUR SIDE</div>
           ${characterByColor(me?.color)?.id === 'xana' ? '<div class="small">XANA always plays for XANA’s side 👁️</div>' : `
           <button class="btn tiny ${me?.team === 'lyoko' ? 'primary' : ''}" data-team="lyoko">🛡️ Lyoko Warriors</button>
@@ -456,7 +456,18 @@ export class UI {
       </div>`).join('');
   }
 
-  renderInventory(inv, special = null) {
+  renderInventory(inv, special = null, { rewind = null, hunter = null } = {}) {
+    if (hunter) {
+      // XANA's hunter: tools paid with energy instead of an inventory
+      const tools = Object.entries(hunter.tools).map(([id, cost], k) => {
+        const d = POWERUPS[id];
+        return `<div class="slot hunter ${hunter.energy < cost ? 'used' : ''}" data-i="H:${id}" title="${esc(d.name)}: ${esc(d.desc)}">
+          <kbd>${k + 1}</kbd><div class="ic">${d.icon}</div><div class="nm">${esc(d.name)} · ${cost}⚡</div></div>`;
+      });
+      tools.push(`<div class="energy" title="XANA's energy"><div style="width:${Math.round(hunter.energy)}%"></div><span>⚡ ${Math.floor(hunter.energy)}</span></div>`);
+      this.$('.hud-inventory').innerHTML = tools.join('');
+      return;
+    }
     const slots = [0, 1, 2].map((i) => {
       const id = inv[i];
       if (!id) return `<div class="slot empty" data-i="${i}"><kbd>${i + 1}</kbd></div>`;
@@ -468,6 +479,10 @@ export class UI {
       const d = POWERUPS[special.id];
       slots.push(`<div class="slot special ${special.used ? 'used' : ''}" data-i="S" title="Special move (once per course): ${esc(d.name)}: ${esc(d.desc)}">
         <kbd>4 ★</kbd><div class="ic">${d.icon}</div><div class="nm">${special.used ? 'Used' : esc(d.name)}</div></div>`);
+    }
+    if (rewind) {
+      slots.push(`<div class="slot special rewind ${rewind.used ? 'used' : ''}" data-i="R" title="Return to the Past (once per course): undo your last shot: ball, stroke, life points and power-ups">
+        <kbd>5</kbd><div class="ic">⏪</div><div class="nm">${rewind.used ? 'Used' : 'Rewind'}</div></div>`);
     }
     this.$('.hud-inventory').innerHTML = slots.join('');
   }

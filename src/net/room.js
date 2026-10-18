@@ -101,7 +101,7 @@ export class HostRoom {
     this.relayed = new Set();     // friends connected through the public relay (relay.js)
     this.players = new Map();     // id -> player record
     this.phase = 'lobby';         // lobby | hole | between | final
-    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', puMode: 'pickups', mode: 'ffa' }; // mode: ffa | teams | elim · puSet: all | lyoko · puMode: pickups | draft | mirror
+    this.settings = { course: 'cup3', timeMul: 1, puLevel: 'normal', puSet: 'all', puMode: 'pickups', mode: 'ffa' }; // mode: ffa | teams | elim | relay | hunter · puSet: all | lyoko · puMode: pickups | draft | mirror
     this.plan = [];
     this.holeNo = -1;
     this.timer = setInterval(() => this.tick(), 200);
@@ -140,6 +140,8 @@ export class HostRoom {
     this.relayed.delete(id);
     const p = this.players.get(id);
     if (!p) return;
+    const tm = this.turnOf(id);
+    if (tm && tm.shooter === id && this.phase === 'hole') { p.connected = false; this.passTurn(p.team, p.pos || tm.pos, p.strokes ?? tm.strokes); }
     if (this.phase === 'lobby') this.players.delete(id);
     else p.connected = false;
     this.broadcast({ t: 'left', id, name: p.name });
@@ -155,7 +157,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, lp: p.lp ?? 100,
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, rewindUsed: p.rewindUsed || null, lp: p.lp ?? 100, hunter: !!p.hunter,
       relay: this.relayed.has(p.id),
     }));
   }
@@ -205,13 +207,29 @@ export class HostRoom {
         if (p?.host && this.phase === 'hole') this.endHole();
         else if (p?.host && this.phase === 'between') this.nextHole();
         return;
-      case 'st':
+      case 'st': {
         if (!p) return;
+        if (this.turns && msg.s === 'gone' && this.turnOf(id)?.shooter !== id) return; // a relay teammate waiting: nothing to show
         p.strokes = msg.k ?? p.strokes;
         p.pos = msg.p;
-        if (typeof msg.lp === 'number') p.lp = Math.max(0, Math.min(100, msg.lp));
+        if (typeof msg.lp === 'number') {
+          const lp = Math.max(0, Math.min(100, msg.lp));
+          if (lp < (p.lp ?? 100)) p.dmg = (p.dmg || 0) + ((p.lp ?? 100) - lp); // XANA hunter: damage taken this hole
+          p.lp = lp;
+        }
+        // Team relay: the team ball's strokes and position belong to every member
+        const tm = this.turnOf(id);
+        if (tm && tm.shooter === id) for (const q of this.players.values()) if (q.team === p.team) { q.strokes = p.strokes; q.pos = p.pos; }
         this.broadcast({ ...msg, id }, id);
         return;
+      }
+      case 'relayRest': {
+        // Team relay: the shooter's ball stopped: the next teammate takes over from there
+        const tm = this.turnOf(id);
+        if (!p || !tm || tm.shooter !== id || this.phase !== 'hole' || p.holed) return;
+        this.passTurn(p.team, msg.p, msg.k);
+        return;
+      }
       case 'possessShot': {
         // XANA's shot for a possessed player: only the one who possessed them, only once
         const ps = this.possess.get(msg.target);
@@ -229,11 +247,14 @@ export class HostRoom {
       case 'holed':
         if (this.playoff) return;
         if (!p || this.phase !== 'hole' || p.holed) return;
-        p.holed = true;
-        p.strokes = msg.strokes;
-        p.scores[this.holeNo] = msg.strokes;
-        this.broadcast({ t: 'holed', id, strokes: msg.strokes, hio: msg.strokes === 1 });
-        if (this.playing().every((q) => q.holed)) this.allHoledAt = performance.now();
+        if (this.turns && this.turnOf(id)?.shooter !== id) return; // only the relay team's shooter can hole out
+        for (const q of this.turns ? [...this.players.values()].filter((q) => q.team === p.team) : [p]) {
+          q.holed = true;
+          q.strokes = msg.strokes;
+          q.scores[this.holeNo] = msg.strokes;
+          this.broadcast({ t: 'holed', id: q.id, strokes: msg.strokes, hio: msg.strokes === 1 });
+        }
+        if (this.golfers().every((q) => q.holed)) this.allHoledAt = performance.now();
         return;
       case 'claim': {
         if (!p || this.phase !== 'hole') return;
@@ -261,6 +282,16 @@ export class HostRoom {
           }
           if (tgt) { tgt.protectedUntil = now + PROTECT_MS; tgt.hits.push(now); this.stat(tgt.id, 'targeted'); }
           if (tgt && msg.pu === 'possession') this.possess.set(tgt.id, { by: id, until: now + 17000 });
+        }
+        // XANA hunter: traps never go right next to a cup or a tee
+        if (p.hunter && (msg.params?.pos || msg.params?.a)) {
+          const def = HOLES[this.plan[this.holeNo]];
+          const spots = [def.tee, def.cup, ...(def.cups || [])];
+          const pts = [msg.params.pos, msg.params.a, msg.params.b].filter(Array.isArray);
+          if (pts.some((q) => spots.some((s) => Math.hypot(q[0] - s[0], q[2] - s[2]) < 3))) {
+            this.sendTo(id, { t: 'refund', pu: msg.pu, hunter: true, reason: 'Too close to a cup or the tee: keep traps 3 units away' });
+            return;
+          }
         }
         // black holes and bumpers can't be dropped on top of a tee or a ball (that's how traps happen)
         if ((msg.pu === 'blackhole' || msg.pu === 'bumper') && Array.isArray(fx.params.pos)) {
@@ -291,6 +322,14 @@ export class HostRoom {
         p.draft = null;
         this.sendTo(id, { t: 'drafted', pu: msg.pu });
         return;
+      case 'rewind': {
+        // Return to the Past: one free rewind per course (the client restores its own ball, strokes and LP)
+        const sector = HOLES[this.plan[this.holeNo]]?.sector ?? null;
+        if (!p || this.phase !== 'hole' || p.holed || this.playoff || p.rewindUsed === sector) return;
+        p.rewindUsed = sector;
+        this.broadcast({ t: 'feed', text: `⏪ ${p.name} returned to the past` });
+        return;
+      }
       case 'specialBack':
         // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing)
         if (p) p.specialUsed = null;
@@ -393,12 +432,13 @@ export class HostRoom {
     this.mirror = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.lp = 100; p.draft = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.rewindUsed = null; p.lp = 100; p.draft = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;
     this.matchMode = this.mode;
-    if (this.matchMode === 'teams') this.assignTeams();
+    this.courseNo = -1;
+    if (this.matchMode === 'teams' || this.matchMode === 'relay') this.assignTeams();
     else for (const p of this.players.values()) p.team = null;
     // the intro (transfer, scanner, virtualization) before hole 1; single-hole practice skips it
     const players = this.playerList();
@@ -415,11 +455,30 @@ export class HostRoom {
   /** Connected and not eliminated. */
   playing() { return this.activePlayers().filter((p) => !p.out); }
 
+  /** The ones putting this hole (XANA's hunter doesn't). */
+  golfers() { return this.playing().filter((p) => !p.hunter); }
+
+  /** Team relay: the turn state of this player's team. */
+  turnOf(id) { const p = this.players.get(id); return this.turns && p?.team ? this.turns[p.team] : null; }
+
+  /** Team relay: the next connected teammate takes the ball where it stopped. */
+  passTurn(team, pos, strokes) {
+    const tm = this.turns?.[team];
+    if (!tm) return;
+    const live = tm.order.filter((id) => this.players.get(id)?.connected);
+    if (!live.length) return;
+    const at = live.indexOf(tm.shooter);
+    tm.shooter = live[(at + 1) % live.length];
+    if (pos) tm.pos = pos;
+    if (typeof strokes === 'number') tm.strokes = strokes;
+    this.broadcast({ t: 'turn', team, shooter: tm.shooter, p: tm.pos, k: tm.strokes });
+  }
+
   get mode() {
     const m = this.settings.mode || 'ffa';
     if (this.solo) return 'ffa';
-    if (m === 'elim' && this.players.size < 3) return 'ffa';
-    if (m === 'teams' && this.players.size < 2) return 'ffa';
+    if ((m === 'elim' || m === 'hunter') && this.players.size < 3) return 'ffa';
+    if ((m === 'teams' || m === 'relay') && this.players.size < 2) return 'ffa';
     return m;
   }
 
@@ -483,6 +542,7 @@ export class HostRoom {
       taken: this.pickups.map((p) => p.taken || null),
       cats: this.pickups.map((p) => p.cat),
       players: this.playerList(),
+      relay: this.turns ? Object.fromEntries(Object.entries(this.turns).map(([k, v]) => [k, { shooter: v.shooter, order: v.order, p: v.pos, k: v.strokes }])) : null,
     };
   }
 
@@ -506,7 +566,23 @@ export class HostRoom {
     const cats = pickupCategories(this.holeSeed, n, RNG);
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
-    for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; }
+    for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; p.dmg = 0; }
+    // XANA hunter: a new hunter each course (whoever plays XANA goes first)
+    if (newCourse) this.courseNo = (this.courseNo ?? -1) + 1;
+    if (this.matchMode === 'hunter' && newCourse) {
+      const order = this.playing().sort((a, b) => (characterByColor(b.color)?.id === 'xana') - (characterByColor(a.color)?.id === 'xana'));
+      const hunter = order[this.courseNo % order.length];
+      for (const p of this.players.values()) p.hunter = p === hunter;
+    } else if (this.matchMode !== 'hunter') for (const p of this.players.values()) p.hunter = false;
+    // Team relay: one ball per team; the first shot rotates hole by hole
+    this.turns = null;
+    if (this.matchMode === 'relay' && !this.playoff) {
+      this.turns = {};
+      for (const team of ['lyoko', 'xana']) {
+        const order = this.playing().filter((p) => p.team === team).map((p) => p.id);
+        if (order.length) this.turns[team] = { order, shooter: order[this.holeNo % order.length], pos: null, strokes: 0 };
+      }
+    }
     // XANA attack: about one hole in three, somewhere between 20% and 55% of the way through
     this.xanaAt = !this.playoff && Math.random() < 0.34 ? this.duration * (0.2 + Math.random() * 0.35) : null;
     this.broadcast(this.holeMessage());
@@ -540,11 +616,22 @@ export class HostRoom {
     const results = [];
     for (const p of this.players.values()) {
       if (p.out) { results.push({ id: p.id, score: null, out: true }); continue; } // eliminated: no score
+      if (p.hunter) { results.push({ id: p.id, score: null, hunter: true }); continue; } // scored below
       if (!p.holed) {
         this.stat(p.id, 'timeouts');
         p.scores[this.holeNo] = timeoutScore(def, p.strokes, p.pos);
         results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true, left: p.pos ? Math.round(trackLeft(def, p.pos)) : null });
       } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
+    }
+    // XANA hunter: the others' average, minus a bonus for the damage they took (max 3)
+    const hunter = [...this.players.values()].find((p) => p.hunter && !p.out);
+    if (hunter) {
+      const others = [...this.players.values()].filter((p) => !p.hunter && !p.out && p.scores[this.holeNo] != null);
+      const mean = others.length ? others.reduce((a, p) => a + p.scores[this.holeNo], 0) / others.length : def.par;
+      const bonus = Math.min(3, Math.floor(others.reduce((a, p) => a + (p.dmg || 0), 0) / 40));
+      hunter.scores[this.holeNo] = Math.max(1, Math.round(mean) - bonus);
+      const r = results.find((x) => x.id === hunter.id);
+      if (r) Object.assign(r, { score: hunter.scores[this.holeNo], timeout: false, hunter: true, bonus });
     }
     this.phase = 'between';
     this.betweenStart = performance.now();
@@ -580,7 +667,7 @@ export class HostRoom {
   }
 
   finish() {
-    if (this.matchMode === 'teams') {
+    if (this.matchMode === 'teams' || this.matchMode === 'relay') {
       // the winning side's best player gets the finale; no playoff between teams
       const teams = this.teamResults();
       const { ordered, rule } = rankStandings(this.playerList());
@@ -638,7 +725,7 @@ export class HostRoom {
       if (this.xanaAt !== null && this.xanaAt !== undefined && this.elapsed() >= this.xanaAt && !this.allHoledAt) this.xanaAttack();
       if (this.elapsed() >= this.duration) this.endHole();
       else if (this.allHoledAt && performance.now() - this.allHoledAt > ALL_HOLED_GRACE_MS) this.endHole();
-      else if (this.playing().length === 0) this.endHole();
+      else if (this.golfers().length === 0) this.endHole();
     } else if (this.phase === 'between') {
       if (performance.now() - this.betweenStart > BETWEEN_HOLES_MS) this.nextHole();
     }

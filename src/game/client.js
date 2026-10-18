@@ -37,6 +37,9 @@ const MAX_INV = 3;
 
 // a ball still moving this many seconds after the shot is stopped (see watchStuck)
 const AUTO_STOP = 15;
+// XANA hunter: energy (regenerates 8/s up to 100) and what each tool costs
+const HUNTER_TOOLS = { agent: 60, creativity: 25, volcano: 35, swarm: 40 };
+const HUNTER_REGEN = 8;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
 const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma', 'kongreMouth', 'marabounta', 'kolossusRoam']);
@@ -175,6 +178,13 @@ export class GameClient {
       case 'fx':
         this.effects.apply(m);
         break;
+      case 'turn': {
+        if (this.relayTurns?.[m.team]) Object.assign(this.relayTurns[m.team], { shooter: m.shooter, p: m.p, k: m.k });
+        if (m.team !== this.players.get(this.myId)?.team || this.phase !== 'hole' || this.ball?.state === 'holed') break;
+        if (m.shooter === this.myId) this.relayTakeOver(m.p, m.k);
+        else this.relayWait(m.shooter);
+        break;
+      }
       case 'xanaAttack':
         this.effects.xanaAttack(m);
         break;
@@ -200,8 +210,9 @@ export class GameClient {
         else this.ui.toast(`${this.nameOf(m.from)} had nothing to steal`);
         break;
       case 'refund':
-        // a refunded special move goes back to the ★ slot, not the inventory
-        if (m.special && this.special?.id === m.pu && this.special.used) { this.special.used = false; this.renderInventory(); }
+        // a refunded special move goes back to the ★ slot, not the inventory; a hunter tool, to the energy bar
+        if (m.hunter && this.hunter) { this.hunter.energy = Math.min(100, this.hunter.energy + (HUNTER_TOOLS[m.pu] ?? 0)); this.renderInventory(); }
+        else if (m.special && this.special?.id === m.pu && this.special.used) { this.special.used = false; this.renderInventory(); }
         else this.addPowerup(m.pu, 'refund');
         this.ui.toast(m.reason);
         break;
@@ -209,6 +220,15 @@ export class GameClient {
         const p = this.players.get(m.id);
         if (p) { p.holed = true; p.strokes = m.strokes; }
         this.playersDirty = true;
+        if (m.id === this.myId && this.relayWaiting) {
+          // Team relay: a teammate holed our ball
+          this.relayWaiting = false;
+          this.strokes = m.strokes;
+          this.ui.setStrokes(this.strokes, this.def.par);
+          this.ball.state = 'holed';
+          this.ui.bigToast('🏃 TEAM HOLED OUT', `${m.strokes} stroke${m.strokes === 1 ? '' : 's'}`, 'good');
+          this.ui.setHint('Your team is in! · <kbd>Tab</kbd> to spectate');
+        }
         if (m.id !== this.myId) {
           this.ui.feed(`${p?.name} holed out in ${m.strokes}${m.hio ? ' — HOLE IN ONE!' : ''}`);
           if (this.course) this.cupCelebration(p?.color || '#ffffff', true, this.course.nearestCup(this.ghosts.lastPos(m.id)));
@@ -386,6 +406,9 @@ export class GameClient {
     const sp = SPECIALS[characterByColor(this.me.color)?.id];
     const mine = m.players?.find((q) => q.id === this.myId);
     this.special = sp && !this.playoff ? { id: sp, used: mine?.specialUsed === def.sector } : null;
+    // Return to the Past: one free rewind per course, remembered by the room like the special
+    this.rewindSlot = this.playoff ? null : { used: mine?.rewindUsed === def.sector };
+    this.preShot = null;
     this.renderInventory();
     // Mirror match: the same power-up for everyone, once per hole
     if (m.mirror && POWERUPS[m.mirror] && this.mirrorHole !== `${m.holeNo}:${m.index}` && !this.players.get(this.myId)?.out) {
@@ -432,6 +455,64 @@ export class GameClient {
     this.virtualize(this.ball.mesh.position);
     // a short flyover from the cup back to the tee so everyone can read the layout
     this.flyover = m.elapsed < 4000 ? this.makeFlyover(def) : null;
+    this.applyRoles(m);
+  }
+
+  /** XANA hunter (no ball: tools and energy instead) and Team relay (one ball per team, turns). */
+  applyRoles(m) {
+    const mine = m.players?.find((q) => q.id === this.myId);
+    this.relayShot = false;
+    this.relayWaiting = false;
+    this.hunter = mine?.hunter && !this.playoff ? { energy: 60 } : null;
+    this.relayTurns = !this.playoff ? m.relay || null : null;
+    if (this.hunter) {
+      this.hideMyBall();
+      this.special = null;
+      this.rewindSlot = null;
+      this.renderInventory();
+      setTimeout(() => this.ui.bigToast('👁️ XANA HUNTER', 'no ball for you this course: possess monsters and lay traps (keys 1–4)', 'good'), 1800);
+      return;
+    }
+    const hunter = m.players?.find((q) => q.hunter);
+    if (hunter) setTimeout(() => this.ui.toast(`👁️ ${hunter.name} is XANA's hunter this course`), 1800);
+    const tm = this.relayTurns?.[mine?.team];
+    if (tm) {
+      if (tm.shooter === this.myId) this.relayTakeOver(tm.p, tm.k, false);
+      else this.relayWait(tm.shooter);
+    }
+  }
+
+  /** My ball is out of play (relay teammate's turn, or I'm the hunter). */
+  hideMyBall() {
+    const b = this.ball;
+    if (!b) return;
+    b.state = 'gone';
+    b.mesh.visible = false;
+    b.body.setEnabled(false);
+    this.sendState(true);
+  }
+
+  relayWait(shooter) {
+    this.relayWaiting = true;
+    this.hideMyBall();
+    this.spectate = shooter;
+    if (shooter && shooter !== this.myId) this.ui.setHint(`🏃 Team relay: ${this.nameOf(shooter)} is shooting your team's ball`);
+  }
+
+  /** My turn in the relay: the team ball is mine, where my teammate left it. */
+  relayTakeOver(p, strokes, announce = true) {
+    const b = this.ball;
+    this.relayWaiting = false;
+    this.spectate = null;
+    if (typeof strokes === 'number') { this.strokes = strokes; this.ui.setStrokes(this.strokes, this.def.par); }
+    b.body.setEnabled(true);
+    b.mesh.visible = true;
+    if (p) b.place(new THREE.Vector3(p[0], p[1] + 0.02, p[2]));
+    b.state = 'idle';
+    this.preShot = null;
+    this.cam.snapTo(b.mesh.position);
+    if (announce) { this.ui.bigToast('🏃 YOUR TURN', `the team ball is yours · ${this.strokes} stroke${this.strokes === 1 ? '' : 's'} so far`, 'good'); sfx.play('beep'); }
+    this.sendState(true);
   }
 
   /** The hole preview: along the route (cup → lane → tee) when the hole has one, else a plain arc. */
@@ -664,6 +745,14 @@ export class GameClient {
       this.shotInProgress = false;
       this.effects.onShotEnd();
     }
+    // Team relay: my shot is done: the ball goes to the next teammate from here
+    if (this.relayShot && this.ball?.state === 'idle') {
+      this.relayShot = false;
+      const p = this.ball.pos;
+      this.sendState(true);
+      this.link.send({ t: 'relayRest', p: [p.x, p.y, p.z], k: this.strokes });
+      this.relayWait(null);
+    }
   }
 
   onHoled() {
@@ -888,9 +977,11 @@ export class GameClient {
   /** Fire my ball at an exact yaw/power (my own shot, or one XANA took for me). */
   fireShot(yaw, power) {
     this.cam.aerial.off.set(0, 0, 0);
-    this.addStrokes(1);
     const p0 = this.ball.pos;
-    this.preShot = { pos: new THREE.Vector3(p0.x, p0.y + 0.02, p0.z), safe: this.ball.lastSafe.clone() };
+    // everything Return to the Past puts back
+    this.preShot = { pos: new THREE.Vector3(p0.x, p0.y + 0.02, p0.z), safe: this.ball.lastSafe.clone(), strokes: this.strokes, lp: this.lp, inventory: [...this.inventory] };
+    this.addStrokes(1);
+    if (this.relayTurns) this.relayShot = true;
     const opts = this.effects.onShoot();
     const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     this.ball.shoot(dir, power * opts.powerMul, { chip: opts.chip });
@@ -1329,6 +1420,53 @@ export class GameClient {
     this.sendState(true);
   }
 
+  /** Return to the Past, the free one (once per course): the last shot never happened at all. */
+  rewindShot() {
+    const b = this.ball, ps = this.preShot, r = this.rewindSlot;
+    if (!r || this.phase !== 'hole' || !b || b.state === 'holed' || b.state === 'sinking') return;
+    if (r.used) return this.ui.toast('⏪ Already used on this course');
+    if (!ps) return this.ui.toast('⏪ Nothing to rewind yet: take a shot first');
+    if (this.possessedBy || this.agentCtl) return;
+    r.used = true;
+    this.preShot = null;
+    this.endTrip();
+    this.fallId++;
+    this.falling = false;
+    this.swallowed = null;
+    b.frozen = false;
+    b.mesh.visible = true;
+    b.body.setEnabled(true);
+    this.ui.closeOverlay();
+    b.place(ps.pos, { safe: false });
+    b.lastSafe.copy(ps.safe);
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.strokes = ps.strokes;
+    this.ui.setStrokes(this.strokes, this.def.par);
+    this.lp = ps.lp;
+    this.showLP(this.lp, 0);
+    this.inventory = [...ps.inventory];
+    this.renderInventory();
+    this.link.send({ t: 'rewind' });
+    // the show's white dome sweeping out from where it all goes back to
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    dome.position.copy(b.mesh.position);
+    this.scene.add(dome);
+    const t0 = performance.now();
+    const grow = () => {
+      const k = (performance.now() - t0) / 900;
+      if (k >= 1 || !this.scene) { this.scene?.remove(dome); dome.geometry.dispose(); dome.material.dispose(); return; }
+      dome.scale.setScalar(0.5 + k * 30);
+      dome.material.opacity = 0.6 * (1 - k);
+      requestAnimationFrame(grow);
+    };
+    grow();
+    this.cam.snapTo(b.mesh.position);
+    this.ui.flash();
+    this.ui.bigToast('⏪ RETURN TO THE PAST', 'your last shot never happened', 'good');
+    sfx.play('teleport');
+    this.sendState(true);
+  }
+
   devirtualize(fromName) {
     const b = this.ball;
     if (!b || b.state === 'holed' || b.state === 'sinking') return;
@@ -1373,15 +1511,17 @@ export class GameClient {
   }
 
   // ---------- power-ups ----------
-  renderInventory() { this.ui.renderInventory(this.inventory, this.special); }
+  renderInventory() { this.ui.renderInventory(this.inventory, this.special, { rewind: this.players.get(this.myId)?.out ? null : this.rewindSlot, hunter: this.hunter ? { energy: this.hunter.energy, tools: HUNTER_TOOLS } : null }); }
 
-  /** What's in a slot: 0–2 are the inventory, 'S' is the special move (until it's used). */
+  /** What's in a slot: 0–2 are the inventory, 'S' is the special move (until it's used), 'H:id' a hunter tool. */
   slotItem(i) {
+    if (typeof i === 'string' && i.startsWith('H:')) { const id = i.slice(2); return this.hunter && this.hunter.energy >= (HUNTER_TOOLS[id] ?? 999) ? id : null; }
     if (i === 'S') return this.special && !this.special.used ? this.special.id : null;
     return this.inventory[i];
   }
 
   consumeSlot(i) {
+    if (typeof i === 'string' && i.startsWith('H:')) { this.hunter.energy -= HUNTER_TOOLS[i.slice(2)] ?? 0; this.renderInventory(); sfx.play('use'); return; }
     if (i === 'S') { this.special.used = true; this.renderInventory(); sfx.play('use'); stats.add('specials'); return; }
     this.inventory.splice(i, 1);
     this.renderInventory();
@@ -1390,6 +1530,7 @@ export class GameClient {
   }
 
   addPowerup(id, source) {
+    if (this.hunter) return;
     if (this.inventory.length >= MAX_INV) {
       this.ui.toast(`Inventory full — ${POWERUPS[id].icon} ${POWERUPS[id].name} discarded`);
       sfx.play('discard');
@@ -1410,6 +1551,11 @@ export class GameClient {
   }
 
   useSlot(i) {
+    if (i === 'R') return this.rewindShot();
+    if (this.hunter && typeof i === 'number') i = `H:${Object.keys(HUNTER_TOOLS)[i]}`; // keys 1–4 are the hunter's tools
+    if (this.hunter && i === 'S') i = 'H:swarm';
+    if (typeof i === 'string' && i.startsWith('H:') && !this.slotItem(i)) return this.ui.toast(`⚡ Not enough energy (${Math.floor(this.hunter?.energy ?? 0)}/${HUNTER_TOOLS[i.slice(2)]})`);
+    if (this.relayWaiting && typeof i === 'number' && ['self', 'aura'].includes(POWERUPS[this.slotItem(i)]?.kind)) return this.ui.toast('🏃 Wait for your turn with the team ball');
     if (i === 'S' && this.special?.used && this.phase === 'hole') return this.ui.toast('★ Special move already used on this course');
     const id = this.slotItem(i);
     if (!id || this.phase !== 'hole') return;
@@ -1458,7 +1604,7 @@ export class GameClient {
     }
     if (this.slotItem(t.slot) === t.id) {
       this.consumeSlot(t.slot);
-      this.link.send({ t: 'use', pu: t.id, params, special: t.slot === 'S' });
+      this.link.send({ t: 'use', pu: t.id, params, special: t.slot === 'S', hunter: typeof t.slot === 'string' && t.slot.startsWith('H:') });
     }
     this.cancelTargeting();
   }
@@ -1642,7 +1788,7 @@ export class GameClient {
     }
     if (this.phase !== 'hole') return;
     if (this.agentCtl && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) { this.agentCtl.keys.add(e.code); return; }
-    const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2, Digit4: 'S', Numpad4: 'S' }[e.code];
+    const digit = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2, Digit4: 'S', Numpad4: 'S', Digit5: 'R', Numpad5: 'R' }[e.code];
     if (digit !== undefined) return e.shiftKey ? this.discardSlot(digit) : this.useSlot(digit);
     if (e.code === 'KeyC') return this.cycleView();
     const emo = { Digit7: 0, Digit8: 1, Digit9: 2, Digit0: 3 }[e.code];
@@ -1830,6 +1976,11 @@ export class GameClient {
     const ball = this.ball;
     if (this.swallowed && this.simTime >= this.swallowed.until) this.spitOut();
     if (this.bossEvent && !this.bossEvent.spawned && this.simTime >= this.bossEvent.at) this.spawnBoss();
+    if (this.hunter && this.hunter.energy < 100) {
+      const before = Math.floor(this.hunter.energy / 5);
+      this.hunter.energy = Math.min(100, this.hunter.energy + HUNTER_REGEN * dt);
+      if (Math.floor(this.hunter.energy / 5) !== before) this.renderInventory();
+    }
     this.course.update(this.simTime, dt);
     this.effects.update(this.simTime);
     ball.preStep(dt, this.env);
@@ -1900,7 +2051,8 @@ export class GameClient {
     const victim = this.possessing && this.ghosts.position(this.possessing.target);
     if (this.agentCtl) { this.steerAgent(dt); const ap = this.agentCtl?.m.agent?.pos; if (ap) target = new THREE.Vector3(ap.x, ap.y + 0.3, ap.z); }
     else if (victim) target = victim;
-    else if (this.ball.state === 'holed') {
+    else if (this.hunter) target = this.hunterFocus || new THREE.Vector3(this.course.cup.x, this.course.cup.y, this.course.cup.z);
+    else if (this.ball.state === 'holed' || this.relayWaiting) {
       const sp = this.spectate && this.ghosts.position(this.spectate);
       if (sp) target = sp;
       else { const c = this.ball.sinkCup || this.course.cup; target = new THREE.Vector3(c.x, c.y + 0.2, c.z); }
