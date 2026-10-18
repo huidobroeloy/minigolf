@@ -17,6 +17,7 @@ export default [
       block([-3.8, 7], [3.8, 7], 4.2),
       block([3.8, 12], [-3.8, 12], 3.6, 0.3),
       block([-3.8, 16.5], [3.8, 16.5], 5, 0.6),
+      { t: 'cyl', p: [1.2, 0, 18], r: 0.4, h: 1.2, look: 'neon' }, // a data pillar on the straight line to the cup
       { t: 'monster', type: 'ninja', path: patrol([-2.2, 9.5], [2.2, 9.5], 4.5) },
       { t: 'monster', type: 'krabe', path: patrol([-1.8, 19], [1.8, 19], 6, 0, 0.4) },
     ],

@@ -20,7 +20,7 @@ export default [
       { t: 'mover', kind: 'obst', s: [2.6, 0.6, 0.3], path: patrol([-3.6, 8], [-1.4, 8], 3.2), look: 'holo' },
       { t: 'mover', kind: 'obst', s: [2.6, 0.6, 0.3], path: patrol([-0.4, 8], [1.8, 8], 3.2), look: 'holo' },
       { t: 'mover', kind: 'obst', s: [2.6, 0.6, 0.3], path: patrol([2.8, 8], [5, 8], 3.2), look: 'holo' },
-      pillar(-2, 12.5), pillar(2, 12.5),
+      pillar(-2, 12.5), pillar(2, 12.5), pillar(0, 11, 0.32), // the middle pillar blocks the straight putt
     ],
   },
   {
