@@ -25,7 +25,9 @@ import { Scanner } from './scanner.js';
 import { Finale } from './finale.js';
 import { TowerTrip } from '../fx/towerCup.js';
 import { Weather } from '../fx/weather.js';
+import { Dissolve } from '../fx/dissolve.js';
 import { stats, trailParticle } from './stats.js';
+import { season } from './season.js';
 import { XanaFinale } from './xanaFinale.js';
 import { characterByColor } from './characters.js';
 import { emojiTexture } from '../fx/particles.js';
@@ -66,6 +68,7 @@ export class GameClient {
     this.ghosts = new Ghosts(this.scene);
     this.ghosts.onTrail = (p, color, r, id) => this.trail(p, color, r, this.players.get(id)?.trail);
     this.effects = new EffectManager(this);
+    this.dissolve = new Dissolve(this.scene);
     this.sendTimer = 0;
     this.simTime = 0;
     this.aim = null; // {sx, sy, power}
@@ -281,6 +284,8 @@ export class GameClient {
         const won = m.teams ? !!m.teams[0]?.members.includes(this.myId) : winners[0]?.id === this.myId;
         if (won) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
         if ((m.plan?.length ?? 0) >= worldCupLength()) stats.add('worldcups');
+        // the host's browser keeps the season: every finished multiplayer match
+        if (this.isHost && !this.lobby?.solo && m.standings.length > 1) season.record(m, { format: this.lobby?.settings?.course, pars: (m.plan || []).map((i) => HOLES[i]?.par ?? 0) });
         // XANA won: the catastrophic ending instead of the tower being saved
         const xanaWins = m.teams ? m.teams[0]?.team === 'xana' : characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
@@ -315,6 +320,7 @@ export class GameClient {
     for (const em of this.emotes) this.scene.remove(em.s);
     this.emotes = [];
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
+    this.dissolve.clear();
     if (this.targeting) { this.targeting.dispose(); this.targeting = null; }
     this.endTrip(true);
     if (this.towerTrip) { this.towerTrip.dispose(); this.towerTrip = null; }
@@ -588,6 +594,7 @@ export class GameClient {
     g.position.copy(p);
     this.scene.add(g);
     this.virt = { g, t: 0, mat };
+    this.dissolve.burst(p, this.me?.color || '#9fe8ff', { r: this.ball?.radius || BALL_R, reverse: true, n: 40 });
     sfx.play('teleport');
   }
 
@@ -884,6 +891,8 @@ export class GameClient {
     if (this.falling) return;
     if (this.mainLostDuringTrip()) return;
     if (!this.lavaFall) this.ui.comms.say('fall');
+    this.dissolve.burst(this.ball.mesh.position, this.lavaFall ? '#ff7a1a' : '#3fc6ff', { r: this.ball.radius });
+    this.ball.mesh.visible = false;
     this.lavaFall = false;
     this.falling = true;
     const fid = ++this.fallId;
@@ -900,6 +909,7 @@ export class GameClient {
       this.falling = false;
       this.ball.respawnAtSafe();
       this.cam.snapTo(this.ball.mesh.position);
+      this.virtualize(this.ball.mesh.position);
       this.onRest();
     }, 1000);
   }
@@ -923,6 +933,7 @@ export class GameClient {
       this.falling = false;
       this.ball.respawnAtSafe();
       this.cam.snapTo(this.ball.mesh.position);
+      this.virtualize(this.ball.mesh.position);
       this.onRest();
     }, 900);
   }
@@ -1191,7 +1202,8 @@ export class GameClient {
     const fid = ++this.fallId;
     this.falling = true;
     const p = b.mesh.position.clone();
-    for (let i = 0; i < 70; i++) {
+    this.dissolve.burst(p, '#ff3b1f', { r: b.radius, n: 72 });
+    for (let i = 0; i < 24; i++) {
       this.effects.particles?.spawn({ pos: [p.x + (Math.random() - 0.5) * 0.3, p.y + Math.random() * 0.3, p.z + (Math.random() - 0.5) * 0.3], vel: [(Math.random() - 0.5) * 3, 1 + Math.random() * 3, (Math.random() - 0.5) * 3], color: i % 3 ? '#ff3b1f' : '#ffd0c0', size: 0.13, life: 1.1, gravity: 1 });
     }
     b.state = 'gone';
@@ -1450,6 +1462,7 @@ export class GameClient {
     // the show's white dome sweeping out from where it all goes back to
     const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
     dome.position.copy(b.mesh.position);
+    this.dissolve.burst(b.mesh.position, '#ffffff', { r: b.radius, reverse: true, n: 40 });
     this.scene.add(dome);
     const t0 = performance.now();
     const grow = () => {
@@ -1474,9 +1487,7 @@ export class GameClient {
     const fid = ++this.fallId;
     this.falling = true;
     const p = b.mesh.position.clone();
-    for (let i = 0; i < 60; i++) {
-      this.effects.particles?.spawn({ pos: [p.x + (Math.random() - 0.5) * 0.4, p.y + Math.random() * 0.4, p.z + (Math.random() - 0.5) * 0.4], vel: [(Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2], color: Math.random() < 0.5 ? this.me.color : '#9fe8ff', size: 0.12, life: 1.2, gravity: 1 });
-    }
+    this.dissolve.burst(p, this.me.color, { r: b.radius, n: 72 });
     b.state = 'gone';
     b.body.setEnabled(false);
     b.mesh.visible = false;
@@ -1942,6 +1953,7 @@ export class GameClient {
     this.updateCelebrations(dt);
     this.updateMarkers(this.simTime);
     this.course.tactical = this.cam.mode === 'tactical';
+    this.dissolve.update(dt);
     if (this.virt) {
       const v = this.virt;
       v.t += dt;

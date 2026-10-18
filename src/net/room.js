@@ -682,7 +682,7 @@ export class HostRoom {
   finalize(ordered, winnerId, rule, teams = null) {
     this.phase = 'final';
     this.playoff = null;
-    this.finalMsg = { t: 'final', standings: ordered, plan: this.plan, winnerId, tiebreak: rule, teams, mode: this.matchMode };
+    this.finalMsg = { t: 'final', at: Date.now(), standings: ordered, plan: this.plan, winnerId, tiebreak: rule, teams, mode: this.matchMode };
     this.broadcast(this.finalMsg);
     this.broadcastLobby();
   }

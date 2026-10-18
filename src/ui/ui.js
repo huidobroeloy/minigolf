@@ -8,6 +8,7 @@ import { ballOrb } from './orb.js';
 import { soundtrack, SLOTS } from '../core/soundtrack.js';
 import { Comms } from './comms.js';
 import { stats, ACHIEVEMENTS, TRAILS } from '../game/stats.js';
+import { season, FINISH_POINTS } from '../game/season.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -139,7 +140,7 @@ export class UI {
           </select>
           <button class="btn" id="solo">Practice</button>
         </div>
-        <div class="row"><button class="btn" id="settingsBtn">⚙️ Sound &amp; graphics</button><button class="btn" id="achBtn">🏆 Achievements</button></div>
+        <div class="row"><button class="btn" id="settingsBtn">⚙️ Sound &amp; graphics</button><button class="btn" id="achBtn">🏆 Achievements</button><button class="btn" id="seasonBtn">🏅 Season</button></div>
         <div class="small">Drag down from anywhere to set power, sideways to aim, release to putt. Press H in game for all controls.</div>
       </div>`);
     this.charSelect(s.querySelector('.cs-host'), {
@@ -161,6 +162,68 @@ export class UI {
     s.querySelector('#solo').onclick = () => this.h.solo?.(s.querySelector('#soloCourse').value, getMe());
     s.querySelector('#settingsBtn').onclick = () => this.toggleSettings();
     s.querySelector('#achBtn').onclick = () => this.showAchievements();
+    s.querySelector('#seasonBtn').onclick = () => this.showSeason();
+  }
+
+  /** The season / trophy cabinet (kept in this browser: the host's matches). */
+  showSeason() {
+    const sum = season.summary(), d = season.data;
+    const fmtTo = (v) => (v == null ? '–' : v === 0 ? 'E' : v > 0 ? `+${v}` : `${v}`);
+    const day = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    const fmtName = (v) => (formatOptions().find(([k]) => k === v)?.[1] || v || 'Match');
+    const top = sum.table.slice(0, 8);
+    const rec = sum.records;
+    const recent = d.matches.slice(-6).reverse();
+    const o = this.overlay(`<div class="panel achievements season">
+      <h2>🏅 Season ${d.no || 1} <small>since ${esc(day(d.started))} · ${sum.matches} match${sum.matches === 1 ? '' : 'es'}</small></h2>
+      ${sum.matches ? `
+      <div class="table-wrap scoreboard"><table>
+        <tr><th>#</th><th>Player</th><th title="Matches">MP</th><th title="Wins">W</th><th title="Top 3">Pod</th><th title="Holes in one">Aces</th><th title="Best round to par">Best</th><th>Pts</th></tr>
+        ${sum.table.map((r, i) => `<tr><td>${i + 1}</td><td><i class="ball" style="background:${esc(r.color)}"></i> ${esc(r.name)}</td><td>${r.played}</td><td>${r.wins}</td><td>${r.podiums}</td><td>${r.aces}</td><td>${fmtTo(r.best)}</td><td class="tot">${r.pts}</td></tr>`).join('')}
+      </table></div>
+      <div class="small">Points per finish: ${FINISH_POINTS.map((p, i) => `${['1st', '2nd', '3rd', '4th', '5th'][i]} ${p}`).join(' · ')}</div>
+      <h3>Records</h3>
+      <div class="ach-stats">
+        ${rec.bestRound ? `<span>Best round <b>${fmtTo(rec.bestRound.toPar)}</b> ${esc(rec.bestRound.name)} (${rec.bestRound.holes} holes)</span>` : ''}
+        ${rec.mostAces ? `<span>Most aces in a match <b>${rec.mostAces.aces}</b> ${esc(rec.mostAces.name)}</span>` : ''}
+        ${rec.biggestWin ? `<span>Biggest win <b>${rec.biggestWin.margin}</b> strokes · ${esc(rec.biggestWin.name)}</span>` : ''}
+      </div>
+      ${top.length > 1 ? `<h3>Head to head <small class="small">(row finished ahead of column)</small></h3>
+      <div class="table-wrap scoreboard h2h"><table>
+        <tr><th></th><th></th>${top.map((c) => `<th title="${esc(c.name)}">${esc(c.name.slice(0, 3))}</th>`).join('')}</tr>
+        ${top.map((r) => `<tr><td></td><td>${esc(r.name)}</td>${top.map((c) => (c === r ? '<td>·</td>' : `<td>${sum.h2h(r.name, c.name)}</td>`)).join('')}</tr>`).join('')}
+      </table></div>` : ''}
+      <h3>Recent matches</h3>
+      <div class="season-recent">${recent.map((m) => `<div><b>${esc(day(m.at))}</b> ${esc(fmtName(m.format))}${m.mode && m.mode !== 'ffa' ? ` · ${esc(m.mode)}` : ''} · 🏆 ${esc(m.players[0]?.name || '')} ${fmtTo(m.players[0] ? m.players[0].total - m.par : null)}</div>`).join('')}</div>`
+      : '<div class="small">No matches yet. Every multiplayer match you host from this browser is added here when it finishes.</div>'}
+      <div class="row">
+        <button class="btn tiny" id="seExport">⬇️ Export</button>
+        <button class="btn tiny" id="seImport">⬆️ Import</button>
+        <button class="btn tiny" id="seNew">🆕 New season</button>
+        <input type="file" id="seFile" accept="application/json,.json" hidden />
+      </div>
+      <div class="row"><button class="btn primary" id="seClose">Done</button></div>
+    </div>`, 'ach-ov');
+    o.querySelector('#seClose').onclick = () => this.closeOverlay();
+    o.querySelector('#seExport').onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([season.exportJSON()], { type: 'application/json' }));
+      a.download = `lyokogolf-season-${d.no || 1}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    const file = o.querySelector('#seFile');
+    o.querySelector('#seImport').onclick = () => file.click();
+    file.onchange = async () => {
+      const f = file.files?.[0];
+      if (!f) return;
+      try { const n = season.importJSON(await f.text()); this.toast(`🏅 Imported ${n} match${n === 1 ? '' : 'es'}`); this.showSeason(); } catch (e) { this.toast(`⚠️ ${e.message || 'Could not read that file'}`); }
+    };
+    o.querySelector('#seNew').onclick = () => {
+      if (!confirm('Start a new season? The current standings are cleared (export them first to keep them).')) return;
+      season.newSeason();
+      this.showSeason();
+    };
   }
 
   /** Lifetime stats, achievements and the ball-trail picker. */
@@ -316,6 +379,7 @@ export class UI {
         <div class="row">
           ${isHost ? '<button class="btn primary" id="start">Start game</button>' : '<div class="tagline">Waiting for the host to start…</div>'}
           <button class="btn" id="leave">Leave</button>
+          ${isHost ? '<button class="btn" id="seasonBtn">🏅 Season</button>' : ''}
         </div>
       </div>`);
     const taken = new Map(lobby.players.filter((p) => p.id !== myId).map((p) => [p.color, p.name]));
@@ -333,6 +397,7 @@ export class UI {
     s.querySelectorAll('[data-team]').forEach((b) => { b.onclick = () => this.h.team?.(b.dataset.team); });
     s.querySelector('#leave').onclick = () => this.h.leave?.();
     if (isHost) {
+      s.querySelector('#seasonBtn').onclick = () => this.showSeason();
       const send = () => this.h.settings?.({
         course: s.querySelector('#course').value,
         timeMul: Number(s.querySelector('#timeMul').value),
