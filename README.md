@@ -236,6 +236,8 @@ Plus the finale, **Sector 5 Core**, against the Kolossus.
 
 **Weather** changes with the sector, the same for everyone: sandstorm gusts in the Desert (a strong wind for 5 s), a blizzard crosswind on the Ice, fog banks rolling over the Mountain, embers and ash patches that slow your ball in the Volcano, falling leaves in the Forest, bubble streams in the Digital Sea and data storms in the Network.
 
+**Atmosphere:** every sector has its own sky: slanting light shafts and a glowing horizon in the sector's colours (fewer on Low graphics). When your ball is devirtualized (a monster, the Megatank's beam, lava or the Digital Sea), it breaks into glowing pixel cubes that drift up and fade, and the cubes gather back together when it re-materializes.
+
 **Jérémie** talks you through it from the lab: monsters nearby, low life points, lava, aces, XANA attacks.
 
 ## Intro and endings
@@ -251,7 +253,16 @@ At the end, the winner's ball escorts Aelita to the activated tower. She deactiv
 Then the awards: Digital Sea Diver, XANA's Favourite Victim, Vaporized, Trigger Happy, Fortune's Fool, and more. Every hole also ends with a **Shot of the hole**.
 
 ## Stats and achievements
-Your device keeps your stats: holes, aces, towers deactivated, devirtualizations, monsters slashed, longest putt, wins and more. **Achievements** (menu → 🏅) unlock cosmetic **ball trails** (sparkle, rainbow, data, fire, XANA), which other players see too.
+Your device keeps your stats: holes, aces, towers deactivated, devirtualizations, monsters slashed, longest putt, wins and more. **Achievements** (menu → 🏆) unlock cosmetic **ball trails** (sparkle, rainbow, data, fire, XANA), which other players see too.
+
+## The season
+The host's browser keeps a **season**: every multiplayer match it hosts is recorded when it finishes. Open it from the menu or the lobby (🏅 Season) to see:
+- **standings** by finish points (1st 10, 2nd 7, 3rd 5, 4th 3, 5th 1), with matches, wins, podiums, aces and best round;
+- **records**: best round to par, most aces in a match, biggest winning margin;
+- **head to head**: how often each player finished ahead of each other;
+- the recent matches.
+
+Players are matched by name, so keep the same name all season. **Export** saves the season as a file and **Import** merges one in (to move it to another device); **New season** starts over.
 
 ## Your own soundtrack
 The built-in music is a procedural synth, made in code. Under **Settings → Soundtrack** you can load your own audio or video files into five slots:
@@ -283,7 +294,8 @@ Code map:
 - `src/core/music.js`, `soundtrack.js`: the procedural music and your own tracks.
 - `src/fx/lyoko.js`: the tower, Aelita and Kolossus models. `towerCup.js`: the tower hologram over each cup and the trip inside. `weather.js`: the weather. `vehicles.js`: the vehicles.
 - `src/holes/extend.js`: the approach lanes that make the holes long, with their secret warps. `boss.js`: the Kolossus hole.
-- `src/game/stats.js`, `src/ui/comms.js`: achievements and trails, and Jérémie's lines.
+- `src/game/stats.js`, `season.js`, `src/ui/comms.js`: achievements and trails, the season cabinet, and Jérémie's lines.
+- `src/course/deco.js`: per-sector scenery and atmosphere (light shafts, horizon glow). `src/fx/dissolve.js`: the devirtualization pixel cubes.
 
 Debug options:
 - `?hole=N` jumps straight into solo practice on hole N.

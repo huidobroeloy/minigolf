@@ -249,6 +249,48 @@ export function decorate(sector, course, group, rng) {
     };
   }
 
+  if (sector === 'carthage') {
+    // Carthage: white wall panels with red edges drift round the course; the Core glows far off
+    const panelMat = std('#f4f0ff', { emissive: '#ff3a5a', emissiveIntensity: 0.06, roughness: 0.35 });
+    for (const p of ringPoints(course, rng, 16, 5, 26)) {
+      const w = rng.range(2, 6), h = rng.range(3, 9);
+      const m = add(new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.4), panelMat));
+      m.position.set(p.x, minY + rng.range(-6, 6), p.z);
+      m.lookAt(c.x, m.position.y, c.z);
+      const edges = add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: '#ff3a5a' })));
+      edges.position.copy(m.position); edges.quaternion.copy(m.quaternion);
+      const spd = rng.range(0.2, 0.6), ph = rng.range(0, 6);
+      anim.push((t) => { m.position.y += Math.sin(t * spd + ph) * 0.006; edges.position.copy(m.position); });
+    }
+    const core = add(new THREE.Mesh(new THREE.SphereGeometry(7, 32, 20), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ff3a5a', emissiveIntensity: 0.35, roughness: 0.2 })));
+    core.position.set(c.x, minY + 14, course.bounds.max.z + 45);
+    const ring = add(new THREE.Mesh(new THREE.TorusGeometry(10, 0.25, 8, 64), new THREE.MeshBasicMaterial({ color: '#ff3a5a' })));
+    ring.position.copy(core.position);
+    anim.push((t) => { ring.rotation.x = t * 0.3; ring.rotation.y = t * 0.2; core.material.emissiveIntensity = 0.3 + 0.1 * Math.sin(t * 1.5); });
+    ambient = (dt) => {
+      if (rand() < 0.5) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 4, area.z + (rand() - 0.5) * area.d], vel: [0, 2.5 + rand() * 2, 0], color: rand() < 0.4 ? '#ff3a5a' : '#ffffff', size: 0.12, life: 6 });
+    };
+  } else if (sector === 'skid') {
+    // the depths: the Skidbladnir cruising far off, kelp-like light streaks, the abyss glowing below
+    const skid = makeSkid();
+    skid.position.set(c.x + course.size.x / 2 + 22, minY + 6, c.z);
+    deco.add(skid);
+    anim.push((t) => { skid.position.z = c.z + Math.sin(t * 0.05) * 30; skid.rotation.y = Math.cos(t * 0.05) > 0 ? 0 : Math.PI; skid.position.y = minY + 6 + Math.sin(t * 0.4) * 0.8; });
+    const kelpMat = new THREE.MeshBasicMaterial({ color: '#3fffd0', transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    for (const p of ringPoints(course, rng, 20, 3, 22)) {
+      const h = rng.range(6, 16);
+      const k = add(new THREE.Mesh(new THREE.PlaneGeometry(0.4, h, 1, 8), kelpMat));
+      k.position.set(p.x, minY - 6 + h / 2, p.z);
+      const ph = rng.range(0, 6);
+      anim.push((t) => { k.rotation.z = Math.sin(t * 0.6 + ph) * 0.12; k.lookAt(c.x, k.position.y, c.z); });
+    }
+    ambient = (dt) => {
+      for (let i = 0; i < 2; i++) em.spawn({ pos: [area.x + (rand() - 0.5) * area.w, minY - 4, area.z + (rand() - 0.5) * area.d], vel: [(rand() - 0.5) * 0.3, 1.5 + rand() * 1.5, (rand() - 0.5) * 0.3], color: rand() < 0.5 ? '#bfffef' : '#7affe0', size: 0.1 + rand() * 0.08, life: 7 });
+    };
+  }
+
+  atmosphere(sector, course, add, anim, rng);
+
   // Lyoko towers on floating platforms around the course (one may be XANA-activated)
   const towerColor = { fortune: '#ff7ae8', volcano: '#ff8a4a', network: '#9fd8ff' }[sector] || '#ffffff';
   const platMat = new THREE.MeshStandardMaterial({ color: '#c9ccd6', roughness: 0.8 });
@@ -276,6 +318,63 @@ export function decorate(sector, course, group, rng) {
     },
     dispose() { em.dispose(); group.remove(deco); },
   };
+}
+
+// ---------- sector atmosphere: light shafts from above and a glow along the horizon ----------
+const ATMOS = {
+  desert: { shaft: '#ffe0a0', n: 4, a: 0.07, horizon: '#ffcf80' },
+  forest: { shaft: '#eaffd0', n: 7, a: 0.09, horizon: '#bfe8a0' },
+  ice: { shaft: '#e8f6ff', n: 4, a: 0.08, horizon: '#cfeaff' },
+  mountain: { shaft: '#ffffff', n: 3, a: 0.05, horizon: '#d8c8ff' },
+  sector5: { shaft: '#a8c0ff', n: 5, a: 0.07, horizon: '#6f8dff' },
+  volcano: { shaft: '#ff8a3a', n: 5, a: 0.08, horizon: '#ff5a14' },
+  sea: { shaft: '#7fe0ff', n: 8, a: 0.1, horizon: '#2fc6ff' },
+  network: { shaft: '#7fc6ff', n: 6, a: 0.08, horizon: '#3fa9ff' },
+  cortex: { shaft: '#b89cff', n: 6, a: 0.08, horizon: '#9a6bff' },
+  carthage: { shaft: '#ffd0dc', n: 5, a: 0.07, horizon: '#ff3a5a' },
+  skid: { shaft: '#7affe0', n: 8, a: 0.1, horizon: '#3fffd0' },
+  core: { shaft: '#ff8090', n: 4, a: 0.07, horizon: '#ff1a3a' },
+  fortune: { shaft: null, n: 0, a: 0, horizon: '#ff2bd6' },
+};
+let fadeTex;
+/** A vertical alpha ramp: clear at both ends, brightest a third of the way down. */
+function verticalFade() {
+  if (fadeTex) return fadeTex;
+  const cv = document.createElement('canvas');
+  cv.width = 4; cv.height = 128;
+  const g = cv.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, 'rgba(255,255,255,0)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,1)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 128);
+  fadeTex = new THREE.CanvasTexture(cv);
+  return fadeTex;
+}
+function lowQuality() {
+  try { return JSON.parse(localStorage.getItem('lyokogolf.prefs') || '{}').quality === 'low'; } catch { return false; }
+}
+function atmosphere(sector, course, add, anim, rng) {
+  const A = ATMOS[sector];
+  if (!A) return;
+  const c = course.center, minY = course.bounds.min.y, base = Math.max(course.size.x, course.size.z) / 2;
+  const tex = verticalFade();
+  // light shafts slanting down round the course, slowly breathing (fewer on low quality)
+  const n = lowQuality() ? Math.ceil(A.n / 2) : A.n;
+  for (let i = 0; i < n; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: A.shaft, map: tex, transparent: true, opacity: A.a, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    const h = rng.range(30, 46);
+    const m = add(new THREE.Mesh(new THREE.CylinderGeometry(rng.range(0.5, 1.2), rng.range(2.5, 4.5), h, 16, 1, true), mat));
+    const a = rng.range(0, Math.PI * 2), r = base * rng.range(0.3, 1.2) + rng.range(2, 10);
+    m.position.set(c.x + Math.cos(a) * r, minY + h / 2 - 6, c.z + Math.sin(a) * r);
+    m.rotation.set(rng.range(-0.25, 0.25), 0, rng.range(-0.25, 0.25));
+    const ph = rng.range(0, 6), sp = rng.range(0.2, 0.5);
+    anim.push((t) => { mat.opacity = A.a * (0.6 + 0.4 * Math.sin(t * sp + ph)); });
+  }
+  // a soft glow along the horizon in the sector's colour
+  const glowMat = new THREE.MeshBasicMaterial({ color: A.horizon, map: tex, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false });
+  const ring = add(new THREE.Mesh(new THREE.CylinderGeometry(base + 120, base + 120, 70, 48, 1, true), glowMat));
+  ring.position.set(c.x, minY - 20, c.z);
 }
 
 function fortuneSign() {

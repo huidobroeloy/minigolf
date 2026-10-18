@@ -586,3 +586,14 @@ body.lp-critical #ui::before { content: ''; position: fixed; inset: 0; pointer-e
 .hud-inventory .energy { position: relative; align-self: center; width: 120px; height: 18px; border-radius: 9px; background: rgba(0,0,0,0.45); overflow: hidden; border: 1px solid rgba(255,42,42,0.5); }
 .hud-inventory .energy > div { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7a0010, #ff2a2a); }
 .hud-inventory .energy > span { position: relative; display: block; text-align: center; font-size: 11px; line-height: 18px; color: #fff; font-weight: 700; }
+
+/* season cabinet */
+.season .scoreboard { margin: 4px 0 6px; }
+.season .scoreboard td:nth-child(2) { text-align: left; }
+.season .scoreboard i.ball { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; }
+.season .h2h td, .season .h2h th { padding: 4px 6px; font-size: 13px; }
+.season h3 small { font-family: var(--font-body, inherit); font-weight: 400; }
+.season-recent { display: grid; gap: 4px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.season-recent b { color: #fff; }
+.season .row { flex-wrap: wrap; }
+@media (max-width: 480px) { .season .scoreboard th, .season .scoreboard td { padding: 5px 4px; font-size: 13px; } }

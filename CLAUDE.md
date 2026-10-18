@@ -149,8 +149,17 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `finale.js`: the winner animation, where Aelita reaches the tower. `xanaFinale.js`: the catastrophe when XANA wins.
   - `intro.js`: the match intro, after the host clicks Start (pref `intro`; host skip ends it for everyone via `skipIntro`).
   - `stats.js`: per-device stats, achievements and trails. `src/ui/comms.js`: Jérémie's lines (8 s global cooldown).
+  - `season.js`: the season cabinet in the host's browser (`localStorage['lyokogolf.season']`). The client records
+    each multiplayer `final` once (deduped by the room's `finalMsg.at`); players are keyed by trimmed lower-case name;
+    finish points `FINISH_POINTS` 10/7/5/3/1; export/import (merge by `at`) and new season. `ui.showSeason()` from the
+    menu and the host's lobby (🏅 Season).
 - **Other `src/fx` files:** `towerCup.js` (tower hologram over cups + the trip inside), `weather.js` (seeded per sector
-  from the hole seed and the shared clock), `vehicles.js` (Overbike, Overboard, Overwing meshes).
+  from the hole seed and the shared clock), `vehicles.js` (Overbike, Overboard, Overwing meshes), `dissolve.js`
+  (`client.dissolve`: one InstancedMesh of additive pixel cubes; `burst(p, color, { r, reverse })` on devirtualize,
+  vaporize, falls, and reversed in `virtualize()` and the rewind; half the cubes on Low quality).
+- **Sector atmosphere** (`src/course/deco.js`): `ATMOS` per sector `{ shaft, n, a, horizon }` drives `atmosphere()`:
+  breathing additive light shafts and a horizon glow cylinder; `lowQuality()` halves the shafts. Carthage and Skid have
+  their own scenery branches.
 - **Modes** (`settings.mode` in the room): `ffa`, `teams` (average total; XANA's player is always on XANA's side),
   `elim` (3+ players; worst course subtotal is eliminated after each course, `p.out`, they spectate),
   `relay` (teams, one ball each: `room.turns[team] = { order, shooter, pos, strokes }` in `holeMessage.relay`; the
