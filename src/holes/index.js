@@ -8,6 +8,8 @@ import volcano from './volcano.js';
 import sea from './sea.js';
 import network from './network.js';
 import cortex from './cortex.js';
+import carthage from './carthage.js';
+import skid from './skid.js';
 import { extendHole } from './extend.js';
 import boss from './boss.js';
 
@@ -54,6 +56,8 @@ export const COURSES = [
   { key: 'sea', name: 'The Digital Sea', holes: lengthen(sea) },
   { key: 'network', name: 'The Network', holes: lengthen(network) },
   { key: 'cortex', name: 'The Cortex', holes: lengthen(cortex) },
+  { key: 'carthage', name: 'Carthage · The Core', holes: lengthen(carthage) },
+  { key: 'skid', name: 'Skidbladnir · The Depths', holes: lengthen(skid) },
   { key: 'fortune', name: 'Fortune Falls Casino', holes: fortune },
 ].filter((c) => c.holes.length);
 
