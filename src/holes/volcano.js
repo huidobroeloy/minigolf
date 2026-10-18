@@ -32,6 +32,8 @@ export default [
       { t: 'mover', kind: 'obst', s: [1.6, 0.5, 0.35], path: patrol([-2.1, 12.4], [2.1, 12.4], 2.6), look: 'rock' },
       { t: 'cyl', p: [-2.2, 0, 2.5], r: 0.4, h: 1.2, look: 'rock' },
       { t: 'cyl', p: [2.3, 0, 14], r: 0.45, h: 1.4, look: 'rock' },
+      // green: run past the cup and you're in the magma
+      lava(-1.6, 16.1, 1.6, 17), lava(-3, 14.4, -1.3, 15.6),
     ],
   },
   {

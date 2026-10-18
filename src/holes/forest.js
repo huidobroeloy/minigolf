@@ -90,7 +90,7 @@ export default [
     tee: [0, 0, 2.6], cup: [0.4, 0, 15.6], yaw: 0.45,
     hio: 'Bank round the trunk off the outer ring wall, between the roots.',
     parts: [
-      { t: 'floor', poly: circlePoly(0, 9, 7.4, 8, Math.PI / 8) }, // straight sides: no round bank funnelling into the cup
+      { t: 'floor', poly: circlePoly(0, 9, 7.4, 8, Math.PI / 8), holes: [{ c: [-1.2, 16], r: 0.42 }, { c: [1.9, 15.1], r: 0.4 }] }, // straight sides: no round bank funnelling into the cup; root holes guard it
       { t: 'cyl', p: [0, 0, 9], r: 2.3, h: 3.2, look: 'bark' },
       { t: 'deco', make: (THREE) => {
         const g = new THREE.Group();

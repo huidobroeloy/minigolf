@@ -28,10 +28,10 @@ export default [
     tee: [0, 0, 0], cup: [-6, 0, 27],
     hio: 'Ride the data stream round the bend at just the right pace.',
     parts: [
-      { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 22], [0.5, 30], [-8.5, 30], [-8.5, 23.5], [-2.5, 23.5]] },
+      { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 22], [0.5, 30], [-8.5, 30], [-8.5, 23.5], [-2.5, 23.5]], holes: [{ c: [-7.4, 27], r: 0.45 }, { c: [-6, 28.6], r: 0.42 }, { c: [-5.4, 25.3], r: 0.36 }] },
       // fast lanes: a stream up the middle, then one that bends left at the top
       stream(-0.8, 4, 0.8, 18, [0, 1], 4.5),
-      stream(-5.5, 24.5, 0, 28.5, [-1, 0], 3),
+      stream(-3.6, 24.5, 0, 28.5, [-1, 0], 3),
       packet([-2, 10], [2, 10], 2.8),
       packet([2, 14.5], [-2, 14.5], 3.4, 0.3),
       packet([-7.5, 26], [-7.5, 29], 2.6),

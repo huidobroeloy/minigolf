@@ -37,7 +37,7 @@ export default [
     id: 'cortex-3', name: 'Data Current', sector: 'cortex', par: 3, time: 120,
     tee: [0, 0, 0], cup: [-2, 0, 17.5],
     parts: [
-      { t: 'floor', poly: [[-4, -1.2], [4, -1.2], [4, 20], [-4, 20]] },
+      { t: 'floor', poly: [[-4, -1.2], [4, -1.2], [4, 20], [-4, 20]], holes: [{ c: [-2, 18.9], r: 0.5 }, { c: [-3.45, 16.9], r: 0.4 }, { c: [-0.4, 17.3], r: 0.4 }] },
       // a stream of data pushes everything to the right
       { t: 'zone', kind: 'conveyor', rect: [-4, 7, 4, 11], dir: [1, 0], speed: 3 },
       { t: 'wall', pts: [[-4, 13.5], [1, 13.5]], h: 0.5 },
@@ -52,7 +52,7 @@ export default [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [-3, 6]], open: [2] },
       // a block of ground that rises to the upper level and sinks back
       { t: 'mover', s: [3, 0.4, 3], path: elevator(0, 7.6, -0.2, 2.2, 8), sideLook: 's5' },
-      { t: 'floor', y: 2.4, poly: [[-3, 9.1], [3, 9.1], [3, 22], [-3, 22]], open: [0] },
+      { t: 'floor', y: 2.4, poly: [[-3, 9.1], [3, 9.1], [3, 22], [-3, 22]], open: [0], holes: [{ c: [1.5, 20.4], r: 0.5 }, { c: [2.55, 17.9], r: 0.36 }, { c: [0, 19.3], r: 0.4 }] },
       { t: 'mover', kind: 'obst', s: [3.4, 0.4, 0.3], path: spin(0, 2.6, 14, 5), look: 'holo' },
       { t: 'monster', type: 'krabe', path: patrol([-2, 17], [2, 17], 6, 2.4) },
       { t: 'monster', type: 'manta', path: patrol([-3, 3], [3, 3], 6.5, 1.0, 0.2), size: 0.8 },
