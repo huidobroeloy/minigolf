@@ -35,7 +35,7 @@ const MAX_INV = 3;
 const AUTO_STOP = 15;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
-const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma']);
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma', 'kongreMouth', 'marabounta']);
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -109,7 +109,7 @@ export class GameClient {
     if (this.playoff && this.strokes >= 1) return false;
     if (this.possessing) return !this.flyover && this.phase === 'hole' && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen;
     if (this.possessedBy || this.ball?.frozen || this.agentCtl) return false;
-    return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
+    return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling && !this.swallowed;
   }
 
   // ---------- network ----------
@@ -340,6 +340,7 @@ export class GameClient {
     };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
+    this.swallowed = null;
     this.strokes = 0;
     // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
     this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
@@ -561,9 +562,46 @@ export class GameClient {
     else if (type === 'vent') sfx.play('whoosh');
     else if (type === 'warp') { sfx.play('teleport'); this.cam.snapTo(this.ball.mesh.position); }
     else if (type === 'lava') { this.ui.toast('🌋 Into the lava!'); this.lavaFall = true; this.ui.comms.say('lava'); }
-    else if (type === 'grabbed') { sfx.play('teleport'); this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad'); this.cam.snapTo(this.ball.mesh.position); }
+    else if (type === 'grabbed') this.onGrabbed(data);
     else if (type === 'sinkStart') { sfx.play('cup'); this.cupCelebration(this.me.color, false, this.ball?.sinkCup); }
     else if (type === 'rest') this.onRest();
+  }
+
+  /** A monster carried your ball off: the Scyphozoa (keeps a power-up) or Kongre's mouth (spits it out). */
+  onGrabbed({ by, dir }) {
+    if (by === 'kongre') {
+      // swallowed: hidden for 2 s, then spat out where it's been put, rolling away from the mouth
+      const b = this.ball;
+      b.mesh.visible = false;
+      b.frozen = true;
+      this.swallowed = { until: this.simTime + 2, dir: dir || [0, 1] };
+      sfx.play('splash');
+      this.ui.bigToast('KONGRE!', 'swallowed your ball · it spits it back out in a moment', 'bad');
+      return;
+    }
+    sfx.play('teleport');
+    const i = this.inventory.length ? Math.floor(Math.random() * this.inventory.length) : -1;
+    if (i >= 0) {
+      const id = this.inventory.splice(i, 1)[0];
+      this.renderInventory();
+      this.ui.bigToast('SCYPHOZOA!', `dropped your ball back and stole your ${POWERUPS[id].icon} ${POWERUPS[id].name}`, 'bad');
+    } else this.ui.bigToast('SCYPHOZOA!', 'grabbed your ball and dropped it back', 'bad');
+    this.cam.snapTo(this.ball.mesh.position);
+  }
+
+  /** Kongre spits the swallowed ball back out. */
+  spitOut() {
+    const b = this.ball, s = this.swallowed;
+    this.swallowed = null;
+    if (!b) return;
+    b.frozen = false;
+    b.mesh.visible = true;
+    b.state = 'moving';
+    b.restTimer = 0;
+    b.body.setLinvel({ x: s.dir[0] * 3.2, y: 2.5, z: s.dir[1] * 3.2 }, true);
+    b.launchTimer = 0.15;
+    sfx.play('splash');
+    this.cam.snapTo(b.mesh.position);
   }
 
   /** Playoff: report how close your one shot finished. */
@@ -921,6 +959,11 @@ export class GameClient {
         break;
       case 'ink':
         this.ui.toast('🦑 Kalamar ink! You can barely see, and it\'s thick');
+        break;
+      case 'kongre':
+        break; // the swallow has its own banner (onGrabbed)
+      case 'marabounta':
+        if (!this.maraToastT || this.simTime - this.maraToastT > 6) { this.maraToastT = this.simTime; this.ui.toast('🌿 The Marabounta is eating your ball! Get it out'); }
         break;
       case 'magma':
         this.ui.toast('🌋 Hit by a magma bomb!');
@@ -1730,6 +1773,7 @@ export class GameClient {
 
   step(dt) {
     const ball = this.ball;
+    if (this.swallowed && this.simTime >= this.swallowed.until) this.spitOut();
     this.course.update(this.simTime, dt);
     this.effects.update(this.simTime);
     ball.preStep(dt, this.env);

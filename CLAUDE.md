@@ -168,6 +168,13 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   monster pushes a resting ball. By design: Krabe and Tarantula let a ball roll under the belly between their solid
   legs, Scyphozoa's tentacles grab (its bell is solid), Kongre's arm sweeps with a force. `__monsterAudit()` must report
   `ok` for every type.
+  Show upgrades: lane Creepers are `WallCreeper`s (`spec.wall`: patrol along the lane's side wall top, laser/charged
+  down; `laneMonster` builds it from the slot). Scyphozoa's grab uses `canTarget` and sets `out.tpBy`; the client's
+  `onGrabbed` steals a random held power-up. `kongreMouth` (Sea lanes): seeded surfacing every 11–14 s, 1.2 s ring,
+  2.4 s open; swallows (15 LP, `out.tpBy = 'kongre'`), the client hides/freezes the ball for 2 s (`client.swallowed`,
+  no aiming) and `spitOut` launches it from `spitPoint` (safe floor, never closer to a cup). `marabounta` (Forest and
+  Sector 5 lanes): seeded 26 s cycle (grow 8, hold 6, shrink 6, gone 6), drags rolling balls, 5 LP/s on a resting ball.
+  Both are placed by `extendHole` on a spare leg (not shooter slots, not re-rolled).
   Never let a monster fire at a ball whose owner is aiming. Show-faithful kits: Kankrelat weak frequent laser; Hornet
   laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
   two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens

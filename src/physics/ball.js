@@ -244,7 +244,8 @@ export class Ball {
       this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       this.state = 'moving';
       this.restTimer = 0;
-      this.onEvent('grabbed', {});
+      this.onEvent('grabbed', { by: acc.tpBy || 'scyphozoa', dir: acc.tpDir || null });
+      acc.tpBy = acc.tpDir = null;
       return;
     }
     const pv = this.platformVel();

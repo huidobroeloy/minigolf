@@ -110,14 +110,15 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 | Krabe | Laser or charged laser; two Krabes together fire the combined beam (60 LP) |
 | Megatank | Opens up and fires its flat blade of light along a line: it **vaporizes** your ball (+1). Being run over costs 50 LP |
 | Tarantula | Rears up and fires rapid volleys that lead your ball |
-| Creeper | Pops out of the floor and fires |
+| Creeper | Pops out of the floor and fires; on the lanes it climbs the side walls and fires its laser down at you |
 | Manta | Laser strafes, and the odd mine: 30 LP and a blast that throws your ball |
-| Scyphozoa | Grabs your ball and XANA-fies your next shot (inverted controls) |
+| Scyphozoa | Grabs your ball, drops it back, **steals one of your power-ups** and XANA-fies your next shot (inverted controls) |
 | Shark | Cruises its lane, rams you, and fires slow torpedoes that follow you |
 | Kalamar | Digital Sea: lasers, and ink clouds that hide the track and slow you down |
 | Ninja | The Cortex: dashes at your ball and slashes it with its sword, or fires from its palm |
 | Guardian | A drifting prison sphere: roll into it and you're trapped for 4 s |
-| Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane |
+| Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane. On the lanes its **mouth** surfaces (purple ring first): roll over it while it's open and it swallows your ball (15 LP) and spits it out 2 s later, never closer to the cup |
+| Marabounta | A dark creeping plant on Forest and Sector 5 lanes: it spreads, holds and recedes. It drags a rolling ball almost to a stop and gnaws 5 LP a second off a ball left in it |
 | Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
 
 ### The Kolossus finale
