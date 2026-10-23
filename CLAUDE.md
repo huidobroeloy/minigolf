@@ -178,7 +178,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   (≤8 units, no landing ring), Telekinesis ≤1 unit and never within 1.5 of a cup, Sprint ×1.35, Wings 1.8 s, Hopper
   10 s immunity, Zweihänder 25 s / range 3, Activate Tower spares XANA's own ball (`course.calmUntil`, checked in `canTarget` and `landHit`).
 - **Life points:** cumulative: they carry over from hole to hole (the room keeps `p.lp` from the `st` messages, so
-  reloads keep them) and refill to 100 at each new course. `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind,
+  reloads keep them) and refill to 100 at each new course. A hole that ended while you were devirtualized (LP 0)
+  starts the next one at 100. `DAMAGE` in `monsters/attacks.js`; `landHit(course, kind,
   t, dmg)`; kind `vaporize` devirtualizes outright. `client.showLP` puts `body.lp-critical` (red screen) on when LP ≤
   `maxHit`, the hole's hardest ordinary hit (one-shot attacks ≥80 don't count).
 - **Power-up modes** (`settings.puMode`): `pickups` (default), `draft` (first hole of each course: the room offers each
@@ -186,7 +187,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   `rollAny` item per hole for everyone in `holeMessage.mirror`, no pickups).
 - **XANA's Agent** (`agent` power-up): takes over a monster for 12 s (`m.agent`, `Monster.at` returns the steered
   position). The driver's client picks the monster index (`agentTargetAt`), steers it (`steerAgent`) and relays
-  `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
+  `agentPos` at 15 Hz; it fires twice as often and never at the driver (pass `{ monster }` to `canTarget`, or check
+  `drivenByMe`, in every attack that can hurt the local ball; Ninjas don't dash and Megatanks don't run balls over while
+  driven). `AGENT_PROOF` lists monsters it can't take.
 - **Boss events** (`holes/bossEvent.js`): `rollBoss(def, seed)` gives ~1 hole in 6 (not Fortune or the boss hole) a
   boss at 20 s: `kolossus` (`kolossusRoam`, stomp every 7–9 s, ring 1.5 s, r 2.6, 25 LP + knock, solid feet),
   `scyphozoa` (the Scyphozoa at `scale` 1.8, drops the ball at the old tee) or `megatanks` (3). `client.spawnBoss` walks it
@@ -221,7 +224,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 
 ## Rules the owner chose
 - **Time limit:** per hole (`time`, by par). Running out scores `max(par, strokes)` + 1…8 by the share of the track
-  still left (`timeoutScore`/`trackLeft` in `room.js`, along `def.route`), so it always pays to keep playing.
+  still left (`timeoutScore`/`trackLeft` in `room.js`, along `timeoutRoute(def)` in `holes/route.js`: the lane, then
+  a grid path through the hole from the old tee to the cup, where walls are costly and gaps cost extra, so a
+  switchback never looks shorter than it plays), so it always pays to keep playing. The room flags the hole in
+  `p.timeouts` for the scoreboard.
 - **Ties:** never shared — countback (last 3, last hole), most aces, then a closest-to-the-pin playoff.
 - **Players:** everyone plays simultaneously, up to 8.
 - **Power-ups after holing out:** power-ups that affect others can still be used.

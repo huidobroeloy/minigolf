@@ -876,10 +876,12 @@ export class UI {
       if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, name: SECTOR_NAMES[key] || key, idx: [] });
       groups[groups.length - 1].idx.push(i);
     });
-    const cell = (s, i) => {
+    const cell = (p, i) => {
+      const s = p.scores[i];
       if (s === null || s === undefined) return '<td class="na">·</td>';
       const d = s - pars[i];
-      return `<td class="${s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? (d >= 8 ? 'timeout' : 'over') : 'par'}">${s}</td>`;
+      // the room flags timed-out holes (a timeout scores par + 1…8, so the score alone can't tell)
+      return `<td class="${p.timeouts?.[i] ? 'timeout' : s === 1 ? 'hio' : d < 0 ? 'under' : d > 0 ? 'over' : 'par'}">${s}</td>`;
     };
     const s = this.setScreen(`
       <div class="panel scoreboard${xana ? ' xana-board' : ''}">
@@ -898,7 +900,7 @@ export class UI {
             const rel = p.total - parSum;
             const subt = (g) => { const v = g.idx.map((i) => p.scores[i]).filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) : '·'; };
             return `<tr class="${p.id === myId ? 'me' : ''} ${p.out ? 'out' : ''}"><td>${rank + 1}</td><td><i style="background:${p.color}"></i>${p.team === 'xana' ? '👁️ ' : p.team === 'lyoko' ? '🛡️ ' : ''}${esc(p.name)}${r?.timeout ? ` ⏰${r.left != null ? `<span class="left">${r.left}u left</span>` : ''}` : ''}${p.out ? ' <span class="out-tag">OUT</span>' : ''}</td>
-              ${groups.map((g) => g.idx.map((i) => cell(p.scores[i], i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
+              ${groups.map((g) => g.idx.map((i) => cell(p, i)).join('') + `<td class="sub">${subt(g)}</td>`).join('')}<td class="tot">${p.total}</td><td>${rel > 0 ? '+' + rel : rel}</td></tr>`;
           }).join('')}</tbody>
         </table></div>
         <div class="row">

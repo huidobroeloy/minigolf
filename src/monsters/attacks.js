@@ -38,9 +38,13 @@ export const DAMAGE = {
 };
 export const damageFor = (type, kind) => DAMAGE[type]?.[kind] ?? 20;
 
-/** May a monster start an attack on this ball right now? */
-export function canTarget(course, ball, t, { allowResting = false } = {}) {
+/** Is this monster being driven (XANA's Agent) by the local player? It never hurts its own driver. */
+export const drivenByMe = (course, m, t) => !!m?.agent && m.agent.by === course.myId && t < m.agent.until;
+
+/** May a monster start an attack on this ball right now? Pass `monster` so a driven one spares its driver. */
+export function canTarget(course, ball, t, { allowResting = false, monster = null } = {}) {
   if (!ball || course.noAttacks) return false;
+  if (drivenByMe(course, monster, t)) return false;
   if (ball.state !== 'idle' && ball.state !== 'moving') return false;
   if (ball.mods?.monsterProof || ball.frozen) return false;
   if (t - (course.monsterHitAt ?? -99) < HIT_COOLDOWN) return false;
@@ -124,7 +128,7 @@ export class Gun {
       if (k >= 1) {
         this.ctx.group.remove(c.ring);
         this.charge = null;
-        for (let i = 0; i < cfg.burst; i++) this.fire(t + i * cfg.burstGap, c.to, i, cfg);
+        for (let i = 0; i < cfg.burst; i++) this.fire(t + i * cfg.burstGap, c.to, i, cfg, c.ambient);
       }
       return;
     }
@@ -137,9 +141,9 @@ export class Gun {
     let to = null, ambient = false;
     const bp = ball?.pos;
     const driven = this.m.agent && t < this.m.agent.until;
-    const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4 && !(driven && this.m.agent.by === course.myId);
+    const inRange = ball && Math.hypot(bp.x - from.x, bp.z - from.z) <= cfg.range && Math.abs(bp.y - from.y) < 4;
     // a resting ball is only targeted half the time (it can't dodge); a rolling one always
-    if (inRange && canTarget(course, ball, t, { allowResting: cfg.allowResting }) && (ball.state === 'moving' || this.rng.next() < 0.5)) {
+    if (inRange && canTarget(course, ball, t, { allowResting: cfg.allowResting, monster: this.m }) && (ball.state === 'moving' || this.rng.next() < 0.5)) {
       const lead = ball.state === 'moving' ? cfg.charge * (cfg.lead ?? 0.5) : 0; // Tarantulas lead their shots fully
       to = new THREE.Vector3(bp.x + ball.vel.x * lead, bp.y - ball.radius + 0.02, bp.z + ball.vel.z * lead);
     } else {
@@ -156,7 +160,7 @@ export class Gun {
     ring.position.copy(to).add(new THREE.Vector3(0, 0.03, 0));
     this.ctx.group.add(ring);
     if (ambient) ring.material.opacity = 0.35;
-    this.charge = { t0: t, to, ring, cfg };
+    this.charge = { t0: t, to, ring, cfg, ambient };
     this.cfg = cfg;
     this.m.onCharge?.(t, cfg);
   }
@@ -175,7 +179,7 @@ export class Gun {
     return null;
   }
 
-  fire(t0, to, i, cfg) {
+  fire(t0, to, i, cfg, ambient = false) {
     const from = this.base.muzzle(t0);
     const beam = cfg.kind === 'ice' || cfg.kind === 'mixed';
     // a burst scatters a little around the marked spot
@@ -194,8 +198,10 @@ export class Gun {
     } else if (cfg.kind === 'poison') {
       mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), m);
     } else if (cfg.kind === 'torpedo') {
-      mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.36, 4, 8), m);
-      mesh.rotation.x = Math.PI / 2;
+      // the capsule's long axis is Y: turn the geometry onto Z so lookAt points its nose along the path
+      mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.36, 4, 8).rotateX(Math.PI / 2), m);
+      mesh.position.copy(from);
+      mesh.lookAt(spot);
     } else {
       const big = cfg.kind === 'charged' ? 1.9 : cfg.kind === 'rapid' ? 0.7 : 1;
       mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08 * big, 8, 6), m);
@@ -208,7 +214,7 @@ export class Gun {
     flash.position.copy(spot).add(new THREE.Vector3(0, 0.03, 0));
     flash.visible = false;
     this.ctx.group.add(mesh, flash);
-    this.shots.push({ t0, dur, from, to: spot, mesh, flash, landed: false, applied: false, cfg });
+    this.shots.push({ t0, dur, from, to: spot, mesh, flash, landed: false, applied: false, cfg, ambient, lastT: t0 });
     if (i === 0 || cfg.kind === 'rapid') sfx.play('laser');
   }
 
@@ -218,10 +224,14 @@ export class Gun {
       if (k < 0) { s.mesh.visible = false; continue; }
       const beam = s.cfg.kind === 'ice' || s.cfg.kind === 'mixed';
       s.mesh.visible = !s.landed || beam && t - s.t0 < s.dur + 0.25;
-      if (s.cfg.homing && !s.landed && k < 0.85) {
-        // a torpedo bends toward your ball while it travels (gently: you can outrun it)
+      const dt = Math.max(0, t - s.lastT);
+      s.lastT = t;
+      if (s.cfg.homing && !s.ambient && !s.landed && k < 0.85) {
+        // a torpedo aimed at you bends toward your ball while it travels (gently: you can outrun it).
+        // 4% per 60 Hz frame, scaled by dt so the pull is the same at any frame rate
         const bp = this.ctx.course.localBall?.pos;
-        if (bp && Math.hypot(bp.x - s.to.x, bp.z - s.to.z) < 4) { s.to.x += (bp.x - s.to.x) * 0.04; s.to.z += (bp.z - s.to.z) * 0.04; s.flash.position.set(s.to.x, s.to.y + 0.03, s.to.z); }
+        const e = 1 - (1 - 0.04) ** (dt * 60);
+        if (bp && Math.hypot(bp.x - s.to.x, bp.z - s.to.z) < 4) { s.to.x += (bp.x - s.to.x) * e; s.to.z += (bp.z - s.to.z) * e; s.flash.position.set(s.to.x, s.to.y + 0.03, s.to.z); }
       }
       if (!beam) {
         s.mesh.position.lerpVectors(s.from, s.to, Math.min(1, k));
@@ -270,9 +280,12 @@ export class Gun {
       if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 5; out.z -= v.z * 5; }
       if (!pd.stung) { pd.stung = true; landHit(this.ctx.course, 'venom', t, damageFor(this.m.spec.type, 'poison')); }
     }
+    // same rules as aiming a shot: never a ball whose owner is lining up a shot, never this monster's driver
+    const spare = (ball.state === 'idle' && this.ctx.course.aiming) || drivenByMe(this.ctx.course, this.m, t);
     for (const s of this.shots) {
       if (!s.landed || s.applied) continue;
       s.applied = true;
+      if (spare) continue;
       const dx = p.x - s.to.x, dz = p.z - s.to.z, d = Math.hypot(dx, dz);
       const reach = (s.cfg.kind === 'firering' ? 0.9 : 0.6) + ball.radius;
       if (d > reach || Math.abs(p.y - s.to.y) > 1) continue;
