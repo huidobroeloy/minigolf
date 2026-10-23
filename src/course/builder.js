@@ -523,7 +523,7 @@ export function buildCourse(def, physics, scene) {
       tex.rotation = -ang + Math.PI;
       z.tex = tex;
     } else {
-      const slowBySector = { desert: '#b9874a', forest: '#5b3a1e', ice: '#ffffff', mountain: '#4a3f38', sector5: '#3d6cff', fortune: '#ff2bd6', volcano: '#5a2414', sea: '#2a8fd6', network: '#3fa9ff', carthage: '#ff3a5a', skid: '#1a6fb6' };
+      const slowBySector = { desert: '#b9874a', forest: '#5b3a1e', ice: '#ffffff', mountain: '#4a3f38', sector5: '#3d6cff', fortune: '#ff2bd6', volcano: '#5a2414', sea: '#2a8fd6', network: '#3fa9ff', cortex: '#7a4dff', carthage: '#ff3a5a', skid: '#1a6fb6' };
       const col = z.kind === 'slow' ? (z.color || slowBySector[def.sector] || colors.slow) : (colors[z.kind] || '#fff');
       const op = z.kind === 'vent' ? 0.35 : z.kind === 'slow' && def.sector === 'ice' ? 0.85 : 0.5;
       mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false });

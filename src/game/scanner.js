@@ -6,7 +6,8 @@ import { buildCourse } from '../course/builder.js';
 /**
  * Jérémie's Scanner: predicts the next shot by replaying it in a private, invisible copy
  * of the course (same physics, same monster clock), then draws the path as holo dots.
- * It only shows the path up to the first bounce (or MAX_LEN units), never a whole ace line.
+ * It only shows the path up to the first bounce (or MAX_LEN units), never a whole ace line,
+ * and never a landing ring: it never tells you where (or whether) the ball ends up in the cup.
  */
 const MAX_LEN = 8;
 const BOUNCE = 0.35; // a sudden turn of this many radians in one step is a bounce
@@ -19,7 +20,6 @@ export class Scanner {
     scene.add(this.group);
     this.dotGeo = new THREE.SphereGeometry(0.05, 6, 4);
     this.dotMat = new THREE.MeshBasicMaterial({ color: '#7fffd4', transparent: true, opacity: 0.85, depthWrite: false });
-    this.endMat = new THREE.MeshBasicMaterial({ color: '#7fffd4', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
     this.last = { t: 0, yaw: NaN, power: NaN };
   }
 
@@ -89,24 +89,17 @@ export class Scanner {
       if (dist > MAX_LEN) this.result = 'cut';
       if (i % 5 === 0 || this.result === 'cut') pts.push(new THREE.Vector3(p.x, p.y - b.radius + 0.06, p.z));
     }
-    // cut short: no landing ring, so it never tells you where (or whether) the ball ends up in the cup
-    const end = this.result === 'cut' ? null : b.state === 'sinking' ? b.sinkFrom : b.pos;
-    this.draw(pts, end && new THREE.Vector3(end.x, end.y - b.radius + 0.03, end.z));
+    this.draw(pts);
   }
 
-  draw(pts, end) {
+  /** The holo dots only (no landing ring, whatever the result). */
+  draw(pts) {
     this.group.clear();
     for (let i = 0; i < pts.length; i++) {
       const d = new THREE.Mesh(this.dotGeo, this.dotMat);
       d.position.copy(pts[i]);
       d.scale.setScalar(1 - (i / pts.length) * 0.5);
       this.group.add(d);
-    }
-    if (end && this.result !== 'fall') {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 24), this.endMat);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.copy(end);
-      this.group.add(ring);
     }
   }
 

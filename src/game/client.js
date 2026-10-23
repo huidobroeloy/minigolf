@@ -229,6 +229,7 @@ export class GameClient {
           this.strokes = m.strokes;
           this.ui.setStrokes(this.strokes, this.def.par);
           this.ball.state = 'holed';
+          document.body.classList.remove('lp-critical');
           this.ui.bigToast('🏃 TEAM HOLED OUT', `${m.strokes} stroke${m.strokes === 1 ? '' : 's'}`, 'good');
           this.ui.setHint('Your team is in! · <kbd>Tab</kbd> to spectate');
         }
@@ -374,12 +375,17 @@ export class GameClient {
     this.ball.teleportCooldown = 0;
     this.swallowed = null;
     this.strokes = 0;
-    // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
-    this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
+    // Lyoko life points carry over between holes (the room keeps them; a new course refills them).
+    // 0 means the hole ended while you were devirtualized: you come back virtualized, at 100
+    const keptLP = m.players?.find((q) => q.id === this.myId)?.lp;
+    this.lp = keptLP > 0 ? keptLP : 100;
     // the danger screen comes on when the hardest ordinary hit on this hole would finish you
-    // (one-shot attacks like mines, beams and Blok fire rings don't count: they always would)
-    this.maxHit = Math.max(20, ...def.parts.filter((p) => p.t === 'monster').flatMap((p) => Object.values(DAMAGE[p.type] || {}).filter((v) => v < 80)));
-    this.showLP(this.lp);
+    // (one-shot attacks of 80+, like the Megatank beam, don't count: they always would). The
+    // Krabes' combined beam needs two Krabes on the hole
+    const monsters = def.parts.filter((p) => p.t === 'monster');
+    const krabes = monsters.filter((p) => p.type === 'krabe').length;
+    this.maxHit = Math.max(20, ...monsters.flatMap((p) => Object.entries(DAMAGE[p.type] || {})
+      .filter(([kind, v]) => v < 80 && !(p.type === 'krabe' && kind === 'mixed' && krabes < 2)).map(([, v]) => v)));
     this.shotInProgress = false;
     this.falling = false;
     this.spectate = null;
@@ -462,6 +468,8 @@ export class GameClient {
     // a short flyover from the cup back to the tee so everyone can read the layout
     this.flyover = m.elapsed < 4000 ? this.makeFlyover(def) : null;
     this.applyRoles(m);
+    // after the roles: spectators, playoff watchers, hunters and relay waiters get no danger screen
+    this.showLP(this.lp);
   }
 
   /** XANA hunter (no ball: tools and energy instead) and Team relay (one ball per team, turns). */
@@ -501,6 +509,7 @@ export class GameClient {
   relayWait(shooter) {
     this.relayWaiting = true;
     this.hideMyBall();
+    this.showLP(this.lp); // no danger screen while a teammate shoots
     this.spectate = shooter;
     if (shooter && shooter !== this.myId) this.ui.setHint(`🏃 Team relay: ${this.nameOf(shooter)} is shooting your team's ball`);
   }
@@ -518,7 +527,7 @@ export class GameClient {
     this.preShot = null;
     this.cam.snapTo(b.mesh.position);
     if (announce) { this.ui.bigToast('🏃 YOUR TURN', `the team ball is yours · ${this.strokes} stroke${this.strokes === 1 ? '' : 's'} so far`, 'good'); sfx.play('beep'); }
-    this.sendState(true);
+    this.showLP(this.lp); // also sends the state
   }
 
   /** The hole preview: along the route (cup → lane → tee) when the hole has one, else a plain arc. */
@@ -1183,7 +1192,8 @@ export class GameClient {
   /** The LP bar, plus the red danger screen when one more hit would devirtualize you. */
   showLP(lp, delta = 0) {
     this.ui.setLP(lp, delta);
-    const live = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking' && this.phase === 'hole';
+    // only while your own ball is in play (not holed, spectating, the hunter, or waiting for a relay turn)
+    const live = this.ball && this.ball.state !== 'holed' && this.ball.state !== 'sinking' && this.phase === 'hole' && !this.hunter && !this.relayWaiting;
     document.body.classList.toggle('lp-critical', !!live && lp > 0 && lp <= (this.maxHit ?? 20));
     this.sendState(true);
   }
@@ -1275,12 +1285,15 @@ export class GameClient {
   }
 
   // ---------- Telekinesis ----------
-  nudgeBall(pos) {
+  nudgeBall(pos, special = false) {
     const b = this.ball;
     const s = this.telekinesisSpot(pos);
     if (s.err) {
-      // the room already counted the special as used: hand it back
-      if (this.special?.id === 'telekinesis' && this.special.used) { this.special.used = false; this.renderInventory(); this.link.send({ t: 'specialBack' }); }
+      // it couldn't be done after all: hand back what was spent, the ★ special (the room already
+      // counted it as used) or the picked-up power-up
+      if (special) {
+        if (this.special?.id === 'telekinesis' && this.special.used) { this.special.used = false; this.renderInventory(); this.link.send({ t: 'specialBack', pu: 'telekinesis' }); }
+      } else this.addPowerup('telekinesis', 'refund');
       return this.ui.toast(s.err);
     }
     b.place(new THREE.Vector3(s.x, s.y + b.radius + 0.02, s.z));
@@ -1894,10 +1907,10 @@ export class GameClient {
     this.watchMonsters(dt);
     if (this.phase !== 'hole' || !this.course) return;
     const ts = this.effects.timeScale();
-    // keyboard camera
+    // keyboard camera (not while WASD / arrows steer XANA's Agent)
     const k = this.input;
-    const lr = (k.down('KeyA') || k.down('ArrowLeft') ? 1 : 0) - (k.down('KeyD') || k.down('ArrowRight') ? 1 : 0);
-    const ud = (k.down('KeyW') || k.down('ArrowUp') ? 1 : 0) - (k.down('KeyS') || k.down('ArrowDown') ? 1 : 0);
+    const lr = this.agentCtl ? 0 : (k.down('KeyA') || k.down('ArrowLeft') ? 1 : 0) - (k.down('KeyD') || k.down('ArrowRight') ? 1 : 0);
+    const ud = this.agentCtl ? 0 : (k.down('KeyW') || k.down('ArrowUp') ? 1 : 0) - (k.down('KeyS') || k.down('ArrowDown') ? 1 : 0);
     if (this.cam.mode === 'tactical') {
       if (lr || ud) this.cam.pan(-lr * dt * 700, -ud * dt * 700);
       const qe = (k.down('KeyQ') ? 1 : 0) - (k.down('KeyE') ? 1 : 0);
@@ -1946,6 +1959,7 @@ export class GameClient {
     this.weather?.frame(this.simTime, dt, this.ball.mesh.position);
     this.pickups.frame(this.simTime);
     this.ghosts.update(dt);
+    this.updateAgents(dt);
     this.updateCamera(dt);
     this.updateAimLine();
     this.updateScanner();
@@ -2016,6 +2030,17 @@ export class GameClient {
     this.simTime += dt;
   }
 
+  /** XANA's Agent: steer the monster I drive; ease the ones others drive toward the positions they send (15 Hz). */
+  updateAgents(dt) {
+    for (const mo of this.course.monsters) {
+      const ag = mo.agent, q = ag?.target;
+      if (!q || ag.by === this.myId) continue;
+      const k = 1 - Math.exp(-dt * 12), p = ag.pos;
+      ag.pos = { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: p.z + (q.z - p.z) * k, ry: q.ry ?? p.ry };
+    }
+    if (this.agentCtl) this.steerAgent(dt);
+  }
+
   updateCamera(dt) {
     if (this.towerTrip) {
       if (this.towerTrip.frame(dt)) return;
@@ -2052,16 +2077,10 @@ export class GameClient {
       if (u >= 1) { this.flyover = null; this.cam.snapTo(ball); }
       return;
     }
-    // someone else's Agent: ease toward the positions they send (15 Hz)
-    for (const mo of this.course.monsters) {
-      const ag = mo.agent, q = ag?.target;
-      if (!q || ag.by === this.myId) continue;
-      const k = 1 - Math.exp(-dt * 12), p = ag.pos;
-      ag.pos = { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: p.z + (q.z - p.z) * k, ry: q.ry ?? p.ry };
-    }
     let target = this.ball.mesh.position;
     const victim = this.possessing && this.ghosts.position(this.possessing.target);
-    if (this.agentCtl) { this.steerAgent(dt); const ap = this.agentCtl?.m.agent?.pos; if (ap) target = new THREE.Vector3(ap.x, ap.y + 0.3, ap.z); }
+    const ap = this.agentCtl?.m.agent?.pos;
+    if (ap) target = new THREE.Vector3(ap.x, ap.y + 0.3, ap.z);
     else if (victim) target = victim;
     else if (this.hunter) target = this.hunterFocus || new THREE.Vector3(this.course.cup.x, this.course.cup.y, this.course.cup.z);
     else if (this.ball.state === 'holed' || this.relayWaiting) {

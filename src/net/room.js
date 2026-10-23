@@ -2,7 +2,8 @@ import { HOLES, buildPlan } from '../holes/index.js';
 import { introDuration } from '../game/intro.js';
 import { randomSeed, RNG } from '../core/rng.js';
 import { signedArea } from '../course/geometry.js';
-import { POWERUPS, pickPowerup, pickupCategories, rollAny, CATEGORY_WEIGHTS } from '../powerups/registry.js';
+import { timeoutRoute } from '../holes/route.js';
+import { POWERUPS, SPECIALS, pickPowerup, pickupCategories, rollAny, CATEGORY_WEIGHTS } from '../powerups/registry.js';
 
 import { CHARACTER_COLORS, characterByColor } from '../game/characters.js';
 
@@ -61,11 +62,14 @@ export function pickupCount(def, players, level) {
 // shot that gets you closer lowers the penalty, so it always pays to keep playing until the end.
 export const TIMEOUT_CAP = 8;
 
-/** Track left from p ([x, y, z]) to the cup: along the hole's route (lane, old tee, cup) when it has one. */
+/**
+ * Track left from p ([x, y, z]) to the cup: along the hole's route when it has one (its lane, then the
+ * walkable path through the hole to the cup, `timeoutRoute`), else straight to the nearest cup.
+ */
 export function trackLeft(def, p) {
   const cups = [def.cup, ...(def.cups || [])];
   const straight = Math.min(...cups.map((c) => Math.hypot(p[0] - c[0], p[2] - c[2])));
-  const r = def.route;
+  const r = timeoutRoute(def);
   if (!r || r.length < 2) return straight;
   const seg = (i) => Math.hypot(r[i + 1][0] - r[i][0], r[i + 1][1] - r[i][1]);
   let best = Infinity, bi = 0, bk = 0;
@@ -157,7 +161,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, rewindUsed: p.rewindUsed || null, lp: p.lp ?? 100, hunter: !!p.hunter,
+      scores: p.scores, timeouts: p.timeouts || [], total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, rewindUsed: p.rewindUsed || null, lp: p.lp ?? 100, hunter: !!p.hunter,
       relay: this.relayed.has(p.id),
     }));
   }
@@ -271,7 +275,8 @@ export class HostRoom {
         if (this.phase !== 'hole') { this.sendTo(id, { t: 'refund', pu: msg.pu, special: !!msg.special, reason: 'Too late — the hole is over' }); return; }
         const def = POWERUPS[msg.pu];
         if (!def) return;
-        const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, seed: randomSeed(), at: this.elapsed() };
+        // `special`: it came from the ★ slot (so a failed Telekinesis knows which to hand back)
+        const fx = { t: 'fx', pu: msg.pu, from: id, target: msg.target ?? null, params: msg.params ?? {}, special: !!msg.special, seed: randomSeed(), at: this.elapsed() };
         if (def.kind === 'one') {
           const tgt = this.players.get(msg.target);
           const now = performance.now();
@@ -330,10 +335,13 @@ export class HostRoom {
         this.broadcast({ t: 'feed', text: `⏪ ${p.name} returned to the past` });
         return;
       }
-      case 'specialBack':
-        // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing)
-        if (p) p.specialUsed = null;
+      case 'specialBack': {
+        // the client couldn't carry out its special after all (e.g. Telekinesis lost its footing):
+        // only that player's own special, and only if it was used on this course
+        const sector = HOLES[this.plan[this.holeNo]]?.sector ?? null;
+        if (p && msg.pu && SPECIALS[characterByColor(p.color)?.id] === msg.pu && p.specialUsed === sector) p.specialUsed = null;
         return;
+      }
       case 'reflect': {
         // a Firewall bounced an effect: send it back at the original sender, once
         const f = msg.fx;
@@ -367,8 +375,9 @@ export class HostRoom {
     const name = String(msg.name || 'Player').slice(0, 16);
     const isHost = this.players.size === 0;
     const scores = this.plan.map((hi, i) => (i < this.holeNo ? timeoutScore(HOLES[hi], 0, null) : null));
+    const timeouts = this.plan.map((hi, i) => i < this.holeNo); // holes missed before joining count as timed out
     const trail = typeof msg.trail === 'string' ? msg.trail.slice(0, 16) : 'default';
-    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, holed: false, strokes: 0, pos: null, token, trail });
+    this.players.set(id, { id, name, color, host: isHost, connected: true, scores, timeouts, holed: false, strokes: 0, pos: null, token, trail });
     this.sendTo(id, { t: 'welcome', you: id, code: this.code, color });
     this.broadcastLobby();
     if (id !== 'host' && id !== 'solo') this.streamTracks(id);
@@ -432,7 +441,7 @@ export class HostRoom {
     this.mirror = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.rewindUsed = null; p.lp = 100; p.draft = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.timeouts = this.plan.map(() => false); p.out = false; p.outAt = null; p.specialUsed = null; p.rewindUsed = null; p.lp = 100; p.draft = null; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;
@@ -620,6 +629,7 @@ export class HostRoom {
       if (!p.holed) {
         this.stat(p.id, 'timeouts');
         p.scores[this.holeNo] = timeoutScore(def, p.strokes, p.pos);
+        (p.timeouts ||= [])[this.holeNo] = true; // the scoreboard marks the hole as timed out
         results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true, left: p.pos ? Math.round(trackLeft(def, p.pos)) : null });
       } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
     }

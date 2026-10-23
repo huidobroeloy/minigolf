@@ -49,6 +49,7 @@ const FLAVOUR = {
   volcano: { hazard: 'lava', prop: 'rock' },
   sea: { hazard: 'current', prop: 'neon' },
   network: { hazard: 'bumpers', prop: 'neon' },
+  cortex: { hazard: 'bumpers', prop: 'neon' }, // a block world: bumpers, never desert sand
   carthage: { hazard: 'bumpers', prop: 's5' },
   skid: { hazard: 'current', prop: 'neon' },
 };

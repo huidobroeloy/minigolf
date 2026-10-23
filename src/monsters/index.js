@@ -4,7 +4,7 @@ import { TEX } from '../course/themes.js';
 import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
-import { Gun, MineLayer, canTarget, landHit, seededRng, damageFor } from './attacks.js';
+import { Gun, MineLayer, canTarget, drivenByMe, landHit, seededRng, damageFor } from './attacks.js';
 import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook, ninjaLook, kalamarLook, guardianLook, kongreMouthLook, marabountaLook } from './looks.js';
 import { patrol } from '../holes/helpers.js';
 
@@ -183,7 +183,7 @@ class Megatank extends Monster {
     const enraged = t < (course.enrageUntil ?? -1);
     this.nextT = t + this.rng.range(9, 14) * (enraged ? 0.5 : 1);
     const ball = course.localBall;
-    if (!canTarget(course, ball, t, { allowResting: true })) return;
+    if (!canTarget(course, ball, t, { allowResting: true, monster: this })) return;
     const s = this.at(t), bp = ball.pos;
     if (Math.hypot(bp.x - s.x, bp.z - s.z) > this.BEAM_LEN - 1) return;
     this.aim = Math.atan2(bp.x - s.x, bp.z - s.z);
@@ -227,7 +227,8 @@ class Megatank extends Monster {
   force(ball, t, out) {
     if (ball.state !== 'idle' && ball.state !== 'moving') return;
     // running a ball over hurts (50 LP) and flings it aside; only the opened beam devirtualizes
-    if (!this.mode && !ball.mods.ghost) {
+    // not while XANA's Agent drives it: at(t + 0.1) jumps back to the patrol path in the last 0.1 s
+    if (!this.mode && !ball.mods.ghost && !(this.agent && t < this.agent.until)) {
       const s0 = this.at(t), s1 = this.at(t + 0.1);
       const rolling = Math.hypot(s1.x - s0.x, s1.z - s0.z) > 0.05;
       const bp = ball.pos;
@@ -238,7 +239,7 @@ class Megatank extends Monster {
         return;
       }
     }
-    if (this.mode !== 'beam' || this.hitDone) return;
+    if (this.mode !== 'beam' || this.hitDone || drivenByMe(this.ctx.course, this, t)) return;
     const s = this.origin || this.at(t);
     const p = ball.pos;
     const fx = Math.sin(this.aim), fz = Math.cos(this.aim);
@@ -534,7 +535,7 @@ class Scyphozoa extends Monster {
     const s = this.at(t);
     const p = ball.pos;
     if (Math.hypot(p.x - s.x, p.z - s.z) < 1.3 * this.k && p.y < s.y) {
-      if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+      if (!canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) return;
       // it grabs the ball, drops it back near the entrance and keeps one of your power-ups
       out.teleport = this.spec.grab;
       out.tpBy = 'scyphozoa';
@@ -792,7 +793,7 @@ class KolossusBoss extends Monster {
       if (!st && t > 1) {
         sfx.play('rumble');
         this.ctx.course.onShake?.(1.0);
-        if (ball && canTarget(this.ctx.course, ball, t, { allowResting: true }) && Math.hypot(ball.pos.x - sl.x, ball.pos.z - sl.z) < SLAM_R) {
+        if (ball && canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this }) && Math.hypot(ball.pos.x - sl.x, ball.pos.z - sl.z) < SLAM_R) {
           landHit(this.ctx.course, 'vaporize', t, 100);
         }
       }
@@ -841,7 +842,7 @@ class Shark extends Monster {
     const enraged = t < (course.enrageUntil ?? -1);
     this.nextT = t + this.rng.range(7, 11) * (enraged ? 0.5 : 1);
     const ball = course.localBall;
-    if (!canTarget(course, ball, t, { allowResting: true })) return;
+    if (!canTarget(course, ball, t, { allowResting: true, monster: this })) return;
     const s = super.at(t), bp = ball.pos;
     const dx = bp.x - s.x, dz = bp.z - s.z, d = Math.hypot(dx, dz);
     if (d > (this.spec.range ?? 5) || Math.abs(bp.y - s.y) > 1.5) return;
@@ -972,9 +973,11 @@ class Ninja extends Monster {
     if (this.dash || t < this.nextT || this.slashed) return;
     const course = this.ctx.course;
     this.nextT = t + this.rng.range(5, 8) * (t < (course.enrageUntil ?? -1) ? 0.5 : 1);
+    // no dash while XANA's Agent steers it (it stays where it's driven, so a slash would land unseen); its palm laser still fires
+    if (this.agent && t < this.agent.until) return;
     const ball = course.localBall;
-    if (!canTarget(course, ball, t, { allowResting: true })) return;
-    const s = super.at(t), bp = ball.pos;
+    if (!canTarget(course, ball, t, { allowResting: true, monster: this })) return;
+    const s = this.at(t), bp = ball.pos;
     const dx = bp.x - s.x, dz = bp.z - s.z, d = Math.hypot(dx, dz);
     if (d > 4 || d < 0.6 || Math.abs(bp.y - s.y) > 1.2) return;
     // stop just short of the ball, so the slash (not the body) is what hits
@@ -984,12 +987,12 @@ class Ninja extends Monster {
   }
   force(ball, t, out) {
     const d = this.dash;
-    if (!d || d.hit || t - d.t0 < 0.85 || t - d.t0 > 1.1 || this.slashed) return;
+    if (!d || d.hit || t - d.t0 < 0.85 || t - d.t0 > 1.1 || this.slashed || (this.agent && t < this.agent.until)) return;
     const p = ball.pos, dx = p.x - d.to.x, dz = p.z - d.to.z, dist = Math.hypot(dx, dz);
     if (dist > 0.95 || Math.abs(p.y - this.at(t).y) > 1.2) return;
     d.hit = true;
     out.x += (Math.sin(d.ry) + dx / (dist || 1)) * 200; out.z += (Math.cos(d.ry) + dz / (dist || 1)) * 200; out.y += 90; out.wake = true;
-    if (canTarget(this.ctx.course, ball, t, { allowResting: true })) landHit(this.ctx.course, 'ninja', t, damageFor('ninja', 'slash'));
+    if (canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) landHit(this.ctx.course, 'ninja', t, damageFor('ninja', 'slash'));
     sfx.play('laser');
   }
   frame(t) {
@@ -1042,7 +1045,7 @@ class Kalamar extends Monster {
       const p = ball.pos;
       if (Math.hypot(p.x - c.x, p.z - c.z) > c.r || Math.abs(p.y - c.y) > 1.5) continue;
       if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 3; out.z -= v.z * 3; } // thick ink: twice the drag
-      if (!c.touched) { c.touched = true; if (canTarget(this.ctx.course, ball, t, { allowResting: true })) landHit(this.ctx.course, 'ink', t, damageFor('kalamar', 'ink')); }
+      if (!c.touched) { c.touched = true; if (canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) landHit(this.ctx.course, 'ink', t, damageFor('kalamar', 'ink')); }
     }
   }
   frame(t) {
@@ -1074,7 +1077,7 @@ class Guardian extends Monster {
     if (t - this.lastT < 6 || ball.frozen || this.slashed) return;
     const s = this.at(t), p = ball.pos;
     if (Math.hypot(p.x - s.x, p.z - s.z) > this.r + ball.radius + 0.08 || Math.abs(p.y - s.y - this.r) > this.r + 0.3) return;
-    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) return;
     this.lastT = t;
     landHit(this.ctx.course, 'guardian', t, 0);
   }
@@ -1127,7 +1130,7 @@ class MagmaBombs extends Monster {
     const s = this.spot(k), p = ball.pos;
     const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
     if (d > 0.8 + ball.radius || Math.abs(p.y - ball.radius - s.y) > 0.8) return;
-    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) return;
     out.x += (dx / (d || 1)) * 260; out.z += (dz / (d || 1)) * 260; out.y += 140; out.wake = true;
     landHit(this.ctx.course, 'magma', t, damageFor('magma', 'bomb'));
   }
@@ -1212,7 +1215,7 @@ class RoamingKolossus extends Monster {
       const ball = this.ctx.course.localBall, s = this.at(t);
       if (!ball) return;
       const p = ball.pos, dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz);
-      if (d < STOMP_R + ball.radius && Math.abs(p.y - ball.radius - s.y) < 1 && canTarget(this.ctx.course, ball, t, { allowResting: true })) {
+      if (d < STOMP_R + ball.radius && Math.abs(p.y - ball.radius - s.y) < 1 && canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) {
         this.pendingKnock = { x: (dx / (d || 1)) * 320, z: (dz / (d || 1)) * 320 };
         landHit(this.ctx.course, 'stomp', t, damageFor('kolossusRoam', 'stomp'));
       }
@@ -1287,7 +1290,7 @@ class KongreMouth extends Monster {
     if (!p.open || this.slashed || this.lastK === p.k || (ball.state !== 'idle' && ball.state !== 'moving')) return;
     const s = this.at(t), b = ball.pos;
     if (Math.hypot(b.x - s.x, b.z - s.z) > 0.95 || Math.abs(b.y - ball.radius - s.y) > 0.6) return;
-    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) return;
     this.lastK = p.k;
     const sp = this.spitPoint(p.k, ball);
     if (!sp) return; // nowhere safe to spit it: it lets this one go
@@ -1347,7 +1350,7 @@ class Marabounta extends Monster {
     if (R0 < 0.1 || Math.hypot(p.x - s.x, p.z - s.z) > R0 || Math.abs(p.y - ball.radius - s.y) > 0.4) return;
     if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 4; out.z -= v.z * 4; return; }
     // it gnaws at a ball left in it
-    if (t - this.drainT >= 1 && canTarget(this.ctx.course, ball, t, { allowResting: true })) {
+    if (t - this.drainT >= 1 && canTarget(this.ctx.course, ball, t, { allowResting: true, monster: this })) {
       this.drainT = t;
       landHit(this.ctx.course, 'marabounta', t, damageFor('marabounta', 'drain'));
     }

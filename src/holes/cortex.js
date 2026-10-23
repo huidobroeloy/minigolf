@@ -76,7 +76,8 @@ export default [
     id: 'cortex-6', name: 'The Core', sector: 'cortex', par: 5, time: 170,
     tee: [0, 0, 0], cup: [0, 1.5, 26],
     parts: [
-      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 10], [-3, 10]], open: [2] },
+      // only the ramp's width (3) is open; walls on either side so an off-centre shot can't drop off the edge
+      { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 10], [1.5, 10], [-1.5, 10], [-3, 10]], open: [3] },
       { t: 'ramp', a: [0, 10], b: [0, 16], w: 3, ya: 0, yb: 1.5 },
       { t: 'floor', y: 1.5, poly: [[-3, 16], [-1.5, 16], [1.5, 16], [3, 16], [7, 19], [7, 27], [3, 30], [-3, 30], [-7, 27], [-7, 19]], open: [1] },
       // the Core: XANA's heart, a glowing sphere hanging over the last cup

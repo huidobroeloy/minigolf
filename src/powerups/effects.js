@@ -132,7 +132,7 @@ export class EffectManager {
         if (fx.pu === 'returnpast') { c.undoShot(); break; }
         if (fx.pu === 'firewall') { this.setShield(true); c.ui.bigToast('🛡️ Firewall up', 'the next attack on you bounces back', 'good'); break; }
         if (fx.pu === 'hopper') { this.cleanse(); break; }
-        if (fx.pu === 'telekinesis') { c.nudgeBall(fx.params.pos); break; }
+        if (fx.pu === 'telekinesis') { c.nudgeBall(fx.params.pos, fx.special); break; }
         if (fx.pu === 'coreshield') { c.coreShield = true; c.ui.bigToast('💠 Core Shield', 'the next monster hit on you does nothing', 'good'); sfx.play('use'); break; }
         this.pending[fx.pu] = true;
         this.applyBallMods();
