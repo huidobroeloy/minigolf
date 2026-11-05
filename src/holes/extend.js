@@ -233,8 +233,9 @@ export function extendHole(def, spec = {}) {
     parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
   }
 
-  // the sector's creeping hazard, on a leg of its own: the Marabounta (Forest, Sector 5) or Kongre's mouth (Sea)
-  const creep = { forest: 'marabounta', sector5: 'marabounta', carthage: 'marabounta', sea: 'kongreMouth', skid: 'kongreMouth' }[def.sector];
+  // the sector's creeping hazard, on a leg of its own: Kongre's mouth (Sea). (The Marabounta is now a whole-hole
+  // takeover event: holes/swarmEvent.js.)
+  const creep = { sea: 'kongreMouth', skid: 'kongreMouth' }[def.sector];
   const spare = segs.filter((s, i) => i > 0 && s.L > 4 && !legs.slice(0, want).includes(s));
   if (creep && spare.length) {
     const s = spare[spare.length - 1];

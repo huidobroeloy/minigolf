@@ -256,6 +256,19 @@ export class HostRoom {
         }
         if (this.golfers().every((q) => q.holed)) this.allHoledAt = performance.now();
         return;
+      case 'swarmed': {
+        // the Marabounta covered the hole before this player (or relay team) holed out: scored like a timeout
+        if (!p || this.phase !== 'hole' || p.holed || this.playoff) return;
+        const def = HOLES[this.plan[this.holeNo]];
+        for (const q of this.turns ? [...this.players.values()].filter((q) => q.team === p.team) : [p]) {
+          q.holed = true;
+          q.swarmed = true;
+          q.scores[this.holeNo] = timeoutScore(def, q.strokes, q.pos);
+        }
+        this.broadcast({ t: 'feed', text: `🌑 ${p.name} was swallowed by the Marabounta` });
+        if (this.golfers().every((q) => q.holed)) this.allHoledAt = performance.now();
+        return;
+      }
       case 'claim': {
         if (!p || this.phase !== 'hole') return;
         const pk = this.pickups[msg.pid];
@@ -568,7 +581,7 @@ export class HostRoom {
     const cats = pickupCategories(this.holeSeed, n, RNG);
     this.pickups = cats.map((cat) => ({ taken: null, cat }));
     this.lastRespawn = performance.now();
-    for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; p.dmg = 0; }
+    for (const p of this.players.values()) { p.holed = false; p.swarmed = false; p.strokes = 0; p.pos = null; p.dmg = 0; }
     // XANA hunter: a new hunter each course (whoever plays XANA goes first)
     if (newCourse) this.courseNo = (this.courseNo ?? -1) + 1;
     if (this.matchMode === 'hunter' && newCourse) {
@@ -623,7 +636,7 @@ export class HostRoom {
         this.stat(p.id, 'timeouts');
         p.scores[this.holeNo] = timeoutScore(def, p.strokes, p.pos);
         results.push({ id: p.id, score: p.scores[this.holeNo], timeout: true, left: p.pos ? Math.round(trackLeft(def, p.pos)) : null });
-      } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: false });
+      } else results.push({ id: p.id, score: p.scores[this.holeNo], timeout: !!p.swarmed });
     }
     // XANA hunter: the others' average, minus a bonus for the damage they took (max 3)
     const hunter = [...this.players.values()].find((p) => p.hunter && !p.out);
@@ -700,7 +713,7 @@ export class HostRoom {
     this.holeStart = performance.now();
     this.allHoledAt = null;
     this.pickups = [];
-    for (const p of this.players.values()) { p.holed = false; p.strokes = 0; p.pos = null; }
+    for (const p of this.players.values()) { p.holed = false; p.swarmed = false; p.strokes = 0; p.pos = null; }
     this.broadcast(this.holeMessage());
   }
 
