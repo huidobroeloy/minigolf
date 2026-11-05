@@ -139,8 +139,8 @@ Proposed fixes for PR C (and the openings). "Keep" means a deliberate game choic
 
 | # | System | Game today | Canon | Proposal |
 |---|---|---|---|---|
-| G1 | Falls into the Digital Sea | +1 stroke, LP unchanged | Digitized forever unless rematerialized | **Done (PR A):** devirtualized, Jérémie rematerializes you, LP 100, +1 |
-| G2 | Marabounta | A red vine patch on lanes, XANA's | Jérémie's dark spheres hunting XANA's monsters, Forest, stopped at its mother cell | **PR B:** takeover event with dark shape-shifting spheres, a floating mother cell as the seed, devirtualizes monsters and balls; Jérémie's lines ("my program's out of control") |
+| G1 ✅ | Falls into the Digital Sea | +1 stroke, LP unchanged | Digitized forever unless rematerialized | **Done (PR A):** devirtualized, Jérémie rematerializes you, LP 100, +1 |
+| G2 ✅ | Marabounta | A red vine patch on lanes, XANA's | Jérémie's dark spheres hunting XANA's monsters, Forest, stopped at its mother cell | **Done (PR B):** a whole-hole takeover of dark spheres from a floating mother cell; destroys monsters, devirtualizes balls; Jérémie's lines. (Not canon: it also runs in Mountain, Sector 5 and Carthage, the owner's choice) |
 | G3 | Guardians | Placed in Carthage and the Cortex | Orange spheres, Ice and Mountain only | Move them to Ice and Mountain holes; make them orange |
 | G4 | Kongre | A sweeping tentacle and a swallowing mouth | Eel-like monsters in groups, double eye laser | Replace with swimming Kongre eels (3–5, double laser) in the Sea; keep the "swallow" only as a Digital Sea current, not a monster |
 | G5 | Kalamar | Ink clouds that blind | 8 m squid with a drill and pincers | Drill-and-grip: it grabs the ball and drags it a short way (no ink) |

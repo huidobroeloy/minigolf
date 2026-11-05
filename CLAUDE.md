@@ -189,6 +189,14 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **XANA's Agent** (`agent` power-up): takes over a monster for 12 s (`m.agent`, `Monster.at` returns the steered
   position). The driver's client picks the monster index (`agentTargetAt`), steers it (`steerAgent`) and relays
   `agentPos` at 15 Hz; it fires twice as often and never at the driver. `AGENT_PROOF` lists monsters it can't take.
+- **Marabounta takeover** (`holes/swarmEvent.js` + `monsters/swarm.js`, canon: ep 36, Jérémie's runaway program):
+  `rollSwarm(def, seed)` gives 1 in 8 Forest/Mountain/Sector 5/Carthage holes (never with a boss) a swarm at 20 s.
+  The front runs along `def.route` from the mother cell (2 behind the tee) to the cup in `max(90, 0.6 × time)` s,
+  with a ragged ±1.2 edge; `covered(x, z, t)` is a pure function of the hole clock, so clients agree with no messages.
+  It cuts out every non-boss monster it reaches (`effects.cutOut`), slows rolling balls (zone decel ×2.5), and a ball
+  resting in it for 2 s is devirtualized (+1, LP 100) and rematerialized on the route just ahead of the front
+  (`spawnAhead`, never past cup − 2.5). Once the front passes the cup (`full`), anyone not holed sends `swarmed`: the
+  room scores them like a timeout (`timeoutScore`) and marks them done. Dark instanced icosahedra, red as they hatch.
 - **Boss events** (`holes/bossEvent.js`): `rollBoss(def, seed)` gives ~1 hole in 6 (not Fortune or the boss hole) a
   boss at 20 s: `kolossus` (`kolossusRoam`, stomp every 7–9 s, ring 1.5 s, r 2.6, 25 LP + knock, solid feet),
   `scyphozoa` (the Scyphozoa at `scale` 1.8, drops the ball at the old tee) or `megatanks` (3). `client.spawnBoss` walks it
@@ -205,9 +213,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   down; `laneMonster` builds it from the slot). Scyphozoa's grab uses `canTarget` and sets `out.tpBy`; the client's
   `onGrabbed` steals a random held power-up. `kongreMouth` (Sea lanes): seeded surfacing every 11–14 s, 1.2 s ring,
   2.4 s open; swallows (15 LP, `out.tpBy = 'kongre'`), the client hides/freezes the ball for 2 s (`client.swallowed`,
-  no aiming) and `spitOut` launches it from `spitPoint` (safe floor, never closer to a cup). `marabounta` (Forest and
-  Sector 5 lanes): seeded 26 s cycle (grow 8, hold 6, shrink 6, gone 6), drags rolling balls, 5 LP/s on a resting ball.
-  Both are placed by `extendHole` on a spare leg (not shooter slots, not re-rolled).
+  no aiming) and `spitOut` launches it from `spitPoint` (safe floor, never closer to a cup); placed by `extendHole` on a
+  spare leg (not shooter slots, not re-rolled). The `marabounta` monster class (seeded 26 s patch: drags rolling balls,
+  5 LP/s on a resting one) now only comes from the `maraseed` power-up.
   Never let a monster fire at a ball whose owner is aiming. Show-faithful kits: Kankrelat weak frequent laser; Hornet
   laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
   two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens

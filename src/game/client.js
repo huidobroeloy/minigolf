@@ -12,6 +12,8 @@ import { DAMAGE } from '../monsters/attacks.js';
 import { AGENT_PROOF } from '../monsters/index.js';
 import { rollMonsters } from '../holes/monsterRoll.js';
 import { rollBoss } from '../holes/bossEvent.js';
+import { rollSwarm } from '../holes/swarmEvent.js';
+import { MarabountaSwarm } from '../monsters/swarm.js';
 import { pointInPoly } from '../course/geometry.js';
 import { loop } from '../holes/helpers.js';
 import { RNG } from '../core/rng.js';
@@ -321,6 +323,7 @@ export class GameClient {
     this.emotes = [];
     if (this.virt) { this.scene.remove(this.virt.g); this.virt = null; }
     this.dissolve.clear();
+    if (this.swarm) { this.swarm.dispose(); this.swarm = null; }
     if (this.targeting) { this.targeting.dispose(); this.targeting = null; }
     this.endTrip(true);
     if (this.towerTrip) { this.towerTrip.dispose(); this.towerTrip = null; }
@@ -348,6 +351,10 @@ export class GameClient {
     this.def = def;
     // ~1 hole in 6: XANA sends a boss in after 20 s (the same boss, path and timing on every client)
     this.bossEvent = m.playoff ? null : rollBoss(def, m.seed ?? 1);
+    // ~1 hole in 8 in the green sectors: the Marabounta takes the whole hole over (never with a boss)
+    const swarmEv = m.playoff ? null : rollSwarm(def, m.seed ?? 1);
+    this.swarmT = 0;
+    this.swarmedOut = false;
     this.holeMsg = m;
     this.phase = 'hole';
     this.playoff = m.playoff || null;
@@ -355,6 +362,7 @@ export class GameClient {
     for (const p of m.players) this.upsertPlayer(p);
     this.physics = new Physics();
     this.course = buildCourse(def, this.physics, this.scene);
+    this.swarm = swarmEv ? new MarabountaSwarm(swarmEv, def, this.course, this.scene) : null;
     this.renderer.applyTheme(def.sector, this.course);
     music.play(def.sector);
     this.ball = new Ball(this.physics, this.scene, this.me.color);
@@ -611,7 +619,7 @@ export class GameClient {
         return out;
       },
       get decelMul() { return self.effects.decelMul(self.simTime); },
-      zoneDecel: (ball) => this.course.zoneDecel(ball) * this.effects.zoneDecel(ball, this.simTime),
+      zoneDecel: (ball) => this.course.zoneDecel(ball) * this.effects.zoneDecel(ball, this.simTime) * (this.swarm?.covered(ball.pos.x, ball.pos.z, this.simTime) ? 2.5 : 1),
       get stickyWalls() { return self.effects.stickyWalls; },
       get bumpers() { return self.effects.bumpers(self.course.bumpers); },
       onHole: () => this.onHoled(),
@@ -720,6 +728,86 @@ export class GameClient {
     this.cam.shake = Math.max(this.cam.shake, 0.8);
     this.ui.bigToast('⚠️ XANA ATTACK', `a ${name} is coming onto the green!`, 'bad');
     this.ui.comms.say('boss', { boss: name }, { force: true });
+  }
+
+  /** The Marabounta takeover: it hatches, cuts down XANA's monsters as it reaches them, and engulfs a ball left in it. */
+  stepSwarm(dt) {
+    const sw = this.swarm, t = this.simTime;
+    if (!sw.warned && t >= sw.ev.at - 2) {
+      sw.warned = true;
+      sfx.play('siren');
+      this.cam.shake = Math.max(this.cam.shake, 0.5);
+      this.ui.bigToast('🌑 MARABOUNTA', 'Jérémie’s program is out of control: beat it to the tower!', 'bad');
+      this.ui.comms.say('swarm', {}, { force: true });
+    }
+    if (t < sw.ev.at) return;
+    // it destroys XANA's monsters without discrimination (bosses shrug it off)
+    for (const m of this.course.monsters) {
+      if (m.slashed || m.spec?.boss || !m.model) continue;
+      const p = m.model.position;
+      if (sw.covered(p.x, p.z, t)) this.effects.cutOut(m, t, 9999, '#ff2a55');
+    }
+    const b = this.ball;
+    if (!b || this.falling || this.swarmedOut || this.relayWaiting || this.hunter) return;
+    if (b.state !== 'idle' && b.state !== 'moving') { this.swarmT = 0; return; }
+    if (sw.full(t)) return this.swarmOut();
+    // a rolling ball can cross it (slowly); one that sits in it for 2 s is engulfed
+    const p = b.pos, y = this.course.floorYAt(p.x, p.z);
+    const onIt = y != null && p.y - y < 0.5 && sw.covered(p.x, p.z, t);
+    if (!onIt || b.state === 'moving') { this.swarmT = 0; return; }
+    if (this.swarmT === 0) this.ui.toast('🌑 The Marabounta is engulfing your ball: shoot!');
+    this.swarmT += dt;
+    if (this.swarmT > 2) this.swarmDevirt();
+  }
+
+  /** Engulfed: devirtualized (+1, life points back to 100) and rematerialized just ahead of the tide. */
+  swarmDevirt() {
+    const b = this.ball, sw = this.swarm;
+    this.swarmT = 0;
+    const at = sw.spawnAhead(this.simTime);
+    if (!at) return this.swarmOut();
+    this.endTrip();
+    const fid = ++this.fallId;
+    this.falling = true;
+    this.dissolve.burst(b.mesh.position, '#ff2a55', { r: b.radius, n: 72 });
+    b.state = 'gone';
+    b.body.setEnabled(false);
+    b.mesh.visible = false;
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.cancelAim();
+    this.addStrokes(1);
+    this.lp = 100;
+    this.showLP(100);
+    this.stat('swarmed');
+    sfx.play('debuff');
+    this.ui.bigToast('🌑 ENGULFED', 'The Marabounta devirtualized you · Jérémie put you back ahead of it · +1', 'bad');
+    this.sendState(true);
+    setTimeout(() => {
+      if (this.ball !== b || fid !== this.fallId) return;
+      this.falling = false;
+      const p = sw.spawnAhead(this.simTime) || at;
+      b.place(new THREE.Vector3(p[0], p[1] + BALL_R + 0.02, p[2]));
+      this.cam.snapTo(b.mesh.position);
+      this.virtualize(b.mesh.position);
+      this.onRest();
+    }, 900);
+  }
+
+  /** The tide reached the tower before you: you're out of this hole (scored like running out of time). */
+  swarmOut() {
+    const b = this.ball;
+    if (this.swarmedOut || !b) return;
+    this.swarmedOut = true;
+    this.endTrip();
+    this.dissolve.burst(b.mesh.position, '#ff2a55', { r: b.radius, n: 72 });
+    this.sendState(true);
+    b.state = 'gone';
+    b.body.setEnabled(false);
+    b.mesh.visible = false;
+    if (this.shotInProgress) { this.shotInProgress = false; this.effects.onShotEnd(); }
+    this.cancelAim();
+    this.link.send({ t: 'swarmed' });
+    this.ui.bigToast('🌑 SWALLOWED', 'The Marabounta covered the whole sector before you reached the tower', 'bad');
   }
 
   /** Kongre spits the swallowed ball back out. */
@@ -1960,6 +2048,7 @@ export class GameClient {
     this.updateMarkers(this.simTime);
     this.course.tactical = this.cam.mode === 'tactical';
     this.dissolve.update(dt);
+    this.swarm?.frame(this.simTime, dt);
     if (this.virt) {
       const v = this.virt;
       v.t += dt;
@@ -1994,6 +2083,7 @@ export class GameClient {
     const ball = this.ball;
     if (this.swallowed && this.simTime >= this.swallowed.until) this.spitOut();
     if (this.bossEvent && !this.bossEvent.spawned && this.simTime >= this.bossEvent.at) this.spawnBoss();
+    if (this.swarm) this.stepSwarm(dt);
     if (this.hunter && this.hunter.energy < 100) {
       const before = Math.floor(this.hunter.energy / 5);
       this.hunter.energy = Math.min(100, this.hunter.energy + HUNTER_REGEN * dt);

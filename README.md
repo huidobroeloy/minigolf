@@ -121,7 +121,7 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 | Ninja | The Cortex: dashes at your ball and slashes it with its sword, or fires from its palm |
 | Guardian | A drifting prison sphere: roll into it and you're trapped for 4 s |
 | Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane. On the lanes its **mouth** surfaces (purple ring first): roll over it while it's open and it swallows your ball (15 LP) and spits it out 2 s later, never closer to the cup |
-| Marabounta | A dark creeping plant on Forest and Sector 5 lanes: it spreads, holds and recedes. It drags a rolling ball almost to a stop and gnaws 5 LP a second off a ball left in it |
+| Marabounta | Not XANA's: Jérémie's own program gone wild (season 2, ep 36). On about 1 hole in 8 in the Forest, Mountain, Sector 5 and Carthage, a tide of dark spheres hatches behind the tee 20 s in and rolls down the **whole hole** to the tower in about 90 s. It destroys XANA's monsters as it reaches them, slows your ball, and if your ball sits in it for 2 s you're devirtualized (+1, back to 100 LP) just ahead of it. If it reaches the tower before you, you're out of the hole (scored like running out of time). Race it! |
 | Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
 
 ### XANA boss events
