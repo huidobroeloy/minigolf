@@ -25,7 +25,8 @@ export function holeMap(def, { px = 18, title = true } = {}) {
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" font-family="sans-serif">`);
   out.push(`<rect width="100%" height="100%" fill="#0b1626"/>`);
   if (title) out.push(`<text x="8" y="22" fill="#e8f0ff" font-size="16" font-weight="700">${def.name} · par ${def.par} · ${def.time}s</text>`);
-  const ordered = [...def.parts].sort((a, b) => (a.y ?? 0) - (b.y ?? 0));
+  const level = (p) => (p.t === 'ramp' ? Math.max(p.ya, p.yb) + 0.01 : p.y ?? 0); // a ramp shows over the floor it climbs from
+  const ordered = [...def.parts].sort((a, b) => level(a) - level(b));
   for (const p of ordered) {
     const mine = op.has(p) ? ' stroke="#2ee6ff" stroke-width="2"' : ' stroke="#000" stroke-width="0.5"';
     if (p.t === 'floor' || p.t === 'crumble') {
