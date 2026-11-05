@@ -597,3 +597,7 @@ body.lp-critical #ui::before { content: ''; position: fixed; inset: 0; pointer-e
 .season-recent b { color: #fff; }
 .season .row { flex-wrap: wrap; }
 @media (max-width: 480px) { .season .scoreboard th, .season .scoreboard td { padding: 5px 4px; font-size: 13px; } }
+.season .holes td:first-child { text-align: left; white-space: normal; }
+.season details summary { cursor: pointer; margin: 4px 0; }
+.season .holes td:nth-child(2) { text-align: center; }
+.season .holes td, .season .holes th { font-size: 13px; padding: 4px 6px; }

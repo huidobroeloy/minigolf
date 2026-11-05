@@ -157,7 +157,7 @@ export class HostRoom {
   playerList() {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, host: p.host, connected: p.connected, trail: p.trail || 'default', team: p.team || null, out: !!p.out,
-      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, rewindUsed: p.rewindUsed || null, lp: p.lp ?? 100, hunter: !!p.hunter,
+      scores: p.scores, total: p.scores.reduce((a, b) => a + (b ?? 0), 0), holed: p.holed, strokes: p.strokes, stats: p.stats || {}, specialUsed: p.specialUsed || null, rewindUsed: p.rewindUsed || null, lp: p.lp ?? 100, hunter: !!p.hunter, falls: p.falls || [],
       relay: this.relayed.has(p.id),
     }));
   }
@@ -406,6 +406,8 @@ export class HostRoom {
     if (!p) return;
     p.stats ||= {};
     p.stats[k] = (p.stats[k] || 0) + n;
+    // falls per hole, for the season's hole table
+    if (k === 'falls' && this.holeNo >= 0) { p.falls ||= []; p.falls[this.holeNo] = (p.falls[this.holeNo] || 0) + n; }
   }
 
   /** 0 = leading … 1 = last (by total so far). Solo: middle of the road. */
@@ -432,7 +434,7 @@ export class HostRoom {
     this.mirror = null;
     this.plan = this.buildPlan();
     this.holeNo = -1;
-    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.rewindUsed = null; p.lp = 100; p.draft = null; }
+    for (const p of this.players.values()) { p.scores = this.plan.map(() => null); p.out = false; p.outAt = null; p.specialUsed = null; p.rewindUsed = null; p.lp = 100; p.draft = null; p.falls = []; }
     // drop players who left in a previous match
     for (const [id, p] of this.players) if (!p.connected) this.players.delete(id);
     this.endEarly = false;

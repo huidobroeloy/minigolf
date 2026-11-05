@@ -1,7 +1,7 @@
 # Lyoko Minigolf
 
 A browser minigolf party game for friends, inspired by Putt Party, with jokes and power-ups.
-It's a **Lyoko World Cup**: 9 courses of 6 holes (54 in all) across Code Lyoko's sectors, the Digital Sea, the Network and the Cortex, then a boss fight against the **Kolossus** at the Sector 5 Core. XANA's monsters shoot at you all the way.
+It's a **Lyoko World Cup**: 11 courses of 6 holes (66 in all) across Code Lyoko's sectors, the Digital Sea, the Network, the Cortex, Carthage and the Skidbladnir, then a boss fight against the **Kolossus** at the Sector 5 Core. XANA's monsters shoot at you all the way.
 Everyone plays at the same time, and there's no ball-to-ball contact.
 
 **Play:** https://huidobroeloy.github.io/minigolf/
@@ -88,7 +88,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
 - Standard minigolf scoring: the lowest total strokes wins.
 - **Life points:** you start each course with 100 LP and they **carry over** from hole to hole. Monster hits cost LP (a Kankrelat laser 10, a Krabe charged shot 40, …); some attacks devirtualize you outright (the Megatank beam, the Kolossus fist). When one more hit would finish you, the screen turns red. At 0 LP you're **devirtualized**: +1 stroke and back to your last safe spot with full LP.
 - The cup is a real hole: slow balls drop in, fast ones lip out. It's the entrance to a XANA tower (a glowing red shaft under the tower's hologram), and holing out takes you inside the tower to deactivate it.
-- Falling into the Digital Sea or touching lava costs **+1 stroke**, and you respawn where you last stopped.
+- Falling into the Digital Sea or touching lava **devirtualizes** you: +1 stroke, and Jérémie rematerializes you where you last stopped with your life points back to 100. (In the show a fall into the Digital Sea is far worse: you're lost unless Jérémie finds you.)
 - Each hole has a time limit that scales with its par. If time runs out, the hole scores **max(par, strokes so far) + 1 to 8**, depending on how much of the track you still had left: keep playing until the end, every shot closer counts.
 - **Ties are broken**, never shared:
   1. countback over the last 3 holes;
@@ -251,6 +251,9 @@ The host can skip it for everyone, or turn it off in Settings.
 At the end, the winner's ball escorts Aelita to the activated tower. She deactivates it, and a Return to the Past sends everyone to the podium.
 **If XANA wins**, it goes very differently. The tower's shield throws Aelita back, the Kolossus smashes the sector into the Digital Sea, and XANA escapes into the Network.
 Then the awards: Digital Sea Diver, XANA's Favourite Victim, Vaporized, Trigger Happy, Fortune's Fool, and more. Every hole also ends with a **Shot of the hole**.
+
+## The lore
+`docs/lore.md` is the game's Code Lyoko reference: sectors, towers, the Digital Sea, the heroes, every monster, with sources, plus a table of where the game differs from the show and why. Two courses aren't from the series itself: the Volcano Replika comes from the Wii game, and the Cortex (with Tyron's ninjas) from *Code Lyoko Évolution*.
 
 ## Stats and achievements
 Your device keeps your stats: holes, aces, towers deactivated, devirtualizations, monsters slashed, longest putt, wins and more. **Achievements** (menu → 🏆) unlock cosmetic **ball trails** (sparkle, rainbow, data, fire, XANA), which other players see too.
