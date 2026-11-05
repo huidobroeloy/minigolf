@@ -152,7 +152,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `season.js`: the season cabinet in the host's browser (`localStorage['lyokogolf.season']`). The client records
     each multiplayer `final` once (deduped by the room's `finalMsg.at`); players are keyed by trimmed lower-case name;
     finish points `FINISH_POINTS` 10/7/5/3/1; export/import (merge by `at`) and new season. `ui.showSeason()` from the
-    menu and the host's lobby (🏅 Season).
+    menu and the host's lobby (🏅 Season). Each match also keeps `ids`/`pars` and each player's `scores`/`falls` (the room
+    counts falls per hole in `p.falls`); `season.holeTable()` drives the Holes table (avg, ±par, spread, falls per hole),
+    the real-play check for hole redesigns.
 - **Other `src/fx` files:** `towerCup.js` (tower hologram over cups + the trip inside), `weather.js` (seeded per sector
   from the hole seed and the shared clock), `vehicles.js` (Overbike, Overboard, Overwing meshes), `dissolve.js`
   (`client.dissolve`: one InstancedMesh of additive pixel cubes; `burst(p, color, { r, reverse })` on devirtualize,
@@ -219,7 +221,13 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   otherwise the procedural style plays.
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.
 
+## Lore
+`docs/lore.md` is the canon reference (cited: codelyoko.fr, the French episode guide, Wikipedia; Fandom refuses
+automated reads). Check "from the show" changes against it, and keep its gap table up to date when a row is done.
+
 ## Rules the owner chose
+- **Every fall is a devirtualization** (sea, lava, void, black hole): +1 stroke, LP back to 100, rematerialized at the
+  last safe spot (`onFall`/`onSwallowed` in `client.js`).
 - **Time limit:** per hole (`time`, by par). Running out scores `max(par, strokes)` + 1…8 by the share of the track
   still left (`timeoutScore`/`trackLeft` in `room.js`, along `def.route`), so it always pays to keep playing.
 - **Ties:** never shared — countback (last 3, last hole), most aces, then a closest-to-the-pin playoff.

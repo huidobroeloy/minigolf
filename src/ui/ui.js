@@ -174,6 +174,10 @@ export class UI {
     const top = sum.table.slice(0, 8);
     const rec = sum.records;
     const recent = d.matches.slice(-6).reverse();
+    const holes = season.holeTable();
+    const f1 = (v) => (v > 0 ? '+' : '') + v.toFixed(1);
+    const holeRow = (r) => `<tr><td>${esc(HOLES.find((h) => h.id === r.id)?.name || r.id)}</td><td>${r.par}</td><td>${r.avg.toFixed(1)}</td><td class="${r.toPar > 0 ? 'over' : r.toPar < 0 ? 'under' : ''}">${f1(r.toPar)}</td><td>${r.spread.toFixed(1)}</td><td>${r.falls.toFixed(1)}</td><td>${r.plays}</td></tr>`;
+    const holeHead = '<tr><th>Hole</th><th>Par</th><th title="Average strokes">Avg</th><th title="Average to par">±Par</th><th title="Spread between players (std dev)">Spread</th><th title="Falls per player">Falls</th><th title="Times played">N</th></tr>';
     const o = this.overlay(`<div class="panel achievements season">
       <h2>🏅 Season ${d.no || 1} <small>since ${esc(day(d.started))} · ${sum.matches} match${sum.matches === 1 ? '' : 'es'}</small></h2>
       ${sum.matches ? `
@@ -193,6 +197,9 @@ export class UI {
         <tr><th></th><th></th>${top.map((c) => `<th title="${esc(c.name)}">${esc(c.name.slice(0, 3))}</th>`).join('')}</tr>
         ${top.map((r) => `<tr><td></td><td>${esc(r.name)}</td>${top.map((c) => (c === r ? '<td>·</td>' : `<td>${sum.h2h(r.name, c.name)}</td>`)).join('')}</tr>`).join('')}
       </table></div>` : ''}
+      ${holes.length ? `<h3>Holes <small class="small">(hardest first)</small></h3>
+      <div class="table-wrap scoreboard holes"><table>${holeHead}${(holes.length > 10 ? [...holes.slice(0, 5), ...holes.slice(-5)] : holes).map(holeRow).join('')}</table></div>
+      ${holes.length > 10 ? `<details><summary class="small">All ${holes.length} holes</summary><div class="table-wrap scoreboard holes"><table>${holeHead}${holes.map(holeRow).join('')}</table></div></details>` : ''}` : ''}
       <h3>Recent matches</h3>
       <div class="season-recent">${recent.map((m) => `<div><b>${esc(day(m.at))}</b> ${esc(fmtName(m.format))}${m.mode && m.mode !== 'ffa' ? ` · ${esc(m.mode)}` : ''} · 🏆 ${esc(m.players[0]?.name || '')} ${fmtTo(m.players[0] ? m.players[0].total - m.par : null)}</div>`).join('')}</div>`
       : '<div class="small">No matches yet. Every multiplayer match you host from this browser is added here when it finishes.</div>'}

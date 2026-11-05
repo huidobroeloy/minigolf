@@ -23,16 +23,19 @@ export const season = {
   save() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* storage blocked */ } },
 
   /** Record a finished match from the room's `final` message (host only, once per match). */
-  record(m, { format, pars }) {
+  record(m, { format, pars, ids = [] }) {
     const at = m.at || Date.now();
     if (this.data.matches.some((x) => x.at === at)) return false;
     const par = pars.reduce((a, b) => a + b, 0);
     this.data.matches.push({
       at, format: format || '', mode: m.mode || 'ffa', holes: pars.length, par,
       winner: m.teams ? m.teams[0]?.team : null,
+      // per hole: which hole and its par at the time, so redesigns can be compared before/after
+      ids, pars,
       players: m.standings.map((p, i) => ({
         name: String(p.name || '').trim(), color: p.color, rank: i + 1, total: p.total, team: p.team || null,
         aces: (p.scores || []).filter((s) => s === 1).length,
+        scores: p.scores || [], falls: p.falls || [],
       })),
     });
     this.save();
@@ -77,6 +80,29 @@ export const season = {
     }
     const table = [...rows.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins || a.played - b.played || (a.best ?? 99) - (b.best ?? 99));
     return { table, records, h2h: (a, b) => h2h.get(key(a) + '|' + key(b)) || 0, matches: this.data.matches.length };
+  },
+
+  /** Every hole played this season (by hole id): plays, average strokes and to-par, spread, falls per play. */
+  holeTable() {
+    const rows = new Map();
+    for (const m of this.data.matches) {
+      if (!m.ids?.length || m.mode === 'hunter') continue; // the hunter's hole scores aren't putts
+      m.ids.forEach((id, h) => {
+        if (!id) return;
+        const r = rows.get(id) || { id, n: 0, sum: 0, sumSq: 0, toPar: 0, falls: 0, par: m.pars[h] };
+        for (const p of m.players) {
+          const s = p.scores?.[h];
+          if (s == null) continue;
+          r.n++; r.sum += s; r.sumSq += s * s; r.toPar += s - m.pars[h]; r.falls += p.falls?.[h] || 0;
+        }
+        r.par = m.pars[h];
+        rows.set(id, r);
+      });
+    }
+    return [...rows.values()].filter((r) => r.n).map((r) => {
+      const avg = r.sum / r.n;
+      return { id: r.id, par: r.par, plays: r.n, avg, toPar: r.toPar / r.n, spread: Math.sqrt(Math.max(0, r.sumSq / r.n - avg * avg)), falls: r.falls / r.n };
+    }).sort((a, b) => b.toPar - a.toPar);
   },
 
   exportJSON() { return JSON.stringify(this.data, null, 1); },

@@ -285,7 +285,7 @@ export class GameClient {
         if (won) { stats.add('wins'); if (characterByColor(this.me.color)?.id === 'xana') stats.add('xanaWins'); }
         if ((m.plan?.length ?? 0) >= worldCupLength()) stats.add('worldcups');
         // the host's browser keeps the season: every finished multiplayer match
-        if (this.isHost && !this.lobby?.solo && m.standings.length > 1) season.record(m, { format: this.lobby?.settings?.course, pars: (m.plan || []).map((i) => HOLES[i]?.par ?? 0) });
+        if (this.isHost && !this.lobby?.solo && m.standings.length > 1) season.record(m, { format: this.lobby?.settings?.course, pars: (m.plan || []).map((i) => HOLES[i]?.par ?? 0), ids: (m.plan || []).map((i) => HOLES[i]?.id) });
         // XANA won: the catastrophic ending instead of the tower being saved
         const xanaWins = m.teams ? m.teams[0]?.team === 'xana' : characterByColor(winners[0]?.color)?.id === 'xana';
         const show = () => {
@@ -890,8 +890,9 @@ export class GameClient {
   onFall() {
     if (this.falling) return;
     if (this.mainLostDuringTrip()) return;
-    if (!this.lavaFall) this.ui.comms.say('fall');
-    this.dissolve.burst(this.ball.mesh.position, this.lavaFall ? '#ff7a1a' : '#3fc6ff', { r: this.ball.radius });
+    const lava = this.lavaFall;
+    if (!lava) this.ui.comms.say('fall');
+    this.dissolve.burst(this.ball.mesh.position, lava ? '#ff7a1a' : '#3fc6ff', { r: this.ball.radius });
     this.ball.mesh.visible = false;
     this.lavaFall = false;
     this.falling = true;
@@ -900,8 +901,10 @@ export class GameClient {
     this.ball.state = 'gone';
     this.ball.body.setEnabled(false);
     this.addStrokes(1);
+    this.lp = 100;
+    this.showLP(100);
     sfx.play('splash');
-    this.ui.bigToast('SPLASH!', 'Lost in the Digital Sea · +1', 'bad');
+    this.ui.bigToast('💥 DEVIRTUALIZED', `${lava ? 'Into the lava' : 'Lost in the Digital Sea'} · Jérémie rematerialized you · +1`, 'bad');
     this.sendState(true);
     const ball = this.ball;
     setTimeout(() => {
@@ -925,8 +928,11 @@ export class GameClient {
     this.ball.body.setEnabled(false);
     this.ball.mesh.visible = false;
     this.addStrokes(1);
+    this.lp = 100;
+    this.showLP(100);
     sfx.play('teleport');
-    this.ui.bigToast('🕳️ SWALLOWED', 'Black hole · +1', 'bad');
+    this.ui.bigToast('🕳️ SWALLOWED', 'Devirtualized by the black hole · +1', 'bad');
+    this.sendState(true);
     const ball = this.ball;
     setTimeout(() => {
       if (this.ball !== ball || fid !== this.fallId) return;
