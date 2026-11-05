@@ -41,6 +41,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__monsterAudit()`: rolls balls at every monster type and parks a resting ball in a walker's path (see Monsters)
   - `__greenAudit({ holes })`, `__puttAudit({ holes })`: how easy each hole is from where its lane joins it, and
     how guarded each cup is (putts from 3 units)
+  - `__holeMap(i | def)`: a top-down SVG of a hole, for design reviews
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
   `canvas.toBlob` → `fetch('/__shot?name=x', {method:'POST', body})`; the dev server saves `.local/shots/x.png`.
 - **Ace searches are CPU-heavy:** 3–4 tabs in parallel make the shell and ripgrep time out; use Read/Edit meanwhile.
@@ -110,7 +111,14 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     `core`, `BOSS_INDEX`): the World Cup is the 11 other courses + the boss (`worldCupLength()`, 67 holes). A new course
     needs entries in `themes.js`, `ROSTER`/`FLAVOUR` (`extend.js`), music `STYLES`, the sector map (`ui.sectorMap`) and the
     per-sector colour tables (`lyoko.js`, `builder.js` slow zones, `renderer.js` sea, `post.js` bloom).
-  - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`): every non-Fortune hole gets a winding
+  - **Hand-made openings** (replacing the generated lanes course by course, owner-reviewed): a hole's
+    `opening: { parts, tee, route, par, time }` is laid out behind its old tee floor (z below that floor's back edge,
+    which `attachOpening` in `extend.js` opens); `route` runs from the new tee to the old start; `par`/`time` add to the
+    hole's. `opening: false` keeps a hole on its own. Each design starts from a one-page brief (decision, risk and
+    reward, set piece, lore moment from `docs/lore.md`) and a review page of `__holeMap(i)` SVGs (`src/dev/holemap.js`:
+    top-down floors by height, ramps, zones, monster paths, tee, cup, route; the opening outlined in cyan).
+    Done: Desert (The Bridge, Megatank Crossing, Column Canyon, Tarantula Flats; desert-3 and desert-6 stand alone).
+  - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`), for the courses not yet redesigned: every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
     long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
     +1 par, +30 s). If a lane would cross the hole, the next shape (or mirror) that fits is used, falling back to the
