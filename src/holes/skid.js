@@ -7,6 +7,12 @@ import { rect, patrol, orbit, shuttle } from './helpers.js';
 const tow = (x0, z0, x1, z1, dir, speed = 2, y = 0) => ({ t: 'zone', kind: 'current', rect: [x0, z0, x1, z1], dir, speed, y });
 const coral = (x, z, r = 0.42, y = 0) => ({ t: 'bumper', p: [x, y, z], r, color: '#3fc6ff' });
 
+/** A pack of Kongre eels swimming back and forth between a and b, one row behind another (they hunt in packs of 3–5). */
+const kongres = (a, b, period, y = 0, n = 3, gap = 0.9) => Array.from({ length: n }, (_, k) => {
+  const o = (k - (n - 1) / 2) * gap;
+  return { t: 'monster', type: 'kongre', path: patrol([a[0], a[1] + o], [b[0], b[1] + o], period, y, k / n), phase: k / n };
+});
+
 export default [
   {
     id: 'skid-1', name: 'Skid Hangar', sector: 'skid', water: true, par: 3, time: 120,
@@ -53,10 +59,9 @@ export default [
       { t: 'floor', poly: rect(-4, -1.2, 4, 26), holes: [{ c: [-2.4, 25], r: 0.5 }, { c: [-0.7, 24.2], r: 0.4 }] },
       { t: 'wall', pts: [[-4, 8], [1.8, 8]], h: 0.6, thick: 0.4 },
       { t: 'wall', pts: [[-1.8, 16], [4, 16]], h: 0.6, thick: 0.4 },
-      // the channel bends past two of Kongre's mouths; a tentacle sweeps the middle
-      { t: 'monster', type: 'kongreMouth', p: [2.3, 0, 11.6] },
-      { t: 'monster', type: 'kongreMouth', p: [-2.3, 0, 19.6] },
-      { t: 'monster', type: 'kongre', p: [-5.4, 0, 12], len: 5, sweep: [0.4, 2.6], period: 9 },
+      // the channel bends past two packs of Kongre eels
+      ...kongres([0.4, 11.8], [3.6, 11.8], 5, 0, 3, 0.75),
+      ...kongres([-3.6, 19.8], [-0.4, 19.8], 5.5, 0, 3, 0.75),
       { t: 'monster', type: 'kalamar', path: patrol([-3, 4], [3, 4], 5.5) },
     ],
   },

@@ -1,8 +1,9 @@
 import { rect, patrol } from './helpers.js';
 
 // The World Cup finale: Sector 5's core, guarded by a Kolossus. Its fist slams the arena (watch the
-// red rings), and a XANA gate seals the corridor to the core. Hit the glowing ankle three times
-// with your ball: the giant kneels and the gate drops for 15 s.
+// red rings), and a XANA gate seals the corridor to the core. As in ep 94, hit both its weak points
+// with your ball within 8 s, the glowing eye low on its leg and its blade while it stays planted after
+// a slam: the giant kneels and the gate drops for 15 s.
 export default {
   id: 'core-boss', name: 'Sector 5 Core', sector: 'core', par: 5, time: 210, boss: true,
   tee: [0, 0, 0], cup: [0, 0, 38.5],

@@ -215,24 +215,28 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   **What you see is what you hit:** every visible monster has a collider that matches its model and follows it
   (bob and dive included, `kind: 'obst', monster: true` in the physics meta); a ball always bounces off it and a walking
   monster pushes a resting ball. By design: Krabe and Tarantula let a ball roll under the belly between their solid
-  legs, Scyphozoa's tentacles grab (its bell is solid), Kongre's arm sweeps with a force. `__monsterAudit()` must report
-  `ok` for every type.
+  legs, Scyphozoa's tentacles grab (its bell is solid). `__monsterAudit()` must report `ok` for every type.
   Show upgrades: lane Creepers are `WallCreeper`s (`spec.wall`: patrol along the lane's side wall top, laser/charged
   down; `laneMonster` builds it from the slot). Scyphozoa's grab uses `canTarget` and sets `out.tpBy`; the client's
-  `onGrabbed` steals a random held power-up. `kongreMouth` (Sea lanes): seeded surfacing every 11–14 s, 1.2 s ring,
-  2.4 s open; swallows (15 LP, `out.tpBy = 'kongre'`), the client hides/freezes the ball for 2 s (`client.swallowed`,
-  no aiming) and `spitOut` launches it from `spitPoint` (safe floor, never closer to a cup); placed by `extendHole` on a
-  spare leg (not shooter slots, not re-rolled). The `marabounta` monster class (seeded 26 s patch: drags rolling balls,
+  `onGrabbed` steals a random held power-up. The `marabounta` monster class (seeded 26 s patch: drags rolling balls,
   5 LP/s on a resting one) now only comes from the `maraseed` power-up.
-  Never let a monster fire at a ball whose owner is aiming. Show-faithful kits: Kankrelat weak frequent laser; Hornet
-  laser/charged/acid puddle (slows + venom)/dive strafe; Blok laser/ice freeze/fire ring (40)/rapid; Krabe laser/charged,
-  two together fire the combined beam (60, no longer a devirtualization); Tarantula leads rapid volleys; Megatank opens
-  for the blade beam (the only devirtualizing attack left besides grabs/fists), running a ball over costs 50; Manta laser
-  strafes and mines (30 LP + blast, every 12–18 s, max 2 live), and its wing gust only pushes moving balls (≥0.6), one
-  0.3 s gust per pass; Shark laser, ram and slow homing torpedoes; Ninja
-  (Cortex) dash + sword slash (25) and palm laser; Kalamar (Sea) laser and ink clouds that blind and slow; Guardian a
-  drifting prison sphere (4 s trap). **XANA-eye weak point:** a ball faster than `WEAK_SPEED` (6) hitting a monster
-  devirtualizes it for 20 s (+5 LP) via `effects.cutOut` (client.js `checkWeakPoints`, not bosses/Kongre/Guardians).
+  Never let a monster fire at a ball whose owner is aiming. Show-faithful kits (`docs/lore.md`; `DAMAGE` follows
+  codelyoko.fr's numbers): Kankrelat weak frequent laser; Hornet laser (20)/charged/acid puddle (slows + venom)/dive
+  strafe; Blok laser/ice freeze/fire ring (60)/rapid; Krabe laser (40)/charged (60), two together fire the combined beam
+  (60); Tarantula leads rapid volleys (25); Creeper laser (40); Megatank opens for the blade beam (the only devirtualizing
+  attack left besides grabs/fists), running a ball over costs 50; Manta laser strafes and mines (60 LP + blast, every
+  12–18 s, max 2 live), and its wing gust only pushes moving balls (≥0.6), one 0.3 s gust per pass; Shark laser, ram and
+  slow homing torpedoes; **Kongre** (Sea/Skid, also in their rosters): eels in packs of 3 (`kongres(a, b, period, y, n)`
+  in `sea.js`/`skid.js`), double eye laser (burst 2, 20 each); **Kalamar**: laser, and its pincers grip a ball that gets
+  in front of it (`claws(t)`), drag it 1.6 s and fling it (15 LP, once per 9 s); Ninja (Cortex) dash + sword slash (25)
+  and palm laser; **Guardian**: an orange prison sphere (4 s trap), only on Ice and Mountain holes (ice-5, mountain-6).
+  **XANA-eye weak point:** a ball faster than `WEAK_SPEED` (6) hitting a monster devirtualizes it for 20 s (+5 LP) via
+  `effects.cutOut` (client.js `checkWeakPoints`, not bosses/Guardians), but only from the side its eye is on
+  (`EYE_SIDE`: front for most, the back for the Krabe; a toast says where to aim); a Creeper dies to any hit (≥1.5).
+  **Kolossus finale** (`KolossusBoss`): two weak points, as in ep 94: the glowing eye low on its leg (`ankle`) and its
+  blade, planted and glowing for `PLANT` 3.5 s after each slam (`planted(t)`, its own collider); hit both within
+  `BOSS_BOTH` 8 s and it kneels for 15 s.
+- **Odd's shield** (season 2+): Odd's ball blocks the first monster hit of each course (`client.oddShield`, HUD chip 🛡️).
 - **Music** (`src/core/music.js` + `soundtrack.js`): a slot (intro, menu, levels, finale, xana) with a loaded file plays it;
   otherwise the procedural style plays.
 - **UI** (`src/ui/ui.js`, `css/style.css`): arcade character select, VS intro, HUD, awards.

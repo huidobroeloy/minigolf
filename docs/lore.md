@@ -169,18 +169,18 @@ Proposed fixes for PR C (and the openings). "Keep" means a deliberate game choic
 |---|---|---|---|---|
 | G1 ✅ | Falls into the Digital Sea | +1 stroke, LP unchanged | Digitized forever unless rematerialized | **Done (PR A):** devirtualized, Jérémie rematerializes you, LP 100, +1 |
 | G2 ✅ | Marabounta | A red vine patch on lanes, XANA's | Jérémie's dark spheres hunting XANA's monsters, Forest, stopped at its mother cell | **Done (PR B):** a whole-hole takeover of dark spheres from a floating mother cell; destroys monsters, devirtualizes balls; Jérémie's lines. (Not canon: it also runs in Mountain, Sector 5 and Carthage, the owner's choice) |
-| G3 | Guardians | Placed in Carthage and the Cortex | Orange spheres, Ice and Mountain only | Move them to Ice and Mountain holes; make them orange |
-| G4 | Kongre | A sweeping tentacle and a swallowing mouth | Eel-like monsters in groups, double eye laser | Replace with swimming Kongre eels (3–5, double laser) in the Sea; keep the "swallow" only as a Digital Sea current, not a monster |
-| G5 | Kalamar | Ink clouds that blind | 8 m squid with a drill and pincers | Drill-and-grip: it grabs the ball and drags it a short way (no ink) |
-| G6 | Damage (`DAMAGE`) | Hornet 15, Tarantula 15, Creeper 20, Krabe 20/40, Blok fire ring 40, Manta mine 30 | Hornet 20, Tarantula ~30, Creeper 40, Krabe ~40/80, fire ring and Manta mine devirtualize | Hornet 20, Tarantula 25, Creeper 40, Krabe laser 40 / charged 60; fire ring and Manta mine 60 (below a one-shot, for fun) |
-| G7 | Creeper | Wall crawler, 20 LP laser | Climbs walls and ceilings, 40 laser, dies to any hit | Damage 40; any ball hit (no speed needed) devirtualizes it |
-| G8 | Weak point | Any monster hit faster than 6 | The Eye of XANA on a specific spot | Keep the speed rule but only when the ball hits the side the eye is on (forehead, back, nose…) |
-| G9 | Kolossus | Finale boss + roaming boss event | Magma giant, blade arm, head eye + arm weak point | Check the model against canon (magma body, blade left arm); finale needs both weak points hit |
-| G10 | Odd's special | Laser Arrow | Laser arrows; shield from season 2 | Keep Laser Arrow; add the shield as Odd's second, shorter special (blocks one monster hit) |
+| G3 ✅ | Guardians | Placed in Carthage and the Cortex | Orange spheres, Ice and Mountain only | Move them to Ice and Mountain holes; make them orange |
+| G4 ✅ | Kongre | A sweeping tentacle and a swallowing mouth | Eel-like monsters in groups, double eye laser | Replace with swimming Kongre eels (3–5, double laser) in the Sea; keep the "swallow" only as a Digital Sea current, not a monster |
+| G5 ✅ | Kalamar | Ink clouds that blind | 8 m squid with a drill and pincers | Drill-and-grip: it grabs the ball and drags it a short way (no ink) |
+| G6 ✅ | Damage (`DAMAGE`) | Hornet 15, Tarantula 15, Creeper 20, Krabe 20/40, Blok fire ring 40, Manta mine 30 | Hornet 20, Tarantula ~30, Creeper 40, Krabe ~40/80, fire ring and Manta mine devirtualize | Hornet 20, Tarantula 25, Creeper 40, Krabe laser 40 / charged 60; fire ring and Manta mine 60 (below a one-shot, for fun) |
+| G7 ✅ | Creeper | Wall crawler, 20 LP laser | Climbs walls and ceilings, 40 laser, dies to any hit | Damage 40; any ball hit (no speed needed) devirtualizes it |
+| G8 ✅ | Weak point | Any monster hit faster than 6 | The Eye of XANA on a specific spot | Keep the speed rule but only when the ball hits the side the eye is on (forehead, back, nose…) |
+| G9 ✅ | Kolossus | Finale boss + roaming boss event | Magma giant, blade arm, head eye + arm weak point | Check the model against canon (magma body, blade left arm); finale needs both weak points hit |
+| G10 ✅ | Odd's special | Laser Arrow | Laser arrows; shield from season 2 | **Done:** Odd's shield blocks the first monster hit of each course (passive, beside his Laser Arrow) |
 | G11 | Aelita's special | Wings | Wings (season 4), energy fields, Creativity | Keep Wings; Creativity is already a power-up |
-| G12 | Return to the Past | Free once per course | Overusing it makes XANA stronger (ep 30) | After a rewind, monsters on that hole fire 25% more often at you |
-| G13 | Volcano Replika course | A volcano course | Volcano only exists in the Wii game | Keep (owner's course); say so in the README |
-| G14 | The Cortex course and Ninjas | A course with Tyron's ninjas | From Évolution, non-canon | Keep; say so in the README |
+| G12 ✗ (owner declined) | Return to the Past | Free once per course | Overusing it makes XANA stronger (ep 30) | After a rewind, monsters on that hole fire 25% more often at you |
+| G13 ✅ | Volcano Replika course | A volcano course | Volcano only exists in the Wii game | Keep (owner's course); say so in the README |
+| G14 ✅ | The Cortex course and Ninjas | A course with Tyron's ninjas | From Évolution, non-canon | Keep; say so in the README |
 | G15 | Sector 5 vs Carthage courses | Two separate courses | The same place | Sector 5 course = the way in (Transporter, Arena, countdown labyrinth, Key); Carthage = the Celestial Dome, the elevator, the Core room's jaws, the Skid garage. Done through the openings (D5, D10) |
 | G16 | Towers | Red XANA tower cup, white when holed | Red = XANA, white = neutral after ep 52 | Already right |
 | G17 | Cups at towers | — | Towers are the goal of every mission | Already right (every cup is a tower) |

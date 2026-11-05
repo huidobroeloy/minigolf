@@ -102,7 +102,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
 
 Every monster is solid: your ball bounces off whatever you can see (it rolls under a Krabe's or Tarantula's belly, between the legs), and a walking monster shoves a resting ball aside.
 Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
-**The XANA eye is their weak point:** ram a monster with a fast ball and it's devirtualized for 20 s (+5 LP). Not the Kolossus, Kongre or Guardians.
+**The XANA eye is their weak point:** ram a monster with a fast ball **on the side its eye is on** (the front for most, the back for a Krabe) and it's devirtualized for 20 s (+5 LP). Creepers fall to any hit. Not the Kolossus or Guardians.
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
 | Monster | What it does |
@@ -113,14 +113,14 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 | Krabe | Laser or charged laser; two Krabes together fire the combined beam (60 LP) |
 | Megatank | Opens up and fires its flat blade of light along a line: it **vaporizes** your ball (+1). Being run over costs 50 LP |
 | Tarantula | Rears up and fires rapid volleys that lead your ball |
-| Creeper | Pops out of the floor and fires; on the lanes it climbs the side walls and fires its laser down at you |
+| Creeper | Pops out of the floor and fires (40 LP); on the lanes it climbs the side walls and fires its laser down at you. Any hit destroys it |
 | Manta | Laser strafes, and the odd mine: 30 LP and a blast that throws your ball |
 | Scyphozoa | Grabs your ball, drops it back, **steals one of your power-ups** and XANA-fies your next shot (inverted controls) |
 | Shark | Cruises its lane, rams you, and fires slow torpedoes that follow you |
-| Kalamar | Digital Sea: lasers, and ink clouds that hide the track and slow you down |
+| Kalamar | Digital Sea: lasers, and if your ball gets in front of it, its pincers grip it, drag it along and fling it off (15 LP) |
 | Ninja | The Cortex: dashes at your ball and slashes it with its sword, or fires from its palm |
-| Guardian | A drifting prison sphere: roll into it and you're trapped for 4 s |
-| Kongre | Its giant tentacles rise out of the Digital Sea and sweep the lane. On the lanes its **mouth** surfaces (purple ring first): roll over it while it's open and it swallows your ball (15 LP) and spits it out 2 s later, never closer to the cup |
+| Guardian | An orange prison sphere drifting over the Ice and Mountain sectors: roll into it and you're trapped for 4 s |
+| Kongre | Digital Sea and the Skid: eels that swim in packs of three and fire a double laser from their eyes |
 | Marabounta | Not XANA's: Jérémie's own program gone wild (season 2, ep 36). On about 1 hole in 8 in the Forest, Mountain, Sector 5 and Carthage, a tide of dark spheres hatches behind the tee 20 s in and rolls down the **whole hole** to the tower in about 90 s. It destroys XANA's monsters as it reaches them, slows your ball, and if your ball sits in it for 2 s you're devirtualized (+1, back to 100 LP) just ahead of it. If it reaches the tower before you, you're out of the hole (scored like running out of time). Race it! |
 | Kolossus | Smashes the Digital Sea in the background, and guards the Sector 5 Core in the finale |
 
@@ -128,7 +128,7 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 On about one hole in six, a siren goes off ~20 s in and XANA sends a boss onto the green: a **roaming Kolossus** (a red ring marks where it stamps, 25 LP and a shockwave), a **giant Scyphozoa** (it grabs balls, drops them back at the start of the hole and keeps a power-up) or a **Megatank swarm** (three of them). You can't beat it: keep clear and finish the hole. It never comes within a few units of the cup, Activate Tower calms it, and everyone gets the same boss at the same moment.
 
 ### The Kolossus finale
-The **Sector 5 Core** hole is a boss fight. The Kolossus stands at the edge of the arena and slams its fist down every 7 s: a red ring shrinks on the floor for 2 s, then the fist lands, and a ball under it is devirtualized. A XANA gate seals the corridor to the core cup. Hit the Kolossus's **glowing ankle** three times with your ball: it kneels, and the gate drops for 15 s (on your screen; everyone has to stun it themselves).
+The **Sector 5 Core** hole is a boss fight. The Kolossus stands at the edge of the arena and slams its fist down every 7 s: a red ring shrinks on the floor for 2 s, then the fist lands, and a ball under it is devirtualized. A XANA gate seals the corridor to the core cup. As in the show, it has two weak points that must be hit together: the **glowing eye** low on its leg, and its **blade**, which stays planted and glowing for 3.5 s after each slam. Hit both with your ball within 8 s: it kneels, and the gate drops for 15 s (on your screen; everyone has to stun it themselves).
 
 ### XANA attacks
 About one hole in three, XANA attacks everyone at once for 20 s, with an alarm and a red vignette:
@@ -140,7 +140,7 @@ About one hole in three, XANA attacks everyone at once for 20 s, with an alarm a
 ## Power-ups
 You can carry up to 3. Pick them up from mini Lyoko towers; if your slots are full, the new one is discarded.
 
-**Special moves:** your character's own move is in the gold ★ slot, free once per course: Ulrich **Super Sprint**, Odd **Laser Arrow**, Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
+**Special moves:** your character's own move is in the gold ★ slot, free once per course: Ulrich **Super Sprint**, Odd **Laser Arrow** (and his shield, which blocks the first monster hit of each course), Yumi **Telekinesis**, Aelita **Angel Wings**, William **Zweihänder**, Jérémie **Scanner**, Franz Hopper **Hopper's Light**, XANA **Activate Tower**. Those items are rarer as pickups.
 The host sets the amount (**Off / Few / Normal / Chaos**), the **power-up set** (all of them, or **Lyoko only**: just the ones from the show) and the **power-up mode**:
 - **Pickups:** grab them from the mini towers (the classic).
 - **Draft:** at the start of each course, Jérémie sends you a program: pick 1 of 3 (pickups still spawn).

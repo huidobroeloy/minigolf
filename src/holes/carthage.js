@@ -33,7 +33,7 @@ export default [
       { t: 'mover', kind: 'obst', s: [3.6, 0.4, 0.3], path: spin(-1.6, 0.2, 8.5, 5), look: 's5' },
       { t: 'mover', kind: 'obst', s: [3.6, 0.4, 0.3], path: spin(1.6, 0.2, 14, 4.4, 0.3), look: 's5' },
       { t: 'bumper', p: [2.8, 0, 5], r: 0.4 }, { t: 'bumper', p: [-3, 0, 17], r: 0.4 },
-      { t: 'monster', type: 'guardian', path: patrol([-3.6, 17.8], [3.6, 17.8], 7) },
+      { t: 'monster', type: 'blok', path: patrol([-3.6, 17.8], [3.6, 17.8], 7) },
       { t: 'monster', type: 'creeper', p: [-3.2, 0, 11.5], period: 4.4, phase: 0.2 },
     ],
   },
@@ -67,14 +67,15 @@ export default [
     ],
   },
   {
-    id: 'carthage-5', name: 'Guardian Vault', sector: 'carthage', par: 3, time: 120,
+    id: 'carthage-5', name: 'The Key Vault', sector: 'carthage', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 0, 17],
     parts: [
       { t: 'floor', poly: rect(-4.5, -1.2, 4.5, 20), holes: [{ c: [0, 18.5], r: 0.5 }, { c: [-1.6, 17.6], r: 0.42 }, { c: [1.6, 17.6], r: 0.42 }] },
       { t: 'bumper', p: [-2.2, 0, 6], r: 0.42 }, { t: 'bumper', p: [2.2, 0, 6], r: 0.42 }, { t: 'bumper', p: [0, 0, 11], r: 0.36 },
-      // the vault's keepers: prison spheres drifting across your way
-      { t: 'monster', type: 'guardian', path: orbit([0, 9.5], 2.6, 10) },
-      { t: 'monster', type: 'guardian', path: patrol([-3.6, 14.2], [3.6, 14.2], 6.5, 0, 0.4), r: 0.7 },
+      // the Key's room: Creepers guard it (ep 34), a Blok circles the middle
+      { t: 'monster', type: 'blok', path: orbit([0, 9.5], 2.6, 10) },
+      { t: 'monster', type: 'creeper', p: [-1.9, 0, 14.2], period: 4.6, phase: 0.1 },
+      { t: 'monster', type: 'creeper', p: [1.9, 0, 14.2], period: 4.6, phase: 0.6 },
       { t: 'monster', type: 'kankrelat', path: patrol([-3.6, 3], [3.6, 3], 4.5) },
     ],
   },

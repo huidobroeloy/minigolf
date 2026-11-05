@@ -10,14 +10,14 @@ import { rect, patrol } from '../holes/helpers.js';
 
 // one spec per type; `walk` gives it a patrol for the resting-ball test
 const GROUND = {
-  kankrelat: {}, blok: {}, megatank: {}, ninja: {}, kalamar: {}, shark: {}, tumbleweed: {}, drone: { y: 0.5 },
+  kankrelat: {}, blok: {}, megatank: {}, ninja: {}, kalamar: {}, shark: {}, kongre: {}, tumbleweed: {}, drone: { y: 0.5 },
   krabe: { under: true }, tarantula: { under: true }, // tall walkers: roll under the belly between the solid legs
   guardian: { r: 0.8 },
   creeper: { period: 4, phase: 0.15, still: true }, boulder: { size: 0.6, y: 0.6 },
 };
 const FLYERS = { hornet: { y: 2.3, aim: 'ball' }, manta: { y: 1.2, size: 0.8 }, scyphozoa: { y: 2.6, grab: [0, 0.3, -6], grabs: true } }; // its tentacles grab instead of bouncing
 // not tested: background giants, sweeping arms (force-based by design), bombs without a body, the boss hole
-const SKIP = ['kolossus', 'kongre', 'magma', 'kolossusBoss', 'kongreMouth', 'marabounta']; // the mouth swallows, the vines are a carpet
+const SKIP = ['kolossus', 'magma', 'kolossusBoss', 'marabounta']; // the vines are a carpet
 
 const floorDef = (monster) => ({
   id: 'audit', name: 'audit', sector: 'sector5', par: 3, tee: [0, 0, -7], cup: [7, 0, 7],

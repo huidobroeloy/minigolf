@@ -469,20 +469,30 @@ export function sharkLook() {
   return { g, body, tail, tfin, eye: eyeM };
 }
 
-// ---------- Kongre (Digital Sea): one of its giant tentacles, reaching up out of the deep ----------
-export function kongreArmLook(len) {
+// ---------- Kongre (Digital Sea): an eel of XANA's that swims in packs, two red eyes on its snout ----------
+export function kongreEelLook() {
   const g = new THREE.Group();
-  const mat = std('#3a2a63', { emissive: '#7a3cff', emissiveIntensity: 0.25, roughness: 0.4 });
-  const sucker = std('#e0b8ff', { emissive: '#ff6fe0', emissiveIntensity: 0.4 });
-  // lies along +z from the pivot, thinning to a curled tip
-  const n = 10;
-  for (let i = 0; i < n; i++) {
-    const r = 0.42 - (i / n) * 0.3;
-    add(g, new THREE.SphereGeometry(r, 12, 8), mat, [0, r * 0.7, (i + 0.5) * (len / n)], [0, 0, 0], [1, 0.8, 1.15]);
-    if (i % 2 === 0) for (const s of [-1, 1]) add(g, new THREE.SphereGeometry(r * 0.25, 8, 6), sucker, [s * r * 0.75, r * 0.5, (i + 0.5) * (len / n)]);
+  const skin = std('#26385f', { emissive: '#14245a', emissiveIntensity: 0.4, roughness: 0.3, metalness: 0.25 });
+  const fin = std('#6fd0ff', { emissive: '#2a8cff', emissiveIntensity: 0.6 });
+  const glow = std('#ff2a2a', { emissive: '#ff2a2a', emissiveIntensity: 1.2 });
+  // the body: a chain of segments from the snout (+z) to the tail, each a joint we can wave
+  const segs = [];
+  let parent = g;
+  for (let i = 0; i < 8; i++) {
+    const j = new THREE.Group();
+    j.position.z = i === 0 ? 0.42 : -0.17;
+    parent.add(j);
+    const r = 0.2 - i * 0.016;
+    add(j, new THREE.SphereGeometry(r, 12, 8), skin, [0, 0, 0], [0, 0, 0], [1, 0.82, 1.45]);
+    if (i % 2 === 1) add(j, new THREE.ConeGeometry(0.06, 0.16, 4), fin, [0, r * 0.8, 0], [0, 0, 0], [0.4, 1, 1]);
+    segs.push(j);
+    parent = j;
   }
-  const tip = add(g, new THREE.TorusGeometry(0.16, 0.06, 6, 12, Math.PI * 1.4), mat, [0, 0.25, len + 0.1], [0, Math.PI / 2, 0]);
-  return { g, mat, tip };
+  add(segs[7], new THREE.ConeGeometry(0.14, 0.3, 4), fin, [0, 0, -0.18], [-Math.PI / 2, 0, 0], [0.25, 1, 1]);
+  // the double laser comes from its two eyes; the Eye of XANA sits on its brow
+  for (const sx of [-1, 1]) add(segs[0], new THREE.SphereGeometry(0.045, 8, 6), glow, [sx * 0.1, 0.06, 0.2]);
+  decal(segs[0], [0, 0.155, 0.08], 0.2, [-Math.PI / 2 + 0.35, 0, 0]);
+  return { g, segs };
 }
 
 // ---------- Kongre: the colossal squid of the Digital Sea (background scenery) ----------
@@ -552,30 +562,13 @@ export function kalamarLook() {
   return { g, body, mantle, arms };
 }
 
-// ---------- Guardian: XANA's translucent prison sphere with red rings ----------
+// ---------- Guardian: XANA's see-through orange prison sphere (Ice and Mountain, eps 7 and 10) ----------
 export function guardianLook(r = 0.8) {
   const g = new THREE.Group();
-  const shell = add(g, new THREE.SphereGeometry(r, 28, 18), new THREE.MeshPhysicalMaterial({ color: '#f4f8ff', transparent: true, opacity: 0.32, roughness: 0.08, transmission: 0.4, depthWrite: false }), [0, r, 0]);
+  const shell = add(g, new THREE.SphereGeometry(r, 28, 18), new THREE.MeshPhysicalMaterial({ color: '#ffa04a', emissive: '#ff7a1a', emissiveIntensity: 0.25, transparent: true, opacity: 0.38, roughness: 0.08, transmission: 0.35, depthWrite: false }), [0, r, 0]);
   shell.castShadow = false;
-  const rings = [0, 1, 2].map((i) => add(g, new THREE.TorusGeometry(r * 1.06, 0.02, 6, 48), new THREE.MeshBasicMaterial({ color: '#ff2a2a' }), [0, r, 0], [Math.PI / 2 + i * 0.7, i * 0.9, 0]));
+  const rings = [0, 1, 2].map((i) => add(g, new THREE.TorusGeometry(r * 1.06, 0.02, 6, 48), new THREE.MeshBasicMaterial({ color: '#ffd08a' }), [0, r, 0], [Math.PI / 2 + i * 0.7, i * 0.9, 0]));
   return { g, shell, rings };
-}
-
-// ---------- Kongre's mouth: a ring of hooked teeth that surfaces from the deep beside a lane ----------
-export function kongreMouthLook() {
-  const g = new THREE.Group();
-  const mat = std('#2a1d4a', { emissive: '#5a2cbf', emissiveIntensity: 0.35, roughness: 0.45 });
-  const tooth = std('#f2e6ff', { emissive: '#b48cff', emissiveIntensity: 0.25 });
-  const lip = add(g, new THREE.TorusGeometry(0.95, 0.26, 10, 28), mat, [0, 0, 0], [Math.PI / 2, 0, 0]);
-  const throat = add(g, new THREE.CircleGeometry(0.9, 28), new THREE.MeshBasicMaterial({ color: '#05010d' }), [0, -0.05, 0], [-Math.PI / 2, 0, 0]);
-  const teeth = [];
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const t = add(g, new THREE.ConeGeometry(0.08, 0.34, 6), tooth, [Math.sin(a) * 0.82, 0.12, Math.cos(a) * 0.82]);
-    t.userData.a = a;
-    teeth.push(t);
-  }
-  return { g, mat, lip, throat, teeth };
 }
 
 // ---------- Marabounta (season 3): a dark creeping plant mass that spreads over the floor ----------

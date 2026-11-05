@@ -163,7 +163,7 @@ export class EffectManager {
         if (fx.pu === 'quake') {
           // every client shoves its own ball, each in its own seeded direction
           const r = new RNG(`${fx.seed}:${me}`), a = r.next() * Math.PI * 2, sp = r.range(2.6, 4);
-          if (myBallActive && !c.ball.frozen && !c.swallowed) {
+          if (myBallActive && !c.ball.frozen) {
             c.ball.state = 'moving';
             c.ball.restTimer = 0;
             const v = c.ball.body.linvel();
@@ -243,7 +243,7 @@ export class EffectManager {
         c.ui.bigToast('🚀 TORPEDO!', `${fromName} fired the Skid's torpedo at you`, 'bad');
         setTimeout(() => {
           const b = c.ball;
-          if (!b || b.state === 'holed' || b.state === 'sinking' || b.frozen || c.swallowed) return;
+          if (!b || b.state === 'holed' || b.state === 'sinking' || b.frozen) return;
           const r = new RNG(`${fx.seed}:torpedo`), a = r.next() * Math.PI * 2, sp = r.range(4, 5.5);
           b.state = 'moving';
           b.restTimer = 0;
@@ -749,6 +749,7 @@ export class EffectManager {
     if (this.stickyWalls) out.push({ icon: '🪤', text: 'all hole' });
     if (this.shield) out.push({ icon: '🛡️', text: 'ready', good: true });
     if (this.client.coreShield) out.push({ icon: '💠', text: 'ready', good: true });
+    if (this.client.oddShield) out.push({ icon: '🛡️', text: 'shield', good: true });
     const mine = this.auras.find((a) => a.from === this.client.myId && t - a.start <= a.dur);
     if (mine) out.push({ icon: '💔', text: `${Math.ceil(mine.dur - (t - mine.start))}s`, good: true });
     return out;

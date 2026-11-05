@@ -126,6 +126,8 @@ export default [
       { t: 'zone', kind: 'vent', c: [-1.6, 4.2], r: 0.6, y: 0, launch: 15.5, push: [0.4, 1], minSpeed: 5, hidden: false },
       rock(1, 28.8, 0.45, 1.1, 3),
       { t: 'monster', type: 'tarantula', path: patrol([-4, 15], [2, 15], 7, 1.5) },
+      // a Guardian drifts across the foot of the climb (ep 10)
+      { t: 'monster', type: 'guardian', path: patrol([0.6, 3.6], [5.2, 3.6], 7) },
       { t: 'monster', type: 'boulder', path: avalanche(-4.5, 23.6, 18.4, 3, 1.5, 17, 5, 0) },
     ],
   },
