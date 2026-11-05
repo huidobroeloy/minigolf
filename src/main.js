@@ -79,6 +79,7 @@ class App {
       import('./dev/sim.js').then((m) => { window.__sim = m.simulateShot; window.__hio = m.searchHIO; window.__hioAll = m.searchAllHIO; window.__rampTest = m.rampTest; window.__cupWalls = m.cupWalls; window.__cupTest = m.cupTest; window.__holes = HOLES; });
       import('./dev/monsters.js').then((m) => { window.__monsterAudit = m.monsterAudit; });
       import('./dev/greens.js').then((m) => { window.__greenAudit = m.greenAudit; window.__puttAudit = m.puttAudit; });
+      import('./dev/holemap.js').then((m) => { window.__holeMap = (h) => m.holeMap(typeof h === 'number' ? HOLES[h] : h); });
     }
   }
 

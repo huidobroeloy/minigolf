@@ -10,7 +10,7 @@ import network from './network.js';
 import cortex from './cortex.js';
 import carthage from './carthage.js';
 import skid from './skid.js';
-import { extendHole } from './extend.js';
+import { extendHole, attachOpening } from './extend.js';
 import boss from './boss.js';
 
 // Longer holes: every hole gets a winding approach lane in front of it (see extend.js). Holes up
@@ -22,6 +22,9 @@ export const APPROACH = {};
 
 function lengthenOne(h, i) {
   if (h.sector === 'fortune') return h;
+  // hand-designed openings replace the generated lanes, course by course (false: the hole stands alone)
+  if (h.opening === false) return h;
+  if (h.opening) return attachOpening(h, h.opening);
   const long = h.par < 5;
   const base = APPROACH[h.id] ?? {};
   const mirror = base.mirror ?? i % 2 === 1;

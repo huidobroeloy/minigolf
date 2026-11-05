@@ -146,6 +146,27 @@ function backEdge(def) {
 }
 
 /**
+ * A hand-designed opening (def.opening): { parts, tee: [x,y,z], route: [[x,z]…], par, time, yaw? }.
+ * Its parts are laid out behind the hole's start (z below the tee floor's back edge), which is opened so the
+ * opening's last floor joins it; its route runs from the new tee to that edge. Returns a new def.
+ */
+export function attachOpening(def, op) {
+  const be = backEdge(def);
+  const parts = def.parts.map((p, i) => (be && i === be.pi && op.join !== false ? { ...p, open: [...(p.open || []), be.edge] } : p));
+  parts.push(...op.parts);
+  const r = op.route;
+  return {
+    ...def, parts,
+    tee: op.tee,
+    yaw: op.yaw ?? Math.atan2(r[1][0] - r[0][0], r[1][1] - r[0][1]),
+    par: def.par + (op.par ?? 1),
+    time: (def.time ?? 120) + (op.time ?? 30),
+    route: [...r, [def.tee[0], def.tee[2]], [def.cup[0], def.cup[2]]],
+    approach: { shape: 'designed', length: +len([...r, [def.tee[0], def.tee[2]]]).toFixed(1) },
+  };
+}
+
+/**
  * Extend a hole with an approach lane. spec: { shape, mirror, extraPar }
  * Returns a new def (the original is untouched), or the original if it can't be extended.
  */

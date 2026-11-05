@@ -96,7 +96,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
   3. most aces;
   4. a sudden-death closest-to-the-pin playoff.
 - **Fortune Falls Casino:** every cup ends the hole, but each one adds or removes strokes. The number is written over the cup, for example −2 or +3. The neon pits midway add a random penalty.
-- Holes are long, with doglegs: every hole starts with a winding approach lane (about 41–55 units in front of par 2–4 holes, a shorter one in front of par 5s) full of its sector's hazards and monsters. There are no shortcuts: you play the whole lane.
+- Holes are being redesigned course by course with **hand-made openings** built on the show's own terrain, each asking one real decision (some holes stand alone with no opening). The Desert is done; the other courses still start with a winding approach lane full of their sector's hazards and monsters. There are no shortcuts: you play the whole way.
 
 ## XANA's monsters
 
@@ -219,7 +219,7 @@ Active effects show as chips with a countdown at the top of the screen.
 | 🌱 | Marabounta Seed | Plant a Marabounta where you click: for 20 s it spreads, drags balls to a crawl and gnaws resting ones |
 
 ## The courses
-1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks.
+1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks. Its openings: an unwalled bridge between plateaus, a Megatank canyon to jump or cross, a sunken trench of rock columns under Hornets, and Tarantula flats where slabs give cover.
 2. **Forest Sector:** Hornets, log ramps, a turntable Blok, a data-stream waterfall, a treehouse and a hollow-log shortcut.
 3. **Ice Sector:** almost frictionless floors, a glass bobsled run, crevasses, thin ice and the **Kolossus** in the distance.
 4. **Mountain Sector:** crumbling ledges, avalanches, updraft vents, windy ridge bridges and the summit.
@@ -296,7 +296,7 @@ Code map:
 - `src/game/intro.js`, `finale.js`, `xanaFinale.js`: the intro and the two endings.
 - `src/core/music.js`, `soundtrack.js`: the procedural music and your own tracks.
 - `src/fx/lyoko.js`: the tower, Aelita and Kolossus models. `towerCup.js`: the tower hologram over each cup and the trip inside. `weather.js`: the weather. `vehicles.js`: the vehicles.
-- `src/holes/extend.js`: the approach lanes that make the holes long, with their secret warps. `boss.js`: the Kolossus hole.
+- `src/holes/extend.js`: the approach lanes for courses not yet redesigned, and `attachOpening` for the hand-made openings (`opening` in each hole). `boss.js`: the Kolossus hole.
 - `src/game/stats.js`, `season.js`, `src/ui/comms.js`: achievements and trails, the season cabinet, and Jérémie's lines.
 - `src/course/deco.js`: per-sector scenery and atmosphere (light shafts, horizon glow). `src/fx/dissolve.js`: the devirtualization pixel cubes.
 

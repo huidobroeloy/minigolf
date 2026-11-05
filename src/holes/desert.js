@@ -1,9 +1,106 @@
 import { rect, patrol, loop, kicker } from './helpers.js';
+import { corridorPoly } from './extend.js';
 
 // Sector 1 — DESERT: sand, mesas, tumbleweeds, Kankrelats and a Megatank.
+// The openings (docs/lore.md): in the show the Desert is huge sandy plateaus joined only by small bridges,
+// cut by canyons where Megatanks run you over, pits that drop into the Digital Sea, and tall rock slabs
+// that Kankrelats hide behind and Tarantulas shoot round.
+
+/** Sandstone cliff walls either side of a sunken path (pts at floor height y0, rim at y1). */
+function cliffs(pts, w, y0, y1) {
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az);
+    const ux = (bx - ax) / L, uz = (bz - az) / L, nx = -uz, nz = ux, o = w / 2 + 0.75;
+    for (const sd of [1, -1]) {
+      out.push({ t: 'box', p: [(ax + bx) / 2 + nx * o * sd, (y0 + y1) / 2, (az + bz) / 2 + nz * o * sd], s: [1.3, y1 - y0, L + 1.2], ry: Math.atan2(ux, uz), look: 'sandstone' });
+    }
+  }
+  return out;
+}
+
+// desert-1: the plateau and its bridge. Straight over the unwalled bridge, or the long way round the side.
+const bridgeWay = corridorPoly([[4.6, -10.2], [4.6, -7.2], [2.75, -5.6], [2.75, -4.4]], 1.7);
+const OPEN1 = {
+  par: 1, time: 30,
+  tee: [0, 0, -16.5], route: [[0, -16.5], [0, -4.6], [0, -1.2]],
+  parts: [
+    // the start plateau: walled, but for the bridge and the path round
+    { t: 'floor', poly: [[-6, -18], [6, -18], [6, -10], [5.45, -10], [3.75, -10], [0.6, -10], [-0.6, -10], [-6, -10]], open: [3, 5] },
+    { t: 'cyl', p: [-3.2, 0, -12.8], r: 0.9, h: 2.4, look: 'sandstone' },
+    { t: 'cyl', p: [2.3, 0, -14.2], r: 0.7, h: 1.8, look: 'sandstone' },
+    // the bridge: straight, no walls, a ball and a half wide, the Digital Sea either side
+    { t: 'floor', poly: rect(-0.6, -10.2, 0.6, -4.4), walls: false },
+    // the long way round, through soft sand
+    { t: 'floor', poly: bridgeWay.poly, open: [bridgeWay.startEdge, bridgeWay.endEdge] },
+    { t: 'zone', kind: 'slow', c: [4.3, -7.6], r: 0.75, mul: 3 },
+    // the landing both ways meet on, before the old tee
+    { t: 'floor', poly: [[-1.6, -4.6], [-0.6, -4.6], [0.6, -4.6], [1.9, -4.6], [3.6, -4.6], [3.6, -1.2], [1.6, -1.2], [-1.6, -1.2]], open: [1, 3, 6] },
+    // Kankrelats hiding behind the rocks
+    { t: 'monster', type: 'kankrelat', path: patrol([-4.8, -11.2], [-1.6, -11.2], 3.4) },
+    { t: 'monster', type: 'kankrelat', path: patrol([0.8, -12.4], [4.8, -12.4], 3.8, 0, 0.5) },
+  ],
+};
+
+// desert-2: a Megatank canyon across your way. Jump it from the ramp, or go down, past the Megatank, and up.
+const OPEN2 = {
+  par: 1, time: 40,
+  tee: [0, 0, -19.5], route: [[0, -19.5], [0, -13.5], [0, -8], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: rect(-4, -21.5, 4, -13.5), open: [2] },
+    { t: 'ramp', a: [-1.5, -16.3], b: [-1.5, -13.5], w: 1.8, ya: 0, yb: 0.6, jump: true },
+    { t: 'ramp', a: [3, -13.5], b: [3, -10.4], w: 1.6, ya: 0, yb: -1.8 },
+    // the canyon floor (deep enough that its walls stay below the plateaus): walled but for the two ramps
+    { t: 'floor', y: -1.8, poly: [[-7, -13.5], [2.2, -13.5], [3.8, -13.5], [7, -13.5], [7, -8], [1.6, -8], [-1.6, -8], [-7, -8]], open: [1, 5] },
+    { t: 'ramp', a: [0, -12], b: [0, -8], w: 3.2, ya: -1.8, yb: 0 },
+    { t: 'box', p: [-7.6, -0.9, -10.75], s: [1.2, 1.8, 5.9], look: 'sandstone' },
+    { t: 'box', p: [7.6, -0.9, -10.75], s: [1.2, 1.8, 5.9], look: 'sandstone' },
+    // the far side: the jump lands here
+    { t: 'floor', poly: rect(-2, -8, 2, -1.0), open: [0, 2] },
+    { t: 'monster', type: 'megatank', path: patrol([-6, -12.8], [1.0, -12.8], 7, -1.8) },
+    { t: 'monster', type: 'kankrelat', path: patrol([-1.5, -4.6], [1.5, -4.6], 3.2) },
+  ],
+};
+
+// desert-4: a sunken canyon dotted with rock columns to zigzag through (the Desert Replika, ep 83), Hornets overhead.
+const trench = [[0, -25], [0, -20.5], [-5, -15.5], [-5, -11.5], [0, -7], [0, -5.2]];
+const trenchPoly = corridorPoly(trench, 4);
+const OPEN4 = {
+  par: 1, time: 30,
+  tee: [0, -1.2, -24], route: [...trench, [0, -1.2]],
+  parts: [
+    { t: 'floor', y: -1.2, poly: trenchPoly.poly, open: [trenchPoly.endEdge] },
+    { t: 'ramp', a: [0, -5.6], b: [0, -1.0], w: 4, ya: -1.2, yb: 0 },
+    ...cliffs(trench.slice(0, -1), 4, -1.2, 0.3),
+    { t: 'cyl', p: [0.9, -1.2, -21.6], r: 0.5, h: 2.6, look: 'sandstone' },
+    { t: 'cyl', p: [-3.2, -1.2, -17.0], r: 0.5, h: 2.6, look: 'sandstone' },
+    { t: 'cyl', p: [-1.8, -1.2, -18.4], r: 0.45, h: 2.2, look: 'sandstone' },
+    { t: 'cyl', p: [-5.9, -1.2, -13.4], r: 0.5, h: 2.6, look: 'sandstone' },
+    { t: 'cyl', p: [-3.9, -1.2, -12.6], r: 0.45, h: 2.2, look: 'sandstone' },
+    { t: 'cyl', p: [-1.8, -1.2, -8.6], r: 0.5, h: 2.6, look: 'sandstone' },
+    { t: 'monster', type: 'hornet', path: patrol([-1.2, -19.6], [-3.8, -16.4], 4.4, 1.1), aim: 'ball' },
+    { t: 'monster', type: 'hornet', path: patrol([-4.6, -10.6], [-0.8, -8.0], 4.0, 1.1, 0.5), aim: 'ball' },
+  ],
+};
+
+// desert-5: Tarantula flats. The open middle is short but under fire; the slabs give cover on a longer zigzag.
+const slab = (x, z, ry) => ({ t: 'box', p: [x, 0.8, z], s: [2.6, 1.6, 0.45], ry, look: 'sandstone' });
+const OPEN5 = {
+  par: 1, time: 30,
+  tee: [0, 0, -15], route: [[0, -15], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: rect(-5, -17, 5, -1.0), open: [2] },
+    slab(-2.6, -12.4, 0.55), slab(2.7, -11.2, -0.55), slab(-2.9, -7.4, -0.5), slab(2.8, -6.2, 0.5), slab(-1.2, -3.4, 0.2),
+    // deep sand across the open middle
+    { t: 'zone', kind: 'slow', rect: [-1.1, -10.2, 1.1, -5.4], mul: 2.5 },
+    { t: 'monster', type: 'tarantula', path: patrol([-4.2, -9.2], [-4.2, -4.4], 5.2) },
+    { t: 'monster', type: 'tarantula', path: patrol([4.2, -13.8], [4.2, -8.8], 5.6, 0, 0.5) },
+  ],
+};
+
 export default [
   {
-    id: 'desert-1', name: 'Dune Drive', sector: 'desert', par: 2, time: 90,
+    id: 'desert-1', opening: OPEN1, name: 'Dune Drive', sector: 'desert', par: 2, time: 90,
     tee: [0, 0, 0], cup: [8.6, 0, 12.6],
     hio: 'Straight up the lane into the 45° kicker, ~75% power, between the Kankrelats.',
     parts: [
@@ -16,7 +113,7 @@ export default [
     ],
   },
   {
-    id: 'desert-2', name: 'Megatank Mesa', sector: 'desert', par: 3, time: 110,
+    id: 'desert-2', opening: OPEN2, name: 'Megatank Mesa', sector: 'desert', par: 3, time: 110,
     tee: [0, 0, 0], cup: [0, 1.5, 19.4],
     hio: 'Up the ramp after the Megatank passes, bank off the right wall around the centre rock.',
     parts: [
@@ -32,7 +129,7 @@ export default [
     ],
   },
   {
-    id: 'desert-3', name: 'Kankrelat Canyon', sector: 'desert', par: 4, time: 160,
+    id: 'desert-3', opening: false, name: 'Kankrelat Canyon', sector: 'desert', par: 4, time: 160,
     tee: [0, 0, 0], cup: [-1.1, 0, 40.5],
     hio: 'Clear the chasm, hit the sand geyser fast and fly the canyon straight onto the far mesa.',
     parts: [
@@ -62,7 +159,7 @@ export default [
     ],
   },
   {
-    id: 'desert-4', name: 'Sandstorm Pass', sector: 'desert', par: 4, time: 150,
+    id: 'desert-4', opening: OPEN4, name: 'Sandstorm Pass', sector: 'desert', par: 4, time: 150,
     tee: [0, 0, 0], cup: [-6.4, 0, 22.5],
     hio: 'Off both kickers: right side of the lane, left along the ridge, then straight up into the storm.',
     parts: [
@@ -77,7 +174,7 @@ export default [
     ],
   },
   {
-    id: 'desert-5', name: 'Tower Oasis', sector: 'desert', par: 3, time: 120,
+    id: 'desert-5', opening: OPEN5, name: 'Tower Oasis', sector: 'desert', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 0, 11.2],
     hio: 'Thread the gap between the two sinkholes at a gentle pace.',
     parts: [
@@ -95,7 +192,7 @@ export default [
     ],
   },
   {
-    id: 'desert-6', name: 'Mesa Switchbacks', sector: 'desert', par: 5, time: 170,
+    id: 'desert-6', opening: false, name: 'Mesa Switchbacks', sector: 'desert', par: 5, time: 170,
     tee: [-3, 0, 0], cup: [3, 3, 27.5],
     parts: [
       { t: 'floor', poly: [[-6, -1.2], [6, -1.2], [6, 6], [3, 6], [-6, 6]], open: [2] },
