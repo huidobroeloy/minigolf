@@ -21,6 +21,7 @@ being written in June 2026 [FR-WIKI].
 | SKILLS | http://codelyoko.fr/dossiers/skills.cl | Warriors' fighting skills (fan editorial, "non officielles") |
 | VIRTMAT | https://www.codelyoko.fr/dossiers/virt_mat.cl | Virtualization (fan speculation, says so itself) |
 | GUIDE36 | https://www.codelyoko-leguide.fr/36 | Episode 36 "Marabounta" (official summary) |
+| DESERT, FORET, MONTAGNE, BANQUISE, RESEAU | https://www.codelyoko.fr/lieux/desert.cl (and foret.cl, montagne.cl, banquise.cl, reseau.cl) | The sectors and the Network, place by place |
 | EN-WIKI | https://en.wikipedia.org/wiki/Code_Lyoko | |
 | FR-WIKI | https://fr.wikipedia.org/wiki/Code_Lyoko | |
 | EN-EPS | https://en.wikipedia.org/wiki/List_of_Code_Lyoko_episodes | |
@@ -66,6 +67,33 @@ reference videos (`.local/`) were not available in the cloud checkout; check mon
 - **The Skidbladnir** (season 4): Aelita's submarine, with four **Navskids** clamped to it for close combat in the
   Digital Sea [S4]. The Kolossus destroys it in ep 93 [S4].
 - **The Cortex, Tyron's ninjas** and the **Megapod** come from *Évolution* (non-canon) [NINJAS, FR-WIKI].
+
+## The sectors, for level design
+- **Desert** [DESERT]: dry, yellow, sun at its zenith, no greenery. The largest sector: **huge plateaus joined only by
+  small bridges**. **Canyons** wind a long way (Megatanks run you over in them); **pits**: some bottomless, straight
+  into the Digital Sea, some with a floor and a tower at the bottom, reached on foot by a **spiral path**. Giant rocks
+  and **long flat rocks planted upright or at an angle** give cover. Kankrelats hide behind the relief; Megatanks and
+  Tarantulas use the open ground; Hornets the big open spaces; Bloks almost never. A sandstorm in ep 4. The Desert
+  Replika has a canyon trench dotted with rock columns (ep 83).
+- **Forest** [FORET]: humid, tropical light through dense leaves (bright green from season 2). **Many winding paths**
+  that split and rejoin at medium platforms (often with a tower); paths are sometimes cut so you must jump; **fallen
+  logs** join paths and **hollow stumps** hold tunnels (ep 16); trees float over the Digital Sea. Dark **ponds** by
+  towers, reached over log bridges. Krabes are very common (they run the paths), Kankrelats come from several paths at
+  once, Hornets crash into trees. The Marabounta invaded it (ep 36).
+- **Mountain** [MONTAGNE]: cold, permanent thin **mist**, bonsai trees, a slightly East-Asian mood. **Long bridges**
+  between medium plateaus, rocks of every size, narrow passages between rocks, a maze (ep 15), **floating
+  mountains**, hollow mountains with tunnels and caves (no mist inside). Its signature is **moving platforms**: a tower
+  on a **rotating island** reached by jumping onto a turning arm (ep 20), and platforms that **rise and fall** then
+  **circle round the tower**. Thick fog hides monsters and lifts when the tower is deactivated. Hornets, Mantas and Bloks
+  (they climb the peaks) are at home; Megatanks block the narrow paths.
+- **Ice** [BANQUISE]: night, −15 °C, a thin layer of snow on eternal ice: **slippery** for everyone. **Ice plateaus**
+  joined by long frozen paths, icebergs with **caves, waterfalls, rivers and tunnels**; tunnels are long slides that
+  often open onto a **cliff**. The ice **cracks and breaks** into floating floes (ep 38). **Lakes at path height**
+  (monsters sink). Towers hide in **caves behind waterfalls guarded by Tarantulas**. Hornet squadrons; Bloks hide under
+  the ice (ep 31); Guardians (eps 7, 10).
+- **The Network** [RESEAU]: an ocean "with no bottom and no surface", calm transparent blue that turns red when XANA
+  lurks, giant red data blocks with white graffiti, and **hubs** that shoot you across at hyperspeed. Sharks, Kongres,
+  the Kalamar (ep 88 only), William's Rorkal (ep 77).
 
 ## Life points and devirtualization
 - No life-point number is given for the heroes in the series. codelyoko.fr's estimates imply 100 (a Kankrelat's
