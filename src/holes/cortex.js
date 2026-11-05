@@ -60,13 +60,13 @@ export default [
     ],
   },
   {
-    id: 'cortex-5', name: 'Guardian Field', sector: 'cortex', par: 4, time: 150,
+    id: 'cortex-5', name: 'Ninja Field', sector: 'cortex', par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 21.5],
     parts: [
       { t: 'floor', poly: [[-4.5, -1.2], [4.5, -1.2], [4.5, 24], [-4.5, 24]] },
-      // XANA's prison spheres drift across the field: roll into one and you're stuck for a while
-      { t: 'monster', type: 'guardian', path: patrol([-3.4, 8], [3.4, 8], 7) },
-      { t: 'monster', type: 'guardian', path: patrol([3.4, 13.5], [-3.4, 13.5], 6, 0, 0.5) },
+      // Tyron's ninjas pace the field and dash at anything that stops near them
+      { t: 'monster', type: 'ninja', path: patrol([-3.4, 8], [3.4, 8], 7) },
+      { t: 'monster', type: 'ninja', path: patrol([3.4, 13.5], [-3.4, 13.5], 6, 0, 0.5) },
       { t: 'wall', pts: [[-4.5, 18], [-1, 18]], h: 0.5 },
       { t: 'wall', pts: [[1.6, 18], [4.5, 18]], h: 0.5 },
       { t: 'monster', type: 'tarantula', path: patrol([-3, 11], [3, 11], 7, 0, 0.3) },

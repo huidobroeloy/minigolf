@@ -2,10 +2,16 @@ import { rect, patrol, orbit, circlePoly } from './helpers.js';
 
 // THE DIGITAL SEA (season 4): the gang crosses it in the Skidbladnir. Underwater the ball floats
 // a little when airborne. Glass tubes and warp pipes (very Mario), currents that carry you,
-// bubble columns that lift you, Sharks that ram and Kongre's tentacles sweeping the lanes.
+// bubble columns that lift you, Sharks that ram and packs of Kongre eels firing their double laser.
 
 const current = (x0, z0, x1, z1, dir, speed = 3, y = 0) => ({ t: 'zone', kind: 'current', rect: [x0, z0, x1, z1], dir, speed, y });
 const coral = (x, z, r = 0.45, y = 0) => ({ t: 'bumper', p: [x, y, z], r, color: '#3fc6ff' });
+
+/** A pack of Kongre eels swimming back and forth between a and b, one row behind another (they hunt in packs of 3–5). */
+const kongres = (a, b, period, y = 0, n = 3, gap = 0.9) => Array.from({ length: n }, (_, k) => {
+  const o = (k - (n - 1) / 2) * gap;
+  return { t: 'monster', type: 'kongre', path: patrol([a[0], a[1] + o], [b[0], b[1] + o], period, y, k / n), phase: k / n };
+});
 
 /** A ring gateway (decor) facing along z. */
 const gateway = (x, y, z, r = 1.6) => ({
@@ -46,7 +52,7 @@ export default [
       current(-5, 8, 5, 11, [1, 0], 3.2),
       current(-5, 16, 5, 19, [-1, 0], 3.2),
       coral(-2.5, 5), coral(2.8, 13.5), coral(-1.5, 13.8, 0.35), coral(2.7, 21.2),
-      { t: 'monster', type: 'kongre', p: [-5.6, 0, 21], len: 6.5, sweep: [0.35, 2.75], period: 9 },
+      ...kongres([-4, 20.6], [4, 20.6], 8, 0, 3, 0.8),
     ],
   },
   {
@@ -103,8 +109,8 @@ export default [
       // dive tube down into the abyss
       { t: 'tube', pts: [[0, 0, 11.6], [0, -0.5, 14], [0, -2.2, 17], [0, -3, 19.5]], r: 0.55 },
       { t: 'floor', y: -3, poly: [[-6, 19], [-0.6, 19], [0.6, 19], [6, 19], [6, 34], [-6, 34]], open: [1] },
-      { t: 'monster', type: 'kongre', p: [-6.4, -3, 24.5], len: 7, sweep: [0.3, 2.8], period: 8 },
-      { t: 'monster', type: 'kongre', p: [6.4, -3, 29.5], len: 7, sweep: [-0.3, -2.8], period: 8, phase: 0.5 },
+      ...kongres([-5, 23.4], [5, 23.4], 8, -3),
+      ...kongres([5, 30.4], [-5, 30.4], 8.5, -3, 3),
       current(-6, 26.5, 6, 27.5, [1, 0], 2.4, -3),
       coral(-3, 22), coral(3.5, 32),
       // the bubble lift back up to the final deck

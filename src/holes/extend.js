@@ -32,11 +32,11 @@ export const ROSTER = {
   mountain: ['tarantula', 'manta', 'hornet'],
   sector5: ['creeper', 'manta'],
   volcano: ['tarantula', 'krabe', 'blok'],
-  sea: ['shark', 'manta', 'kalamar'],
+  sea: ['shark', 'kongre', 'kalamar', 'manta'],
   cortex: ['ninja', 'krabe', 'tarantula', 'manta'],
   network: ['manta', 'creeper'],
   carthage: ['creeper', 'blok', 'manta'],
-  skid: ['shark', 'kalamar', 'manta'],
+  skid: ['shark', 'kongre', 'kalamar', 'manta'],
 };
 
 // What each sector puts in its lanes: the floor look comes from the theme; these are the extras.
@@ -77,7 +77,7 @@ export function laneMonster(type, slot) {
   if (type === 'manta') spec.size = 0.8;
   return spec;
 }
-const SHOOTERS = new Set(['kankrelat', 'hornet', 'blok', 'krabe', 'tarantula', 'creeper', 'manta', 'shark', 'megatank', 'scyphozoa']);
+const SHOOTERS = new Set(['kankrelat', 'hornet', 'blok', 'krabe', 'tarantula', 'creeper', 'manta', 'shark', 'kongre', 'megatank', 'scyphozoa']);
 
 const len = (pts) => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
 
@@ -252,17 +252,6 @@ export function extendHole(def, spec = {}) {
     while (u < 0.9 && Math.hypot(at(s, u)[0] - tee[0], at(s, u)[1] - tee[2]) < 4.5 + w * 0.32) u += 0.05;
     const [cx, cz] = at(s, u), nx = -s.d[1], nz = s.d[0], r = w * 0.32;
     parts.push(laneMonster(type, { a: [cx - nx * r, cz - nz * r], b: [cx + nx * r, cz + nz * r], y, k }));
-  }
-
-  // the sector's creeping hazard, on a leg of its own: Kongre's mouth (Sea). (The Marabounta is now a whole-hole
-  // takeover event: holes/swarmEvent.js.)
-  const creep = { sea: 'kongreMouth', skid: 'kongreMouth' }[def.sector];
-  const spare = segs.filter((s, i) => i > 0 && s.L > 4 && !legs.slice(0, want).includes(s));
-  if (creep && spare.length) {
-    const s = spare[spare.length - 1];
-    const [cx, cz] = at(s, 0.78), nx = -s.d[1], nz = s.d[0]; // clear of the leg's prop at its middle
-    if (creep === 'marabounta') parts.push({ t: 'monster', type: creep, p: [cx, y, cz], r: Math.min(1.7, w * 0.4) });
-    else parts.push({ t: 'monster', type: creep, p: [cx + nx * w * 0.18, y, cz + nz * w * 0.18] });
   }
 
   const extra = spec.extraPar ?? (len(pts) > 30 ? 2 : 1);

@@ -5,7 +5,7 @@ import { sfx } from '../core/audio.js';
 import { makeKolossus } from '../fx/lyoko.js';
 import { RNG } from '../core/rng.js';
 import { Gun, MineLayer, canTarget, landHit, seededRng, damageFor } from './attacks.js';
-import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreArmLook, ninjaLook, kalamarLook, guardianLook, kongreMouthLook, marabountaLook } from './looks.js';
+import { kankrelatLook, blokLook, hornetLook, krabeLook, tarantulaLook, creeperLook, mantaLook, scyphozoaLook, swayTentacle, megatankLook, sharkLook, kongreEelLook, ninjaLook, kalamarLook, guardianLook, marabountaLook } from './looks.js';
 import { patrol } from '../holes/helpers.js';
 
 // XANA's monsters, built from primitives. Each one follows a time-based path so every
@@ -644,9 +644,11 @@ class Kolossus extends Monster {
 
 // ---------- Kolossus boss (Sector 5 Core): fist slams, a glowing ankle and the gate to the core ----------
 // spec: { p: feet [x,y,z], ry, ankle: [x,y,z], gate: { a: [x,z], b: [x,z], y }, zone: [x0,z0,x1,z1], every }
-// Everything except the stun is a function of the shared clock. The stun is your own: hit the ankle
-// three times with your ball and the giant kneels, the gate drops for 15 s (on your screen).
-const BOSS_HITS = 3, BOSS_STUN = 15, SLAM_TELL = 2, SLAM_R = 1.5;
+// Everything except the stun is a function of the shared clock. The stun is your own. As in the show
+// (ep 94: its eye and its blade arm, hit together), it has two weak points: the glowing eye low on its
+// leg, and its blade, which stays planted for a few seconds after each slam. Hit both within 8 s and it
+// kneels: the gate drops for 15 s (on your screen).
+const BOSS_BOTH = 8, BOSS_STUN = 15, SLAM_TELL = 2, SLAM_R = 1.5, PLANT = 3.5, BLADE_R = 0.8;
 class KolossusBoss extends Monster {
   constructor(spec, ctx) {
     const g = makeKolossus();
@@ -695,17 +697,32 @@ class KolossusBoss extends Monster {
     this.tell.rotation.x = -Math.PI / 2;
     this.tell.visible = false;
     ctx.group.add(this.tell);
-    this.fist = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1, 0), g.userData.mats[0]);
+    // its weapon is a blade in place of a hand (EN-WIKI): a long magma-rock blade that strikes point-first
+    this.fist = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.05, 2.4, 4, 1), g.userData.mats[0]);
+    this.fist.scale.set(1, 1, 0.4);
     this.fist.visible = false;
     ctx.group.add(this.fist);
     this.every = spec.every ?? 7;
-    this.hits = 0;
+    // the planted blade: a solid, glowing target where the last slam landed
+    this.bladeBody = kinematic(ctx.physics, { x: 0, y: -50, z: 0 });
+    collider(ctx.physics, this.bladeBody, R.ColliderDesc.cuboid(BLADE_R, 1.1, 0.35), 0.9);
+    this.bladeBody.setRotation(new THREE.Quaternion().setFromAxisAngle(UP, 0.6), true); // as the blade is drawn
+    this.bladeRing = new THREE.Mesh(new THREE.TorusGeometry(BLADE_R + 0.25, 0.05, 6, 32), new THREE.MeshBasicMaterial({ color: '#ffd04a', transparent: true, opacity: 0.85 }));
+    this.bladeRing.visible = false;
+    ctx.group.add(this.bladeRing);
+    this.eyeHitT = -99;
+    this.bladeHitT = -99;
     this.hitT = -9;
     this.stunUntil = -1;
     this.lastSlam = -1;
     this.base = s;
   }
   stunned(t) { return t < this.stunUntil; }
+  /** The last slam, while its blade is still planted (null otherwise). */
+  planted(t) {
+    const n = Math.floor(t / this.every), sl = this.slam(n - 1);
+    return n > 0 && t - sl.at < PLANT && !this.stunned(t) ? sl : null;
+  }
   gateOpen(t) { return this.stunned(t) || t < (this.holdUntil ?? -1); }
   /** The n-th slam: where and when (the same on every screen). */
   slam(n) {
@@ -730,8 +747,8 @@ class KolossusBoss extends Monster {
     this.model.userData.breathe(t);
     this.model.position.y = this.base.y - (st ? 1.2 : 0) + Math.sin(t * 0.8) * 0.08;
     this.model.rotation.z = st ? 0.12 : 0;
-    // ankle glow: brighter with each hit; dark while stunned
-    this.ankleMat.emissiveIntensity = st ? 0.3 : 1.2 + this.hits * 0.8 + 0.4 * Math.sin(t * 6);
+    // eye glow: brighter right after you hit it; dark while stunned
+    this.ankleMat.emissiveIntensity = st ? 0.3 : 1.2 + (t - this.eyeHitT < BOSS_BOTH ? 1.6 : 0) + 0.4 * Math.sin(t * 6);
     this.ankleRing.rotation.x = t * 2; this.ankleRing.rotation.y = t * 1.3;
     this.ankleRing.visible = !st;
     // gate
@@ -749,11 +766,22 @@ class KolossusBoss extends Monster {
       this.tell.scale.setScalar(1 + left * 0.6);
       this.tellMat.opacity = 0.5 + 0.4 * Math.abs(Math.sin(t * (8 + (SLAM_TELL - left) * 8)));
     }
-    this.fist.visible = !st && left < 0.45 && left > -0.6;
-    if (this.fist.visible) {
+    const pl = this.planted(t);
+    this.fist.visible = !st && (left < 0.45 || !!pl);
+    if (pl && !(left < 0.45)) {
+      // planted: the blade sits where it struck, glowing, until it pulls back up
+      this.fist.position.set(pl.x, this.gateY + 1.0, pl.z);
+      this.fist.rotation.set(0, 0.6, 0);
+    } else if (this.fist.visible) {
       const fall = Math.max(0, left) / 0.45;
       this.fist.position.set(sl.x, this.gateY + 1.0 + fall * fall * 14, sl.z);
-      this.fist.rotation.set(t, t * 0.7, 0);
+      this.fist.rotation.set(0, 0.6, 0);
+    }
+    this.bladeRing.visible = !!pl && !(left < 0.45);
+    if (this.bladeRing.visible) {
+      this.bladeRing.position.set(pl.x, this.gateY + 0.4, pl.z);
+      this.bladeRing.rotation.x = t * 2.2; this.bladeRing.rotation.y = t * 1.5;
+      this.bladeRing.material.opacity = t - this.bladeHitT < BOSS_BOTH ? 1 : 0.55 + 0.3 * Math.sin(t * 8);
     }
   }
   update(t) {
@@ -764,22 +792,27 @@ class KolossusBoss extends Monster {
     if (!st && this.gate.drop > 0.5 && under) this.holdUntil = t + 0.5; // hold it open a moment
     const gy = this.gateY + 0.6 - (this.gateOpen(t) ? 1.5 : 0);
     this.gateBody.setNextKinematicTranslation({ x: this.gate.x, y: gy, z: this.gate.z });
-    // the ankle: count hard hits from your own ball (the speed just before contact: it may have bounced already)
+    // the planted blade's collider follows the last slam
+    const pl = this.planted(t);
+    this.bladeBody.setNextKinematicTranslation(pl ? { x: pl.x, y: this.gateY + 1.0, z: pl.z } : { x: 0, y: -50, z: 0 });
+    // the weak points: hard hits from your own ball (the speed just before contact: it may have bounced already)
     const sp = ball ? Math.hypot(ball.vel.x, ball.vel.z) : 0, impact = Math.max(sp, this.prevSp ?? 0);
     this.prevSp = sp;
-    if (ball && ball.state === 'moving' && !st) {
-      const p = ball.pos, d = Math.hypot(p.x - this.ankle.x, p.y - this.ankle.y, p.z - this.ankle.z);
-      if (d < this.ankle.r + ball.radius + 0.08 && impact > 1.2 && t - this.hitT > 0.6) {
+    if (ball && ball.state === 'moving' && !st && impact > 1.2 && t - this.hitT > 0.6) {
+      const p = ball.pos;
+      const onEye = Math.hypot(p.x - this.ankle.x, p.y - this.ankle.y, p.z - this.ankle.z) < this.ankle.r + ball.radius + 0.08;
+      const onBlade = pl && p.y < this.gateY + 2.2 && Math.hypot(p.x - pl.x, p.z - pl.z) < BLADE_R + ball.radius + 0.12;
+      if (onEye || onBlade) {
         this.hitT = t;
-        this.hits++;
+        if (onEye) this.eyeHitT = t; else this.bladeHitT = t;
         sfx.play('bumper');
         this.ctx.course.onShake?.(0.5);
-        if (this.hits >= BOSS_HITS) {
-          this.hits = 0;
+        if (Math.abs(this.eyeHitT - this.bladeHitT) <= BOSS_BOTH) {
+          this.eyeHitT = this.bladeHitT = -99;
           this.stunUntil = t + BOSS_STUN;
           sfx.play('rumble');
           this.ctx.course.onBoss?.('stun', BOSS_STUN);
-        } else this.ctx.course.onBoss?.('hit', this.hits, BOSS_HITS);
+        } else this.ctx.course.onBoss?.('hit', onEye ? 'eye' : 'blade', BOSS_BOTH);
       }
     }
     if (this.wasStunned && !this.stunned(t)) this.ctx.course.onBoss?.('recover');
@@ -800,8 +833,8 @@ class KolossusBoss extends Monster {
   }
   dispose() {
     super.dispose();
-    for (const o of [this.ankleMesh, this.ankleRing, this.gateMesh, this.gateEye, this.tell, this.fist]) this.ctx.group.remove(o);
-    for (const b of [this.ankleBody, this.gateBody]) this.ctx.physics.removeBody(b);
+    for (const o of [this.ankleMesh, this.ankleRing, this.gateMesh, this.gateEye, this.tell, this.fist, this.bladeRing]) this.ctx.group.remove(o);
+    for (const b of [this.ankleBody, this.gateBody, this.bladeBody]) this.ctx.physics.removeBody(b);
   }
 }
 
@@ -874,72 +907,26 @@ class Shark extends Monster {
   }
 }
 
-// ---------- Kongre's tentacle: rises from the deep at the side of a lane and sweeps across it ----------
-class KongreArm extends Monster {
+// ---------- Kongre (the Digital Sea): eel-like, swims in packs of 3–5 and fires a double laser from its eyes ----------
+class Kongre extends Monster {
   constructor(spec, ctx) {
-    const len = spec.len ?? 6;
-    const L = kongreArmLook(len);
-    const g = new THREE.Group();
-    g.add(L.g);
-    super(spec, ctx, g);
-    Object.assign(this, { L, len, period: spec.period ?? 8, phase: spec.phase ?? 0 });
-    // no hard collider: a swinging kinematic arm would bat the ball across the map. It sweeps the
-    // ball along at a capped speed instead (see force).
-    // warning stripe where it is about to sweep
-    // RingGeometry runs counter-clockwise from +x; our angles are measured from +z toward +x
-    const [a0, a1] = spec.sweep ?? [0, Math.PI];
-    const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
-    const warn = new THREE.Mesh(new THREE.RingGeometry(0.3, len, 24, 1, lo - Math.PI / 2, hi - lo), new THREE.MeshBasicMaterial({ color: '#b04aff', transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
-    warn.rotation.x = -Math.PI / 2;
-    this.warn = warn;
-    ctx.group.add(warn);
-    this.qq = new THREE.Quaternion();
+    const L = kongreEelLook();
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+    // the body lies along z, snout at +0.62, tail at -0.9
+    super(spec, ctx, L.g, { yOff: 0.42, colliders: [[R.ColliderDesc.capsule(0.5, 0.2).setRotation(q).setTranslation(0, 0, -0.14), 0.8]] });
+    this.L = L;
+    this.prev = super.at(0);
+    this.guns.push(new Gun(this, { kind: 'laser', every: [7, 10], charge: 0.8, range: 7, speed: 11, knock: 130, burst: 2, burstGap: 0.12, muzzle: () => this.L.segs[0].localToWorld(new THREE.Vector3(0, 0.06, 0.26)) }));
   }
-  /** Sweep state at time t: rise (0.14 of the period), sweep (0.2), sink (0.12), hidden otherwise. */
-  pose(t) {
-    const s = super.at(t);
-    const u = ((t / this.period + this.phase) % 1 + 1) % 1;
-    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
-    let ang = a0, h = -3, warn = 0;
-    if (u < 0.14) { const k = u / 0.14; h = -3 + 3 * (1 - (1 - k) ** 3); warn = k; }
-    else if (u < 0.34) { const k = (u - 0.14) / 0.2; ang = a0 + (a1 - a0) * (k * k * (3 - 2 * k)); h = 0; warn = 1; }
-    else if (u < 0.46) { const k = (u - 0.34) / 0.12; ang = a1; h = -3 * k * k; }
-    else { ang = a1; h = -3; }
-    return { x: s.x, y: s.y + h, z: s.z, ry: ang, warn, sweeping: u >= 0.14 && u < 0.34, up: h > -2.9 };
-  }
-  at(t) { return super.at(t); }
-  update() {}
   frame(t) {
-    const p = this.pose(t);
-    this.model.position.set(p.x, p.y, p.z);
-    this.model.rotation.y = p.ry;
-    this.model.visible = p.up && !this.slashed;
-    this.L.tip.rotation.z = Math.sin(t * 3) * 0.4;
-    this.L.mat.emissiveIntensity = p.sweeping ? 0.7 : 0.25;
-    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
-    this.warn.visible = p.warn > 0 && !p.sweeping && p.up && p.ry === a0 && !this.slashed;
-    this.warn.position.set(p.x, super.at(t).y + 0.03, p.z);
-    this.warn.material.opacity = 0.12 + 0.2 * p.warn * Math.abs(Math.sin(t * 8));
+    const s = this.at(t);
+    this.model.position.set(s.x, s.y + 0.42 + Math.sin(t * 2.6 + (this.spec.phase ?? 0) * 5) * 0.05, s.z);
+    const dx = s.x - this.prev.x, dz = s.z - this.prev.z;
+    if (Math.hypot(dx, dz) > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
+    this.prev = s;
+    // it swims: a wave runs down the body to the tail
+    this.L.segs.forEach((j, i) => { if (i) j.rotation.y = Math.sin(t * 7 - i * 0.8) * 0.16 * Math.min(1, i / 3); });
   }
-  force(ball, t, out) {
-    const p = this.pose(t);
-    if (!p.sweeping || this.slashed || ball.state === 'holed') return;
-    const b = ball.pos;
-    const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz);
-    if (d > this.len + 0.4 || Math.abs(b.y - p.y) > 1) return;
-    // distance from the arm's line
-    const fx = Math.sin(p.ry), fz = Math.cos(p.ry);
-    const perp = dx * fz - dz * fx, along = dx * fx + dz * fz;
-    if (along < 0 || Math.abs(perp) > 0.45 + ball.radius) return;
-    // carry it along with the swing (tangentially), at most 6 u/s
-    const [a0, a1] = this.spec.sweep ?? [0, Math.PI];
-    const sgn = Math.sign(a1 - a0) || 1;
-    const sp = Math.min(6, along * 2.2);
-    const v = ball.vel;
-    out.x += (fz * sgn * sp - v.x) * 10; out.z += (-fx * sgn * sp - v.z) * 10;
-    out.wake = true;
-  }
-  dispose() { super.dispose(); this.ctx.group.remove(this.warn); }
 }
 
 // ---------- Ninja (the Cortex): fast; dashes at you and slashes with its sword, or fires a palm laser ----------
@@ -1003,47 +990,50 @@ class Ninja extends Monster {
   }
 }
 
-// ---------- Kalamar (the Digital Sea): drifts, fires lasers and squirts ink clouds that blind and slow ----------
+// ---------- Kalamar (the Digital Sea): drifts and fires its laser; get close and its pincers grip your ball and drag it
+// along for a moment before flinging it off (ep 88: it grips the Skid with its drill and pincers) ----------
+const GRIP = 1.6;
 class Kalamar extends Monster {
   constructor(spec, ctx) {
     const L = kalamarLook();
     super(spec, ctx, L.g, { colliders: [[R.ColliderDesc.cuboid(0.36, 0.48, 0.62).setTranslation(0, 0.48, 0.25), 0.7]] });
     this.L = L;
-    this.rng = seededRng(ctx, spec, 'ink');
-    this.nextInk = 4 + this.rng.range(0, 6);
-    this.clouds = [];
-    this.inkMat = new THREE.MeshBasicMaterial({ color: '#08020f', transparent: true, opacity: 0.85, depthWrite: false });
     this.prev = super.at(0);
-    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.8, range: 8, speed: 11, knock: 140, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0, 0.9)) }));
+    this.grip = null;
+    this.lastGrip = -99;
+    this.guns.push(new Gun(this, { kind: 'laser', every: [9, 13], charge: 0.8, range: 8, speed: 11, knock: 140, ready: () => !this.grip, muzzle: () => this.model.localToWorld(new THREE.Vector3(0, 0, 0.9)) }));
   }
-  update(t) {
-    super.update(t);
-    // ink on a seeded rhythm where the Kalamar is, so everyone sees the same clouds
-    if (t >= this.nextInk && !this.slashed) {
-      this.nextInk = t + this.rng.range(10, 14);
-      const s = this.at(t), y = this.ctx.course.floorYAt(s.x, s.z);
-      if (y !== null) {
-        const g = new THREE.Group();
-        for (let i = 0; i < 6; i++) {
-          const m = new THREE.Mesh(new THREE.SphereGeometry(0.55 + (i % 3) * 0.15, 12, 8), this.inkMat);
-          m.position.set(Math.cos(i * 1.05) * 0.7, 0.45 + (i % 2) * 0.35, Math.sin(i * 1.05) * 0.7);
-          g.add(m);
-        }
-        g.position.set(s.x, y, s.z);
-        this.ctx.group.add(g);
-        this.clouds.push({ g, x: s.x, y, z: s.z, r: 1.6, born: t, until: t + 6, touched: false });
-        sfx.play('splash');
-      }
-    }
-    this.clouds = this.clouds.filter((c) => { if (t < c.until) return true; this.ctx.group.remove(c.g); return false; });
+  /** Where its pincers are at time t (in front of it, the way it's swimming). */
+  claws(t) {
+    const s = this.at(t), b = this.at(t - 0.15);
+    let dx = s.x - b.x, dz = s.z - b.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-4) { dx = Math.sin(this.model.rotation.y); dz = Math.cos(this.model.rotation.y); } else { dx /= d; dz /= d; }
+    return { x: s.x + dx * 0.95, y: s.y, z: s.z + dz * 0.95, fx: dx, fz: dz };
   }
   force(ball, t, out) {
-    for (const c of this.clouds) {
-      const p = ball.pos;
-      if (Math.hypot(p.x - c.x, p.z - c.z) > c.r || Math.abs(p.y - c.y) > 1.5) continue;
-      if (ball.state === 'moving') { const v = ball.vel; out.x -= v.x * 3; out.z -= v.z * 3; } // thick ink: twice the drag
-      if (!c.touched) { c.touched = true; if (canTarget(this.ctx.course, ball, t, { allowResting: true })) landHit(this.ctx.course, 'ink', t, damageFor('kalamar', 'ink')); }
+    if (this.slashed || ball.state === 'holed') { this.grip = null; return; }
+    const c = this.claws(t), p = ball.pos, g = this.grip;
+    if (g) {
+      if (t < g.until) {
+        // held in the pincers: pulled to them, dragged along as the Kalamar swims
+        const v = ball.vel;
+        out.x += (c.x - p.x) * 70 - v.x * 9; out.z += (c.z - p.z) * 70 - v.z * 9;
+        out.wake = true;
+      } else {
+        this.grip = null;
+        out.x += c.fx * 260; out.z += c.fz * 260; out.y += 70;
+        out.wake = true;
+      }
+      return;
     }
+    if (t - this.lastGrip < 9) return;
+    if (Math.hypot(p.x - c.x, p.z - c.z) > 0.55 + ball.radius || Math.abs(p.y - c.y) > 1.4) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    this.lastGrip = t;
+    this.grip = { until: t + GRIP };
+    landHit(this.ctx.course, 'grip', t, damageFor('kalamar', 'grip'));
+    sfx.play('whoosh');
   }
   frame(t) {
     const s = this.at(t);
@@ -1051,14 +1041,9 @@ class Kalamar extends Monster {
     const dx = s.x - this.prev.x, dz = s.z - this.prev.z;
     if (Math.hypot(dx, dz) > 1e-4) this.model.rotation.y = Math.atan2(dx, dz);
     this.prev = s;
-    this.L.arms.forEach((a, i) => { a.rotation.x = Math.sin(t * 4 + i) * 0.35; a.rotation.y = Math.cos(t * 3 + i) * 0.25; });
-    for (const c of this.clouds) {
-      const life = Math.min(1, (t - c.born) * 3, (c.until - t) / 1.2);
-      c.g.scale.setScalar(Math.max(0.01, life));
-      c.g.rotation.y = t * 0.3;
-    }
+    const gripping = this.grip && t < this.grip.until;
+    this.L.arms.forEach((a, i) => { a.rotation.x = Math.sin(t * (gripping ? 12 : 4) + i) * (gripping ? 0.6 : 0.35); a.rotation.y = Math.cos(t * 3 + i) * 0.25; });
   }
-  dispose() { super.dispose(); for (const c of this.clouds) this.ctx.group.remove(c.g); }
 }
 
 // ---------- Guardian: a drifting prison sphere; roll into it and you're trapped for a few seconds ----------
@@ -1226,79 +1211,6 @@ class RoamingKolossus extends Monster {
   dispose() { super.dispose(); this.ctx.group.remove(this.tell); this.ctx.group.remove(this.wave); }
 }
 
-// ---------- Kongre's mouth (Digital Sea): surfaces beside a lane every ~12 s and swallows a ball ----------
-// A purple ring warns 1.2 s ahead; while the jaws are open (2.4 s) a ball rolling over it is swallowed
-// (15 LP) and spat out 2 s later a little way off, somewhere safe and never closer to the cup.
-const MOUTH_RISE = 1.2, MOUTH_OPEN = 2.4, MOUTH_SINK = 0.8;
-class KongreMouth extends Monster {
-  constructor(spec, ctx) {
-    const L = kongreMouthLook();
-    super(spec, ctx, L.g);
-    this.L = L;
-    this.rng = seededRng(ctx, spec, 'mouth');
-    this.period = spec.period ?? this.rng.range(11, 14);
-    this.phase = this.rng.range(0, this.period);
-    this.warn = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 32), new THREE.MeshBasicMaterial({ color: '#b04aff', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
-    this.warn.rotation.x = -Math.PI / 2;
-    ctx.group.add(this.warn);
-    this.lastK = null;
-  }
-  /** k: which surfacing, u: seconds into it; h: how far up (0 = surfaced), open: jaws open. */
-  pose(t) {
-    const s = t + this.phase, k = Math.floor(s / this.period), u = s - k * this.period;
-    let h = -1.4, open = false, warn = 0;
-    if (u < MOUTH_RISE) { warn = u / MOUTH_RISE; h = -1.4 + 1.4 * warn * warn; }
-    else if (u < MOUTH_RISE + MOUTH_OPEN) { h = 0; open = true; }
-    else if (u < MOUTH_RISE + MOUTH_OPEN + MOUTH_SINK) h = -1.4 * ((u - MOUTH_RISE - MOUTH_OPEN) / MOUTH_SINK);
-    return { k, u, h, open, warn, up: h > -1.35 };
-  }
-  update() {}
-  frame(t) {
-    const s = this.at(t), p = this.pose(t);
-    this.model.position.set(s.x, s.y + p.h * 0.3 + 0.05, s.z);
-    this.model.visible = p.up && !this.slashed;
-    const jaw = p.open ? 0.9 + Math.sin(t * 8) * 0.15 : 0.2;
-    for (const tooth of this.L.teeth) tooth.rotation.set(Math.cos(tooth.userData.a) * jaw, 0, -Math.sin(tooth.userData.a) * jaw);
-    this.L.mat.emissiveIntensity = p.open ? 0.8 : 0.35;
-    this.warn.visible = p.warn > 0 && !this.slashed;
-    this.warn.position.set(s.x, s.y + 0.03, s.z);
-    this.warn.material.opacity = 0.2 + 0.5 * p.warn * Math.abs(Math.sin(t * 9));
-  }
-  /** Where the ball comes back out: a safe spot ~2.6 away that's not closer to any cup than `ball`. */
-  spitPoint(k, ball) {
-    const course = this.ctx.course, s = this.at(0);
-    const cupD = (x, z) => { const c = course.nearestCup({ x, y: s.y, z }); return Math.hypot(x - c.x, z - c.z); };
-    const d0 = cupD(ball.pos.x, ball.pos.z);
-    const r = new RNG(`${course.def?.id ?? 'x'}:spit:${s.x.toFixed(2)},${s.z.toFixed(2)}:${k}`);
-    const start = r.next() * Math.PI * 2, ok = [];
-    for (let i = 0; i < 12; i++) {
-      const a = start + (i / 12) * Math.PI * 2, x = s.x + Math.sin(a) * 2.6, z = s.z + Math.cos(a) * 2.6;
-      const y = course.floorYAt(x, z);
-      if (y === null || Math.abs(y - s.y) > 0.6) continue;
-      const q = { x, y: y + 0.2, z };
-      if (course.unsafeAt?.(q) || course.lavaAt?.(q, ball) || cupD(x, z) < d0) continue;
-      ok.push({ x, y, z, a });
-    }
-    if (!ok.length) return null;
-    return ok[0];
-  }
-  force(ball, t, out) {
-    const p = this.pose(t);
-    if (!p.open || this.slashed || this.lastK === p.k || (ball.state !== 'idle' && ball.state !== 'moving')) return;
-    const s = this.at(t), b = ball.pos;
-    if (Math.hypot(b.x - s.x, b.z - s.z) > 0.95 || Math.abs(b.y - ball.radius - s.y) > 0.6) return;
-    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
-    this.lastK = p.k;
-    const sp = this.spitPoint(p.k, ball);
-    if (!sp) return; // nowhere safe to spit it: it lets this one go
-    out.teleport = [sp.x, sp.y + ball.radius + 0.05, sp.z];
-    out.tpBy = 'kongre';
-    out.tpDir = [Math.sin(sp.a), Math.cos(sp.a)];
-    landHit(this.ctx.course, 'kongre', t, damageFor('kongre', 'swallow'));
-  }
-  dispose() { super.dispose(); this.ctx.group.remove(this.warn); }
-}
-
 // ---------- Marabounta (season 3): a creeping plant mass that spreads over the floor and recedes ----------
 // spec: { p: [x,y,z], r }. Seeded cycle: grows for 8 s, holds 6 s, recedes 6 s, gone 6 s. Inside it a
 // rolling ball is heavily slowed, and a ball resting in it loses 5 LP a second.
@@ -1356,13 +1268,13 @@ class Marabounta extends Monster {
 
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
-  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: KongreArm,
+  krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: Kongre,
   kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian, magma: MagmaBombs,
-  kongreMouth: KongreMouth, marabounta: Marabounta, kolossusRoam: RoamingKolossus,
+  marabounta: Marabounta, kolossusRoam: RoamingKolossus,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'kongreMouth', 'marabounta', 'kolossusRoam']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'marabounta', 'kolossusRoam']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];

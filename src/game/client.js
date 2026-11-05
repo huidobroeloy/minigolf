@@ -46,7 +46,10 @@ const HUNTER_TOOLS = { agent: 60, creativity: 25, volcano: 35, swarm: 40 };
 const HUNTER_REGEN = 8;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
-const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'boulder', 'tumbleweed', 'guardian', 'magma', 'kongreMouth', 'marabounta', 'kolossusRoam']);
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'boulder', 'tumbleweed', 'guardian', 'magma', 'marabounta', 'kolossusRoam']);
+// where each monster carries the Eye of XANA (docs/lore.md): a fast hit only counts from that side.
+// Monsters not listed can be hit anywhere; a Creeper dies to any hit at all (codelyoko.fr: "any simple attack")
+const EYE_SIDE = { kankrelat: 1, blok: 1, hornet: 1, tarantula: 1, megatank: 1, shark: 1, kongre: 1, ninja: 1, krabe: -1 };
 // Telekinesis: how far it moves your ball, and how close to a cup it may drop it
 const TK_REACH = 1;
 const TK_CUP = 1.5;
@@ -121,7 +124,7 @@ export class GameClient {
     if (this.playoff && this.strokes >= 1) return false;
     if (this.possessing) return !this.flyover && this.phase === 'hole' && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen;
     if (this.possessedBy || this.ball?.frozen || this.agentCtl) return false;
-    return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling && !this.swallowed;
+    return !this.flyover && this.phase === 'hole' && this.ball && this.ball.state === 'idle' && !this.effects.locked && !this.targeting && this.cam.mode === 'chase' && !this.ui.overlayOpen && !this.falling;
   }
 
   // ---------- network ----------
@@ -374,13 +377,12 @@ export class GameClient {
     this.course.onMonsterHit = (kind, dmg) => this.onMonsterHit(kind, dmg);
     this.course.onMegatank = () => this.ui.comms.say('megatank', {}, { force: true });
     this.course.onBoss = (ev, n, of) => {
-      if (ev === 'hit') this.ui.toast(`🦶 Ankle hit ${n}/${of}`);
+      if (ev === 'hit') this.ui.toast(n === 'eye' ? `👁️ Eye hit! Now its planted blade, within ${of} s` : `🗡️ Blade hit! Now the glowing eye, within ${of} s`);
       if (ev === 'stun') { this.ui.bigToast('🗿 KOLOSSUS STUNNED', `the gate to the core is open for ${n} s · go!`, 'good'); this.cam.shake = Math.max(this.cam.shake, 1.2); }
       if (ev === 'recover') this.ui.toast('🗿 The Kolossus is back up · the gate is sealed');
     };
     this.ball.place(this.course.tee.clone().add(new THREE.Vector3(0, BALL_R + 0.02, 0)));
     this.ball.teleportCooldown = 0;
-    this.swallowed = null;
     this.strokes = 0;
     // Lyoko life points carry over between holes (the room keeps them; a new course refills them)
     this.lp = Math.max(1, m.players?.find((q) => q.id === this.myId)?.lp ?? 100);
@@ -420,6 +422,8 @@ export class GameClient {
     const sp = SPECIALS[characterByColor(this.me.color)?.id];
     const mine = m.players?.find((q) => q.id === this.myId);
     this.special = sp && !this.playoff ? { id: sp, used: mine?.specialUsed === def.sector } : null;
+    // Odd's purple shield (from season 2): it blocks the first monster hit of each course
+    this.oddShield = characterByColor(this.me.color)?.id === 'odd' && !this.playoff && this.oddShieldUsed !== def.sector;
     // Return to the Past: one free rewind per course, remembered by the room like the special
     this.rewindSlot = this.playoff ? null : { used: mine?.rewindUsed === def.sector };
     this.preShot = null;
@@ -669,18 +673,8 @@ export class GameClient {
     else if (type === 'rest') this.onRest();
   }
 
-  /** A monster carried your ball off: the Scyphozoa (keeps a power-up) or Kongre's mouth (spits it out). */
-  onGrabbed({ by, dir }) {
-    if (by === 'kongre') {
-      // swallowed: hidden for 2 s, then spat out where it's been put, rolling away from the mouth
-      const b = this.ball;
-      b.mesh.visible = false;
-      b.frozen = true;
-      this.swallowed = { until: this.simTime + 2, dir: dir || [0, 1] };
-      sfx.play('splash');
-      this.ui.bigToast('KONGRE!', 'swallowed your ball · it spits it back out in a moment', 'bad');
-      return;
-    }
+  /** The Scyphozoa carried your ball off (and kept a power-up). */
+  onGrabbed() {
     sfx.play('teleport');
     const i = this.inventory.length ? Math.floor(Math.random() * this.inventory.length) : -1;
     if (i >= 0) {
@@ -808,21 +802,6 @@ export class GameClient {
     this.cancelAim();
     this.link.send({ t: 'swarmed' });
     this.ui.bigToast('🌑 SWALLOWED', 'The Marabounta covered the whole sector before you reached the tower', 'bad');
-  }
-
-  /** Kongre spits the swallowed ball back out. */
-  spitOut() {
-    const b = this.ball, s = this.swallowed;
-    this.swallowed = null;
-    if (!b) return;
-    b.frozen = false;
-    b.mesh.visible = true;
-    b.state = 'moving';
-    b.restTimer = 0;
-    b.body.setLinvel({ x: s.dir[0] * 3.2, y: 2.5, z: s.dir[1] * 3.2 }, true);
-    b.launchTimer = 0.15;
-    sfx.play('splash');
-    this.cam.snapTo(b.mesh.position);
   }
 
   /** Playoff: report how close your one shot finished. */
@@ -1174,6 +1153,13 @@ export class GameClient {
   // ---------- XANA's monsters ----------
   onMonsterHit(kind, dmg = 20) {
     const e = this.effects;
+    if (this.oddShield && (dmg > 0 || kind === 'vaporize' || kind === 'freeze' || kind === 'guardian' || kind === 'xanafy' || kind === 'venom')) {
+      this.oddShield = false;
+      this.oddShieldUsed = this.def.sector;
+      this.ui.bigToast('🛡️ ODD\'S SHIELD', 'it blocked the hit', 'good');
+      sfx.play('bumper');
+      return;
+    }
     if (this.coreShield && (dmg > 0 || kind === 'vaporize' || kind === 'freeze' || kind === 'guardian' || kind === 'xanafy' || kind === 'venom')) {
       this.coreShield = false;
       this.ui.bigToast('💠 CORE SHIELD', 'it absorbed the hit', 'good');
@@ -1204,11 +1190,9 @@ export class GameClient {
       case 'guardian':
         this.freezeBall(4, 'guardian', 'a Guardian');
         break;
-      case 'ink':
-        this.ui.toast('🦑 Kalamar ink! You can barely see, and it\'s thick');
+      case 'grip':
+        this.ui.toast('🦑 The Kalamar\'s pincers have your ball!');
         break;
-      case 'kongre':
-        break; // the swallow has its own banner (onGrabbed)
       case 'marabounta':
         if (!this.maraToastT || this.simTime - this.maraToastT > 6) { this.maraToastT = this.simTime; this.ui.toast('🌿 The Marabounta is eating your ball! Get it out'); }
         break;
@@ -1260,12 +1244,24 @@ export class GameClient {
   checkWeakPoints(ball) {
     if (ball.state !== 'moving' || ball.mods.ghost) return;
     const v = ball.vel;
-    if (Math.hypot(v.x, v.z) < WEAK_SPEED) return;
+    const speed = Math.hypot(v.x, v.z);
+    if (speed < 1.5) return;
+    const fast = speed >= WEAK_SPEED;
     const t = this.course.time ?? 0;
     for (const m of this.course.monsters) {
       if (m.slashed || !m.model?.visible || WEAK_PROOF.has(m.spec.type)) continue;
+      if (!fast && m.spec.type !== 'creeper') continue;
       const p = m.model.position;
       if (Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) > 0.95 + ball.radius || Math.abs(ball.pos.y - p.y) > 1.4) continue;
+      // the eye's side: in front (+1) or on the back (-1) of the way it faces
+      const side = EYE_SIDE[m.spec.type];
+      if (side) {
+        const ry = m.model.rotation.y, dx = ball.pos.x - p.x, dz = ball.pos.z - p.z, d = Math.hypot(dx, dz) || 1;
+        if (((dx * Math.sin(ry) + dz * Math.cos(ry)) / d) * side < 0.2) {
+          if (!this.eyeHintT || t - this.eyeHintT > 10) { this.eyeHintT = t; this.ui.toast(side > 0 ? '👁️ Hit it in the eye: from the front!' : '👁️ Its eye is on its back!'); }
+          continue;
+        }
+      }
       this.effects.cutOut(m, t, 20, '#ff2a2a');
       this.healLP(5);
       sfx.play('jackpot');
@@ -1538,7 +1534,6 @@ export class GameClient {
     this.endTrip();
     this.fallId++;
     this.falling = false;
-    this.swallowed = null;
     b.frozen = false;
     b.mesh.visible = true;
     b.body.setEnabled(true);
@@ -2081,7 +2076,6 @@ export class GameClient {
 
   step(dt) {
     const ball = this.ball;
-    if (this.swallowed && this.simTime >= this.swallowed.until) this.spitOut();
     if (this.bossEvent && !this.bossEvent.spawned && this.simTime >= this.bossEvent.at) this.spawnBoss();
     if (this.swarm) this.stepSwarm(dt);
     if (this.hunter && this.hunter.energy < 100) {

@@ -95,6 +95,8 @@ export default [
       { t: 'zone', kind: 'slow', c: [-3.6, 12], r: 1.2, mul: 8 },
       { t: 'zone', kind: 'slow', c: [3.6, 25.5], r: 1.2, mul: 8 },
       { t: 'monster', type: 'krabe', path: patrol([-4.2, 16.8], [4.2, 16.8], 6.5) },
+      // a Guardian drifts between the crevasses: roll into it and it traps you (ep 7)
+      { t: 'monster', type: 'guardian', path: patrol([-4, 12.4], [4, 12.4], 8) },
       { t: 'monster', type: 'krabe', path: patrol([4, 4], [-4, 4], 5.5, 0, 0.4) },
       { t: 'monster', type: 'kolossus', p: [40, -30, 14], ry: -Math.PI / 2, phase: 0.8 },
     ],
