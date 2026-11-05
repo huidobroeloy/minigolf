@@ -96,7 +96,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
   3. most aces;
   4. a sudden-death closest-to-the-pin playoff.
 - **Fortune Falls Casino:** every cup ends the hole, but each one adds or removes strokes. The number is written over the cup, for example −2 or +3. The neon pits midway add a random penalty.
-- Holes are being redesigned course by course with **hand-made openings** built on the show's own terrain, each asking one real decision (some holes stand alone with no opening). The Desert is done; the other courses still start with a winding approach lane full of their sector's hazards and monsters. There are no shortcuts: you play the whole way.
+- Holes are being redesigned course by course with **hand-made openings** built on the show's own terrain, each asking one real decision (some holes stand alone with no opening). The Desert and the Forest are done; the other courses still start with a winding approach lane full of their sector's hazards and monsters. There are no shortcuts: you play the whole way.
 
 ## XANA's monsters
 
@@ -220,7 +220,7 @@ Active effects show as chips with a countdown at the top of the screen.
 
 ## The courses
 1. **Desert Sector:** tumbleweeds, Kankrelats, a Megatank, kicker banks, sinkholes and mesa switchbacks. Its openings: an unwalled bridge between plateaus, a Megatank canyon to jump or cross, a sunken trench of rock columns under Hornets, and Tarantula flats where slabs give cover.
-2. **Forest Sector:** Hornets, log ramps, a turntable Blok, a data-stream waterfall, a treehouse and a hollow-log shortcut.
+2. **Forest Sector:** Hornets, log ramps, a turntable Blok, a data-stream waterfall, a treehouse and a hollow-log shortcut. Its openings: a path cut in two you hop (or the long way past a Krabe), a hollow stump to go through or over, and three paths that split and meet again, one of them a fallen log.
 3. **Ice Sector:** almost frictionless floors, a glass bobsled run, crevasses, thin ice and the **Kolossus** in the distance.
 4. **Mountain Sector:** crumbling ledges, avalanches, updraft vents, windy ridge bridges and the summit.
 5. **Sector 5 · Carthage:** sliding bridges, closing walls, the core elevator, a firewall maze and the Core of Lyoko.
