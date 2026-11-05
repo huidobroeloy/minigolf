@@ -1,4 +1,4 @@
-import { rect, patrol } from './helpers.js';
+import { rect, patrol, elevator } from './helpers.js';
 
 const rock = (x, z, r = 0.6, h = 1.6, y = 0) => ({ t: 'cyl', p: [x, y, z], r, h, look: 'rock' });
 
@@ -24,9 +24,70 @@ function avalanche(x, z0, z1, y0, y1, zEnd, period, phase, r = 0.6) {
 }
 
 // Sector 4 — MOUNTAIN: crumbling plateaus, avalanches and updraft vents. Tarantulas guard the ledges.
+// The openings (docs/lore.md): in the show the Mountain is mist, long bridges between plateaus, narrow passages
+// between rocks where Megatanks block the way, floating mountains you reach only by teleport, platforms that
+// rise and fall to reach a tower, and a maze (ep 15).
+
+// mountain-1: a floating mountain. Ride the teleport up onto it and drop off its edge onto the landing, or
+// take the narrow ledge round the side where a Megatank rolls.
+const OPEN1 = {
+  par: 1, time: 30,
+  tee: [0, 0, -16.5], route: [[0, -16.5], [-2.4, -14.2], [-2.4, -9.6], [0, -4], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: [[-4, -18.5], [4, -18.5], [4, -13], [3.8, -13], [2.2, -13], [-4, -13]], open: [3] },
+    { t: 'teleport', p: [-2.4, 0, -14.6], r: 0.55, to: [[-2.6, 3.2, -10.2]] },
+    rock(-0.6, -14.2, 0.5, 1.4),
+    // the floating mountain: walled but for its front, where you drop off onto the landing
+    { t: 'floor', y: 3, poly: rect(-4, -11.5, -1, -8), open: [2] },
+    rock(-3.4, -10.9, 0.4, 1.2, 3),
+    // the ledge: narrow, no walls, a Megatank rolling up and down it
+    { t: 'floor', poly: rect(2.2, -13.2, 3.8, -6.8), walls: false },
+    { t: 'monster', type: 'megatank', path: patrol([3, -12.2], [3, -7.8], 6) },
+    { t: 'floor', poly: [[-4, -7], [2.2, -7], [3.8, -7], [4, -7], [4, -1.0], [2, -1.0], [-2, -1.0], [-4, -1.0]], open: [0, 1, 5] },
+    { t: 'monster', type: 'hornet', path: patrol([-3, -5], [3, -5], 6, 2.4), aim: 'ball' },
+  ],
+};
+
+// mountain-2: platforms that rise and fall to reach the tower (ep 20). Ride the first lift up to the ledge, or
+// climb the narrow passage between the rocks; the second lift takes you up to the tower's plateau.
+const OPEN2 = {
+  par: 1, time: 30,
+  tee: [0, 0, -17.5], route: [[0, -17.5], [-1.6, -14], [-1.6, -10], [1.6, -8.5], [1.6, -4], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: [[-4.5, -19.5], [4.5, -19.5], [4.5, -14], [4.3, -14], [2.9, -14], [-0.4, -14], [-2.8, -14], [-4.5, -14]], open: [3, 5] },
+    // lift one: from the ground up to the ledge
+    { t: 'mover', s: [2.4, 0.4, 2.5], path: elevator(-1.6, -12.75, -0.2, 1.3, 7), sideLook: 'rock' },
+    // the passage: narrow, between the rocks, up to the same ledge
+    { t: 'ramp', a: [3.6, -17], b: [3.6, -11.5], w: 1.4, ya: 0, yb: 1.5 },
+    rock(4.9, -13.4, 0.45, 1.8, 0.6), rock(2.3, -15.2, 0.4, 1.4),
+    { t: 'floor', y: 1.5, poly: [[-3, -11.5], [-2.8, -11.5], [-0.4, -11.5], [2.9, -11.5], [4.3, -11.5], [4.3, -8.5], [2.8, -8.5], [0.4, -8.5], [-3, -8.5]], open: [1, 3, 6] },
+    { t: 'monster', type: 'kankrelat', path: patrol([-2.4, -10], [3.6, -10], 5, 1.5) },
+    // lift two: from the ledge up to the tower's plateau, out of step with the first
+    { t: 'mover', s: [2.4, 0.4, 2.5], path: elevator(1.6, -7.25, 1.3, 2.8, 7, 0.5), sideLook: 'rock' },
+    { t: 'floor', y: 3, poly: [[-2.5, -6], [0.4, -6], [2.8, -6], [2.8, -1.0], [2.5, -1.0], [-2.5, -1.0]], open: [1, 4] },
+    { t: 'monster', type: 'blok', path: patrol([-2, -3.4], [2, -3.4], 5, 3) },
+  ],
+};
+
+// mountain-5: the maze (ep 15). Bank your way through its turns; dead ends wait for the careless.
+const wall = (a, b) => ({ t: 'wall', pts: [a, b], h: 0.6, thick: 0.3 });
+const OPEN5 = {
+  par: 1, time: 40,
+  tee: [0, 0, -15.5], route: [[0, -15.5], [4, -15], [4, -11], [-4, -11], [-4, -7], [3.4, -7], [3.4, -3], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: rect(-5, -17, 5, -1.0), open: [2] },
+    wall([-5, -13], [3, -13]), wall([-3, -9], [5, -9]), wall([-5, -5], [1.6, -5]),
+    // dead ends: pockets off the main way
+    wall([-1, -13], [-1, -10.6]), wall([1.6, -9], [1.6, -6.6]), wall([-2.6, -5], [-2.6, -2.8]),
+    rock(-3.6, -15.2, 0.5, 1.6), rock(2.6, -11, 0.4, 1.3), rock(-3.8, -3.6, 0.45, 1.4),
+    { t: 'monster', type: 'blok', path: patrol([-4.2, -11], [-1.6, -11], 4.4) },
+    { t: 'monster', type: 'kankrelat', path: patrol([3.6, -7.4], [3.6, -5.4], 3) },
+  ],
+};
+
 export default [
   {
-    id: 'mountain-1', name: 'Crumbling Ledge', sector: 'mountain', par: 4, time: 150,
+    id: 'mountain-1', opening: OPEN1, name: 'Crumbling Ledge', sector: 'mountain', par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 25.5],
     hio: 'Fast and dead straight over all eight crumbling tiles — they fall a moment after you touch them.',
     parts: [
@@ -47,7 +108,7 @@ export default [
     ],
   },
   {
-    id: 'mountain-2', name: 'Avalanche Alley', sector: 'mountain', par: 3, time: 120,
+    id: 'mountain-2', opening: OPEN2, name: 'Avalanche Alley', sector: 'mountain', par: 3, time: 120,
     tee: [0, 3, 0], cup: [1.5, 0, 21.5],
     hio: 'Gentle tap down the slope between boulders, drifting right toward the cup.',
     parts: [
@@ -62,7 +123,7 @@ export default [
     ],
   },
   {
-    id: 'mountain-3', name: 'Updraft Peaks', sector: 'mountain', par: 4, time: 150,
+    id: 'mountain-3', opening: false, name: 'Updraft Peaks', sector: 'mountain', par: 4, time: 150,
     tee: [0, 0, 0], cup: [-1.4, 5, 19.5],
     hio: 'Ride vent one slightly left so you land in line with vent two, then roll to the cup.',
     parts: [
@@ -79,7 +140,7 @@ export default [
     ],
   },
   {
-    id: 'mountain-4', name: 'Ridge Bridges', sector: 'mountain', par: 4, time: 150,
+    id: 'mountain-4', opening: false, name: 'Ridge Bridges', sector: 'mountain', par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 26],
     hio: 'Firm and straight along the narrow centre bridge, against the gusts.',
     parts: [
@@ -97,7 +158,7 @@ export default [
     ],
   },
   {
-    id: 'mountain-5', name: 'Boulder Climb', sector: 'mountain', par: 4, time: 150,
+    id: 'mountain-5', opening: OPEN5, name: 'Boulder Climb', sector: 'mountain', par: 4, time: 150,
     tee: [0, 0, 0], cup: [1.6, 2, 24],
     hio: 'Hard up the slope between the boulders, then the summit funnel does the rest.',
     parts: [
@@ -112,7 +173,7 @@ export default [
     ],
   },
   {
-    id: 'mountain-6', name: 'The Summit', sector: 'mountain', par: 5, time: 170,
+    id: 'mountain-6', opening: false, name: 'The Summit', sector: 'mountain', par: 5, time: 170,
     tee: [-3, 0, 0], cup: [3, 3, 27.5],
     hio: 'The hidden updraft behind the first rock throws you all the way up to the summit.',
     parts: [

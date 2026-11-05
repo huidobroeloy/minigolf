@@ -120,7 +120,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     Done: Desert (The Bridge, Megatank Crossing, Column Canyon, Tarantula Flats; desert-3 and desert-6 stand alone),
     Forest (The Cut Path, Hollow Stump, Three Paths; forest-1, -3 and -6 stand alone), Ice (The Iceberg Tunnel, The
     Floe Lake: `floe` movers with a `sand` top so a ball stops and rides, The Waterfall Cave, Hornet Squadron; ice-2 and
-    ice-5 stand alone).
+    ice-5 stand alone), Mountain (The Floating Mountain: a `teleport` up to a floating rock, The Rising Platforms: two
+    `elevator` lifts out of step, The Maze; mountain-3, -4 and -6 stand alone). Never put a boost at the foot of a ramp:
+    a ball that rolls back into it is relaunched forever (the stuck-ball bug).
   - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`), for the courses not yet redesigned: every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
     long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
