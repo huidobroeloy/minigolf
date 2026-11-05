@@ -29,8 +29,12 @@ export function holeMap(def, { px = 18, title = true } = {}) {
   const ordered = [...def.parts].sort((a, b) => level(a) - level(b));
   for (const p of ordered) {
     const mine = op.has(p) ? ' stroke="#2ee6ff" stroke-width="2"' : ' stroke="#000" stroke-width="0.5"';
-    if (p.t === 'floor' || p.t === 'crumble') {
-      out.push(`<polygon points="${pts(p.poly)}" fill="${p.t === 'crumble' ? '#8a6a4a' : shade(p.y ?? 0)}"${mine}/>`);
+    if (p.t === 'crumble') {
+      // a tile that breaks (thin ice, crumbling rock): centre p, size s
+      const [cx, , cz] = p.p, [w, d] = p.s;
+      out.push(`<rect x="${X(cx - w / 2)}" y="${Z(cz + d / 2)}" width="${(w * px).toFixed(1)}" height="${(d * px).toFixed(1)}" fill="${p.kindLook === 'thinice' ? '#9fd8ff' : '#8a6a4a'}" fill-opacity="0.7"${mine}/>`);
+    } else if (p.t === 'floor') {
+      out.push(`<polygon points="${pts(p.poly)}" fill="${shade(p.y ?? 0)}"${mine}/>`);
       for (const h of p.holes || []) {
         if (h.c) out.push(`<circle cx="${X(h.c[0])}" cy="${Z(h.c[1])}" r="${(h.r * px).toFixed(1)}" fill="#02060c"/>`);
         else if (h.poly) out.push(`<polygon points="${pts(h.poly)}" fill="#02060c"/>`);
@@ -54,6 +58,10 @@ export function holeMap(def, { px = 18, title = true } = {}) {
       const c = p.rect ? [(p.rect[0] + p.rect[2]) / 2, (p.rect[1] + p.rect[3]) / 2] : p.c;
       if (c && p.dir) out.push(`<line x1="${X(c[0])}" y1="${Z(c[1])}" x2="${X(c[0] + p.dir[0] * 1.2)}" y2="${Z(c[1] + p.dir[1] * 1.2)}" stroke="#fff" stroke-width="2" marker-end="url(#ar)"/>`);
       if (c) out.push(`<text x="${X(c[0])}" y="${Z(c[1]) * 1 + 4}" fill="#fff" font-size="9" text-anchor="middle">${p.kind}</text>`);
+    } else if (p.t === 'tube') {
+      out.push(`<polyline points="${pts(p.pts.map((q) => [q[0], q[2]]))}" fill="none" stroke="#bfe9ff" stroke-opacity="0.55" stroke-width="${((p.r ?? 0.5) * 2 * px).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+      const q = p.pts[0];
+      out.push(`<text x="${X(q[0])}" y="${Z(q[2]) * 1 - 4}" fill="#fff" font-size="9" text-anchor="middle">tube</text>`);
     } else if (p.t === 'mover' && typeof p.path === 'function') {
       const tr = []; for (let t = 0; t <= 24; t += 0.25) { const s = p.path(t); tr.push([s.x, s.z]); }
       out.push(`<polyline points="${pts(tr)}" fill="none" stroke="#ffd23a" stroke-dasharray="3 3"/>`);
