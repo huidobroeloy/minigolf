@@ -768,8 +768,8 @@ export function buildCourse(def, physics, scene) {
     return out;
   };
 
-  /** Belts, boosts, launchers, currents and lava aren't somewhere to respawn. */
-  course.unsafeAt = (p) => course.zones.some((z) => ['conveyor', 'boost', 'vent', 'current', 'bubble', 'lava'].includes(z.kind) && z.contains(p));
+  /** Belts, boosts, launchers, currents and lava aren't somewhere to respawn; nor is any zone marked `unsafe` (the jaws' mouth). */
+  course.unsafeAt = (p) => course.zones.some((z) => (z.unsafe || ['conveyor', 'boost', 'vent', 'current', 'bubble', 'lava'].includes(z.kind)) && z.contains(p));
 
   /** Is the ball touching lava? */
   course.lavaAt = (p, ball) => {

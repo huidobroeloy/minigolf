@@ -1266,15 +1266,73 @@ class Marabounta extends Monster {
   }
 }
 
+// ---------- the Core room's jaws (Carthage): two fangs snap shut on a rhythm; "ending up between its fangs means
+// devirtualization" (docs/lore.md). One fang per side: spec { open: [x, z], shut: [x, z], period, phase, w, d, h }.
+// It holds open, snaps shut in 0.15 s, holds 0.7 s, reopens. A ball in its half of the mouth as it snaps is vaporized. ----------
+const FANG_SNAP = 0.15, FANG_HOLD = 0.7, FANG_REOPEN = 1.0;
+class CoreFang extends Monster {
+  constructor(spec, ctx) {
+    const w = spec.w ?? 2.2, d = spec.d ?? 2, h = spec.h ?? 1.2;
+    const g = new THREE.Group();
+    const white = new THREE.MeshStandardMaterial({ color: '#f2ecff', roughness: 0.35, emissive: '#3a2a6a', emissiveIntensity: 0.25 });
+    const red = new THREE.MeshStandardMaterial({ color: '#c8102e', emissive: '#ff1a3a', emissiveIntensity: 0.6, roughness: 0.4 });
+    const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), white);
+    block.position.y = h / 2;
+    g.add(block);
+    // a row of red teeth along the biting face
+    const side = Math.sign(spec.shut[0] - spec.open[0]) || 1;
+    for (let k = 0; k < 4; k++) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 6), red);
+      tooth.rotation.z = -side * Math.PI / 2;
+      tooth.position.set(side * (w / 2 + 0.18), h * 0.55, -d / 2 + (k + 0.5) * (d / 4));
+      g.add(tooth);
+    }
+    super(spec, ctx, g, { colliders: [[R.ColliderDesc.cuboid(w / 2, h / 2, d / 2).setTranslation(0, h / 2, 0), 0.4]] });
+    this.w = w; this.d = d; this.side = side;
+    this.lastBite = -1;
+  }
+  /** 0 = open … 1 = shut, and which cycle it is. */
+  phase(t) {
+    const { period = 4.5, phase = 0 } = this.spec;
+    const u = t / period + phase, n = Math.floor(u), T = (u - n) * period;
+    const openFor = period - FANG_SNAP - FANG_HOLD - FANG_REOPEN;
+    let k;
+    if (T < openFor) k = 0;
+    else if (T < openFor + FANG_SNAP) k = (T - openFor) / FANG_SNAP;
+    else if (T < openFor + FANG_SNAP + FANG_HOLD) k = 1;
+    else { const r = (T - openFor - FANG_SNAP - FANG_HOLD) / FANG_REOPEN; k = 1 - r * r * (3 - 2 * r); }
+    return { k, n, snapping: T >= openFor && T < openFor + FANG_SNAP + 0.05 };
+  }
+  at(t) {
+    const { k } = this.phase(t);
+    const [ox, oz] = this.spec.open, [sx, sz] = this.spec.shut;
+    return { x: ox + (sx - ox) * k, y: 0, z: oz + (sz - oz) * k, ry: 0 };
+  }
+  force(ball, t) {
+    if (this.slashed || ball.state === 'holed') return;
+    const ph = this.phase(t);
+    if (!ph.snapping || ph.n === this.lastBite) return;
+    // its half of the mouth: from where its face stands open to where the fangs meet
+    const [ox, oz] = this.spec.open, [sx] = this.spec.shut;
+    const face0 = ox + this.side * this.w / 2, face1 = sx + this.side * this.w / 2;
+    const p = ball.pos, lo = Math.min(face0, face1) - ball.radius, hi = Math.max(face0, face1) + ball.radius;
+    if (p.x < lo || p.x > hi || Math.abs(p.z - oz) > this.d / 2 + ball.radius || p.y > 1.4) return;
+    if (!canTarget(this.ctx.course, ball, t, { allowResting: true })) return;
+    this.lastBite = ph.n;
+    landHit(this.ctx.course, 'vaporize', t, 100);
+    sfx.play('whoosh');
+  }
+}
+
 const TYPES = {
   kankrelat: Kankrelat, tumbleweed: Tumbleweed, megatank: Megatank, hornet: Hornet, blok: Blok,
   krabe: Krabe, tarantula: Tarantula, boulder: Boulder, creeper: Creeper, manta: Manta, scyphozoa: Scyphozoa, drone: Drone, kolossus: Kolossus, shark: Shark, kongre: Kongre,
   kolossusBoss: KolossusBoss, ninja: Ninja, kalamar: Kalamar, guardian: Guardian, magma: MagmaBombs,
-  marabounta: Marabounta, kolossusRoam: RoamingKolossus,
+  marabounta: Marabounta, kolossusRoam: RoamingKolossus, fang: CoreFang,
 };
 
 /** Monsters XANA's Agent can't take over (bosses, sweeping arms, swimmers, rolling rocks). */
-export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'marabounta', 'kolossusRoam']);
+export const AGENT_PROOF = new Set(['kolossusBoss', 'kolossus', 'kongre', 'shark', 'boulder', 'guardian', 'magma', 'marabounta', 'kolossusRoam', 'fang']);
 
 export function createMonster(spec, ctx) {
   const T = TYPES[spec.type];
