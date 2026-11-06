@@ -101,7 +101,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
 ## XANA's monsters
 
 Every monster is solid: your ball bounces off whatever you can see (it rolls under a Krabe's or Tarantula's belly, between the legs), and a walking monster shoves a resting ball aside.
-Each sector has its typical monsters, but every match a few **guests** from other sectors show up too (about 30% of the lane monsters, plus sometimes one swapped in the hole).
+Each sector has its typical monsters, and every match may swap one walker for another (a Kankrelat, a Blok or a Tarantula).
 **The XANA eye is their weak point:** ram a monster with a fast ball **on the side its eye is on** (the front for most, the back for a Krabe) and it's devirtualized for 20 s (+5 LP). Creepers fall to any hit. Not the Kolossus or Guardians.
 Every hole has at least two monsters that shoot. They fire every 4–7 s, at you (even a resting ball, after a short grace) or near you, but never while you're aiming. Every attack is telegraphed: the monster swells and glows, and a red ring marks the target. Each one has its own abilities:
 
@@ -113,7 +113,7 @@ Every hole has at least two monsters that shoot. They fire every 4–7 s, at you
 | Krabe | Laser or charged laser; two Krabes together fire the combined beam (60 LP) |
 | Megatank | Opens up and fires its flat blade of light along a line: it **vaporizes** your ball (+1). Being run over costs 50 LP |
 | Tarantula | Rears up and fires rapid volleys that lead your ball |
-| Creeper | Pops out of the floor and fires (40 LP); on the lanes it climbs the side walls and fires its laser down at you. Any hit destroys it |
+| Creeper | Pops out of the floor and fires (40 LP), or crawls along the top of a wall and fires its laser down at you. Any hit destroys it |
 | Manta | Laser strafes, and the odd mine: 30 LP and a blast that throws your ball |
 | Scyphozoa | Grabs your ball, drops it back, **steals one of your power-ups** and XANA-fies your next shot (inverted controls) |
 | Shark | Cruises its lane, rams you, and fires slow torpedoes that follow you |
@@ -296,7 +296,7 @@ Code map:
 - `src/game/intro.js`, `finale.js`, `xanaFinale.js`: the intro and the two endings.
 - `src/core/music.js`, `soundtrack.js`: the procedural music and your own tracks.
 - `src/fx/lyoko.js`: the tower, Aelita and Kolossus models. `towerCup.js`: the tower hologram over each cup and the trip inside. `weather.js`: the weather. `vehicles.js`: the vehicles.
-- `src/holes/extend.js`: the approach lanes for courses not yet redesigned, and `attachOpening` for the hand-made openings (`opening` in each hole). `boss.js`: the Kolossus hole.
+- `src/holes/extend.js`: `attachOpening`, which lays each hole's hand-made opening (`opening` in each hole) behind its tee. `monsterRoll.js`: the per-match walker swap. `boss.js`: the Kolossus hole.
 - `src/game/stats.js`, `season.js`, `src/ui/comms.js`: achievements and trails, the season cabinet, and Jérémie's lines.
 - `src/course/deco.js`: per-sector scenery and atmosphere (light shafts, horizon glow). `src/fx/dissolve.js`: the devirtualization pixel cubes.
 

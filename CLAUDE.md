@@ -25,7 +25,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - MQTT.js 5.10.1 (ESM, imported by `src/net/relay.js` only when the relay is used)
 - **Git identity is repo-local:** `huidobroeloy` / `197536980+huidobroeloy@users.noreply.github.com`.
 - **Commit messages** end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- **No shortcuts.** No warp pipe or other route may skip a hole's lane or drop the ball near the cup (the owner removed
+- **No shortcuts.** No warp pipe or other route may skip a hole's opening or drop the ball near the cup (the owner removed
   the old red secret warps for this). Aces are not required; where one is possible it must stay rare (≤1.5% of the
   search grid, see below).
 
@@ -39,7 +39,7 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   - `__rampTest()`: flags balls stopped or hovering on ramps
   - `__cupWalls()`, `__cupTest({ holes })`: cup regression checks (see Physics)
   - `__monsterAudit()`: rolls balls at every monster type and parks a resting ball in a walker's path (see Monsters)
-  - `__greenAudit({ holes })`, `__puttAudit({ holes })`: how easy each hole is from where its lane joins it, and
+  - `__greenAudit({ holes })`, `__puttAudit({ holes })`: how easy each hole is from where its opening joins it, and
     how guarded each cup is (putts from 3 units)
   - `__holeMap(i | def)`: a top-down SVG of a hole, for design reviews
 - **Screenshots when the pane is hidden:** `computer` screenshots time out. Instead render a frame, then
@@ -111,9 +111,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     course together, in random course order. **Fortune Falls (`LUCKY`) is not in the World Cup or the random cups**: it
     only plays in the `lucky` format ("Feeling Lucky"). `HOLES` ends with the Kolossus boss (`holes/boss.js`, sector
     `core`, `BOSS_INDEX`): the World Cup is the 11 other courses + the boss (`worldCupLength()`, 67 holes). A new course
-    needs entries in `themes.js`, `ROSTER`/`FLAVOUR` (`extend.js`), music `STYLES`, the sector map (`ui.sectorMap`) and the
+    needs entries in `themes.js`, music `STYLES`, the sector map (`ui.sectorMap`) and the
     per-sector colour tables (`lyoko.js`, `builder.js` slow zones, `renderer.js` sea, `post.js` bloom).
-  - **Hand-made openings** (replacing the generated lanes course by course, owner-reviewed): a hole's
+  - **Hand-made openings** (owner-reviewed, one course at a time; they replaced the generated approach lanes, whose
+    generator is gone): a hole's
     `opening: { parts, tee, route, par, time }` is laid out behind its old tee floor (z below that floor's back edge,
     which `attachOpening` in `extend.js` opens); `route` runs from the new tee to the old start; `par`/`time` add to the
     hole's. `opening: false` keeps a hole on its own. Each design starts from a one-page brief (decision, risk and
@@ -151,22 +152,13 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     main line as **one floor slab**: a slab that starts on top of another kicks a fast ball into the air at the join
     (the seam snap in `Ball.postStep` now cancels it too, but one slab is cleaner). Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
-  - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`), for the courses not yet redesigned: every non-Fortune hole gets a winding
-    lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
-    long lane (`SHAPES` S/Z/U/L/zig/hook, ≈41–55 units, +2 par, +60 s); par-5 holes a short one (suffix `0`, ≈22–40,
-    +1 par, +30 s). If a lane would cross the hole, the next shape (or mirror) that fits is used, falling back to the
-    short shapes with a `[lanes]` console warning. forest-3 (round floor) has no lane. `APPROACH` takes per-hole
-    `{ shape, mirror }` overrides. Lanes have **no warps**: the only warps left are sea-3's green pipe maze, which is
-    the hole itself (every exit ≥6 from the cup). (Way towers were tried and removed at the owner's request.)
-    Lane lava gutters and water currents only go on straight legs (a diagonal leg's box would cover the whole bend);
-    currents stop 0.9 short of the walls and 0.6 short of each corner, so they never chain down the whole lane;
-    lane winds have `minSpeed: 0.5`. Volcano legs without a gutter get a `magma` monster (`MagmaBombs`: a seeded bomb
-    every 6–9 s, ring telegraph 1.5 s, 20 LP + knock, `canTarget` rules).
-  - **Monster rosters** (`ROSTER` in `extend.js`): each sector's typical lane monsters. `rollMonsters(def, seed)`
-    (`holes/monsterRoll.js`) re-rolls lane monsters each match (`lane` slot on the spec, `laneMonster`), ~30% guests
-    from other sectors, and may swap one hand-placed walker (kankrelat/blok/tarantula). Ninjas only appear in the Cortex,
-    Kalamars and Sharks only in the Digital Sea. Seeded from the host's hole
-    seed, so every client builds the same monsters in the same order; the client loads `rollMonsters(HOLES[i], seed)`.
+  - **No warps** outside sea-3's green pipe maze, which is the hole itself (every exit ≥6 from the cup). (Way towers
+    were tried and removed at the owner's request.) Volcano openings get a `magma` monster (`MagmaBombs`: a seeded
+    bomb every 6–9 s, ring telegraph 1.5 s, 20 LP + knock, `canTarget` rules) over their causeway and ledge.
+  - **Monster variety:** `rollMonsters(def, seed)` (`holes/monsterRoll.js`) may swap one hand-placed walker
+    (kankrelat/blok/tarantula) for another each match, seeded from the host's hole seed, so every client builds the
+    same monsters; the client loads `rollMonsters(HOLES[i], seed)`. Keep each sector's monsters typical: Ninjas only
+    in the Cortex, Kalamars and Sharks only in the Digital Sea and the Skid.
   - Fortune cups carry a `mod` (strokes added on holing out); Fortune pits roll a random penalty.
 - **Power-ups** (`src/powerups`):
   - `registry.js` holds the 48 power-ups (including one per character) with their weights and catch-up luck. From the new
@@ -249,8 +241,8 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
   (bob and dive included, `kind: 'obst', monster: true` in the physics meta); a ball always bounces off it and a walking
   monster pushes a resting ball. By design: Krabe and Tarantula let a ball roll under the belly between their solid
   legs, Scyphozoa's tentacles grab (its bell is solid). `__monsterAudit()` must report `ok` for every type.
-  Show upgrades: lane Creepers are `WallCreeper`s (`spec.wall`: patrol along the lane's side wall top, laser/charged
-  down; `laneMonster` builds it from the slot). Scyphozoa's grab uses `canTarget` and sets `out.tpBy`; the client's
+  Show upgrades: wall Creepers are `WallCreeper`s (`spec.wall`: patrol along a wall top, laser/charged down).
+  Scyphozoa's grab uses `canTarget` and sets `out.tpBy`; the client's
   `onGrabbed` steals a random held power-up. The `marabounta` monster class (seeded 26 s patch: drags rolling balls,
   5 LP/s on a resting one) now only comes from the `maraseed` power-up.
   Never let a monster fire at a ball whose owner is aiming. Show-faithful kits (`docs/lore.md`; `DAMAGE` follows

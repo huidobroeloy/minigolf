@@ -10,39 +10,13 @@ import network from './network.js';
 import cortex from './cortex.js';
 import carthage from './carthage.js';
 import skid from './skid.js';
-import { extendHole, attachOpening } from './extend.js';
+import { attachOpening } from './extend.js';
 import boss from './boss.js';
 
-// Longer holes: every hole gets a winding approach lane in front of it (see extend.js). Holes up
-// to par 4 get a long lane (+2 par, +60 s), par-5 holes a short one (+1, +30 s). The shapes cycle;
-// when a lane would cross the hole, the next shape that fits is used instead.
-const LANES = ['S', 'Z', 'U', 'L', 'zig', 'hook'];
-// per-hole overrides: { shape, mirror }
-export const APPROACH = {};
-
-function lengthenOne(h, i) {
-  if (h.sector === 'fortune') return h;
-  // hand-designed openings replace the generated lanes, course by course (false: the hole stands alone)
-  if (h.opening === false) return h;
-  if (h.opening) return attachOpening(h, h.opening);
-  const long = h.par < 5;
-  const base = APPROACH[h.id] ?? {};
-  const mirror = base.mirror ?? i % 2 === 1;
-  // an override may name a long shape ('S') or a short one ('S0'); either way it is tried first
-  const first = (base.shape ?? LANES[i % LANES.length]).replace(/0$/, '');
-  const order = [first, ...LANES.filter((n) => n !== first)];
-  const names = [...(long && !base.shape?.endsWith('0') ? order : []), ...order.map((n) => `${n}0`)];
-  const tries = names.flatMap((n) => [{ shape: n, mirror }, { shape: n, mirror: !mirror }]);
-  for (const t of tries) {
-    const short = t.shape.endsWith('0');
-    const out = extendHole(h, { ...t, extraPar: short ? 1 : 2 });
-    if (out === h) continue;
-    if (long && short) console.warn(`[lanes] ${h.id}: no long lane fits, using ${t.shape}`);
-    return out;
-  }
-  return h; // no back edge to join (round floors): keeps its own layout
-}
-const lengthen = (holes) => holes.map(lengthenOne);
+// Hand-designed openings (see extend.js): a hole with `opening` gets it laid out behind its tee;
+// `opening: false` (and Fortune Falls, which has none) keeps the hole as it is.
+const withOpening = (h) => (h.opening ? attachOpening(h, h.opening) : h);
+const lengthen = (holes) => holes.map(withOpening);
 
 /**
  * The Lyoko World Cup: every course is a sector of (up to) 6 holes. A match plays whole courses:
