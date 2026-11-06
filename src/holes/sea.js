@@ -1,4 +1,4 @@
-import { rect, patrol, orbit, circlePoly } from './helpers.js';
+import { rect, patrol, orbit, shuttle, circlePoly } from './helpers.js';
 
 // THE DIGITAL SEA (season 4): the gang crosses it in the Skidbladnir. Underwater the ball floats
 // a little when airborne. Glass tubes and warp pipes (very Mario), currents that carry you,
@@ -26,9 +26,43 @@ const gateway = (x, y, z, r = 1.6) => ({
   },
 });
 
+// The openings (docs/lore.md): the Skid leaves Lyoko for the network through the sas (ep 70), and the sea's
+// monsters harass it all the way: the Kalamar grips it with its pincers (ep 88).
+
+// sea-2: the sas. Two doors rise and sink in turn, never both down: stop in the chamber between them and wait
+// (two calm shots), or time one firm shot through both as the first closes and the second opens.
+const sasDoor = (z, phase) => ({ t: 'mover', kind: 'obst', s: [2.4, 0.6, 0.3], path: shuttle([0, -0.62, z], [0, 0.3, z], 8, phase, 0.5), look: '#2a7fff' });
+const OPEN2 = {
+  par: 1, time: 30,
+  tee: [0, 0, -18], route: [[0, -18], [0, -14], [0, -7], [0, -1.2]],
+  parts: [
+    // the bay, the sas tunnel and the open water beyond, one slab (a seam across the tunnel kicks fast balls up)
+    { t: 'floor', poly: [[-4, -20], [4, -20], [4, -14], [1.2, -14], [1.2, -7], [5, -7], [5, -1.0], [-5, -1.0], [-5, -7], [-1.2, -7], [-1.2, -14], [-4, -14]], open: [6] },
+    gateway(0, 0, -14, 1.5), gateway(0, 0, -7, 1.5),
+    sasDoor(-12.6, 0), sasDoor(-8.4, 0.5),
+    coral(-2.6, -16.6), coral(2.8, -15.4, 0.35),
+    { t: 'monster', type: 'shark', path: patrol([-4, -4.2], [4, -4.2], 5.5), range: 4 },
+  ],
+};
+
+// sea-4: the Kalamar's grip. A reef wall bars the way: slip through the strait on the right, where a Kalamar drifts
+// across and grips whatever swims in front of it, or ride the bubble column on the left up and over the reef
+// (safe, but it drops you off-line).
+const OPEN4 = {
+  par: 1, time: 30,
+  tee: [0, 0, -16], route: [[0, -16], [3.2, -11], [3.2, -7], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: [[-5, -18], [5, -18], [5, -1.0], [2.5, -1.0], [-2.5, -1.0], [-5, -1.0]], open: [3] },
+    { t: 'box', p: [-1.8, 0.8, -9], s: [6.4, 1.6, 0.6], kind: 'wall', look: '#1e5f7a' },
+    { t: 'zone', kind: 'bubble', c: [-3.2, -10.7], r: 0.8, height: 3.2, lift: 1.8, push: [0, 2.2] },
+    { t: 'monster', type: 'kalamar', path: patrol([1.9, -9], [4.5, -9], 5) },
+    coral(-0.2, -11.9), coral(3.6, -14.6, 0.35), coral(-3.4, -4.6), coral(3.4, -3.4, 0.35),
+  ],
+};
+
 export default [
   {
-    id: 'sea-1', name: 'Skid Launch Bay', sector: 'sea', water: true, par: 3, time: 120,
+    id: 'sea-1', opening: false, name: 'Skid Launch Bay', sector: 'sea', water: true, par: 3, time: 120,
     tee: [0, 2, 0], cup: [0, 0.8, 22.4],
     hio: 'Down the launch tube with just enough speed to climb onto the landing pad.',
     parts: [
@@ -43,7 +77,7 @@ export default [
     ],
   },
   {
-    id: 'sea-2', name: 'Data Current', sector: 'sea', water: true, par: 4, time: 150,
+    id: 'sea-2', opening: OPEN2, name: 'Data Current', sector: 'sea', water: true, par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 23],
     hio: 'Hard enough to cut straight through both currents before they carry you off.',
     parts: [
@@ -56,7 +90,7 @@ export default [
     ],
   },
   {
-    id: 'sea-3', name: 'Warp Pipe Maze', sector: 'sea', water: true, par: 4, time: 150,
+    id: 'sea-3', opening: false, name: 'Warp Pipe Maze', sector: 'sea', water: true, par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 21],
     parts: [
       { t: 'floor', poly: [[-4.5, -1.2], [4.5, -1.2], [4.5, 8], [-4.5, 8], [-4.5, 7], [-4.5, 5]], open: [4] },
@@ -74,7 +108,7 @@ export default [
     ],
   },
   {
-    id: 'sea-4', name: 'Shark Reef', sector: 'sea', water: true, par: 4, time: 150,
+    id: 'sea-4', opening: OPEN4, name: 'Shark Reef', sector: 'sea', water: true, par: 4, time: 150,
     tee: [0, 0, 0], cup: [11, 0, 15],
     hio: 'Bank off the angled reef wall in the corner and let it roll down the channel.',
     parts: [
@@ -86,7 +120,7 @@ export default [
     ],
   },
   {
-    id: 'sea-5', name: 'Replika Gateway', sector: 'sea', water: true, par: 3, time: 120,
+    id: 'sea-5', opening: false, name: 'Replika Gateway', sector: 'sea', water: true, par: 3, time: 120,
     tee: [0, 0, 0], cup: [-0.2, 2.2, 13.2], yaw: 0,
     hio: 'The bubble lift is the safe way up. The spiral tube, at the right speed, rolls you straight in.',
     parts: [
@@ -102,7 +136,7 @@ export default [
     ],
   },
   {
-    id: 'sea-6', name: 'Kongre’s Abyss', sector: 'sea', water: true, par: 5, time: 170,
+    id: 'sea-6', opening: false, name: 'Kongre’s Abyss', sector: 'sea', water: true, par: 5, time: 170,
     tee: [0, 0, 0], cup: [1.8, 0, 41],
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 12], [0.6, 12], [-0.6, 12], [-3, 12]], open: [3] },

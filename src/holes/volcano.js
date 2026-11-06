@@ -54,17 +54,15 @@ const OPEN1 = {
   par: 1, time: 30,
   tee: [-1, 0, -17.2], route: [[-1, -17.2], [-1, -13], [-1, -6.5], [0, -1.2]],
   parts: [
-    // the wreck's bank, open at the front where it drops into the lake
-    { t: 'floor', poly: rect(-5, -19, 5, -13), open: [2] },
+    // the wreck's bank, the causeway and the landing are one slab (a join between slabs kicks fast balls up); every
+    // edge round the lake is open, so the bank and the landing drop straight into it
+    { t: 'floor', poly: [[-5, -19], [5, -19], [5, -13], [-0.3, -13], [-0.3, -6.5], [5, -6.5], [5, -1.0], [3, -1.0], [-3, -1.0], [-5, -1.0], [-5, -6.5], [-1.7, -6.5], [-1.7, -13], [-5, -13]], open: [2, 3, 4, 7, 10, 11, 12] },
     grounded(-10.5, -14.5, 0.5, 0.18),
     { t: 'cyl', p: [3.4, 0, -16.6], r: 0.45, h: 1.2, look: 'rock' },
     // the lava lake, a step down: the causeway (1.4 wide) runs straight over it, the raft ferries balls on the right
     { t: 'floor', y: -0.6, poly: rect(-5, -13, 5, -6.5), open: [0, 2] },
     lava(-5, -13, 5, -6.5, -0.6),
-    { t: 'floor', poly: rect(-1.7, -13, -0.3, -6.5), walls: false },
     { t: 'mover', kind: 'floor', s: [2.6, 0.3, 2.6], path: shuttle([2.8, -0.15, -11.7], [2.8, -0.15, -7.8], 10, 0, 0.6), mat: 'basalt', sideLook: 'rock', safeRim: true },
-    // the landing
-    { t: 'floor', poly: [[-5, -6.5], [5, -6.5], [5, -1.0], [3, -1.0], [-3, -1.0], [-5, -1.0]], open: [0, 3] },
     { t: 'monster', type: 'magma', p: [-1, 0, -9.75], a: [-1, -12.6], b: [-1, -6.9], w: 1.4 },
     { t: 'monster', type: 'tarantula', path: patrol([-3.6, -3.6], [3.6, -3.6], 7, 0, 0.2) },
   ],
