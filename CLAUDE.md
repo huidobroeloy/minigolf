@@ -123,7 +123,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     ice-5 stand alone), Mountain (The Floating Mountain: a `teleport` up to a floating rock, The Rising Platforms: two
     `elevator` lifts out of step, The Maze; mountain-3, -4 and -6 stand alone), Sector 5 (The Arena: three exit doors
     on a 9 s `shuttle` cycle over a floor XANA eye (`floorEye` deco), The Key's Room: two lanes of rising blocks, slow
-    and fast, with a wall Creeper between them; sector5-1, -4, -5 and -6 stand alone). Never put a boost at the foot of a ramp:
+    and fast, with a wall Creeper between them; sector5-1, -4, -5 and -6 stand alone), Volcano (from the Wii game's
+    Volcano Replika: Run Aground: the wrecked Skid (`makeSkid`, exported from `deco.js`), a lava lake a step down (y −0.6,
+    so the raft's top is the only surface at bank height: a raft level with the floor under lava loses the ground probe)
+    crossed by a causeway or a basalt raft, The Mooring: a tower with the Skid moored, a geyser over a lava moat or a
+    ledge; volcano-2 to -5 stand alone). Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
   - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`), for the courses not yet redesigned: every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
