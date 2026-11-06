@@ -96,7 +96,7 @@ Each hole opens with a **fly-over** along the track, from the cup back to your t
   3. most aces;
   4. a sudden-death closest-to-the-pin playoff.
 - **Fortune Falls Casino:** every cup ends the hole, but each one adds or removes strokes. The number is written over the cup, for example −2 or +3. The neon pits midway add a random penalty.
-- Holes are being redesigned course by course with **hand-made openings** built on the show's own terrain, each asking one real decision (some holes stand alone with no opening). The Desert, Forest, Ice, Mountain, Sector 5 and Volcano courses are done; the other courses still start with a winding approach lane full of their sector's hazards and monsters. There are no shortcuts: you play the whole way.
+- Holes are being redesigned course by course with **hand-made openings** built on the show's own terrain, each asking one real decision (some holes stand alone with no opening). The Desert, Forest, Ice, Mountain, Sector 5, Volcano and Digital Sea courses are done; the other courses still start with a winding approach lane full of their sector's hazards and monsters. There are no shortcuts: you play the whole way.
 
 ## XANA's monsters
 
@@ -225,7 +225,7 @@ Active effects show as chips with a countdown at the top of the screen.
 4. **Mountain Sector:** crumbling ledges, avalanches, updraft vents, windy ridge bridges and the summit. Its openings: a teleport up to a floating mountain (or a narrow ledge past a Megatank), lifts that rise and fall, and a rock maze.
 5. **Sector 5 · Carthage:** sliding bridges, closing walls, the core elevator, a firewall maze and the Core of Lyoko. Its openings: the Arena with XANA's eye on the floor and three exit doors that open in turn, and the Key's room with its rising blocks.
 6. **Volcano Replika:** lava rivers with basalt rafts (their glowing rim means safe to ride), magma geysers (they smoke when you're close, and throw a ball at most twice per shot), crumbling basalt, the Replika core and an obsidian maze. **Magma bombs** fall: a ring marks the spot 1.5 s before, and a hit costs 20 LP. Its openings come from the Wii game, where the Volcano Replika lives: the Skidbladnir run aground (cross the lava lake by the causeway or the raft), and the Skid moored at a tower (ride the geyser over the moat, or take the ledge).
-7. **The Digital Sea:** underwater floaty physics, glass tubes and Mario-style warp pipes, currents, bubble lifts, Sharks and Kongre.
+7. **The Digital Sea:** underwater floaty physics, glass tubes and Mario-style warp pipes, currents, bubble lifts, Sharks and Kongre. Its openings: the sas the Skid leaves Lyoko by (two doors that never open together: wait between them or time one shot through both), and a reef where a Kalamar grips whatever swims past it.
 8. **The Network:** firewall gates, data highways, gravity launchers, the Skid docking bay, packet storms and the Hub.
 9. **The Cortex:** XANA's world in its sphere: blocks that slide across the lane, a bridge that falls away, a data current, rising ground, a Guardian field and the Core itself. Ninjas guard it.
 10. **Carthage · The Core:** the white halls deep in Sector 5: data streams across the hall, spinning wall rings, two lift shafts, zig-zag walls with Creepers crawling along the tops, the Guardian vault and the Core chamber with its spinning shield.

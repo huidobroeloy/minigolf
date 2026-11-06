@@ -127,7 +127,10 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     Volcano Replika: Run Aground: the wrecked Skid (`makeSkid`, exported from `deco.js`), a lava lake a step down (y −0.6,
     so the raft's top is the only surface at bank height: a raft level with the floor under lava loses the ground probe)
     crossed by a causeway or a basalt raft, The Mooring: a tower with the Skid moored, a geyser over a lava moat or a
-    ledge; volcano-2 to -5 stand alone). Never put a boost at the foot of a ramp:
+    ledge; volcano-2 to -5 stand alone), Digital Sea (The Sas: two `shuttle` doors 8 s out of step in a tunnel, never
+    both down; The Kalamar's Grip: a reef wall, the strait past a Kalamar or a `bubble` column over it; sea-1, -3, -5
+    and -6 stand alone). Build an opening's main line as **one floor slab**: a slab that starts on top of another
+    kicks a fast ball into the air at the join. Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
   - **Approach lanes** (`holes/extend.js`, `lengthenOne` in `holes/index.js`), for the courses not yet redesigned: every non-Fortune hole gets a winding
     lane in front of its old tee, with hazards per sector and extra shooters (≥2 per hole). Holes up to par 4 get a
