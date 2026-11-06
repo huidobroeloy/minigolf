@@ -143,7 +143,11 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     or a railed rim path, a slope down; The Jaws: a stream-or-Creeper split hall, then `fang` monsters (`CoreFang`:
     snap shut on a cycle and vaporize a ball in their half of the mouth; agent-proof, no eye, the Marabounta skips them,
     the monster audit skips them) over a hidden zone with `unsafe: true` (`course.unsafeAt`: never a respawn spot);
-    carthage-2 to -5 stand alone). Build an opening's
+    carthage-2 to -5 stand alone), Skidbladnir (The Skid Garage: the docked Skid on a visible cradle (`makeSkid` decor, the
+    ball rolls under the pods), two Navskid pads (hidden `boost`s, `align: 10`) that launch you at a blast door shutting
+    every 7 s, or the right side under a Manta; The Kolossus Walks: a `kolossusRoam` at 0.45 scale stomping up the
+    middle, a left corridor with a tow current and a Kongre pack, a right one past the Skid's wreck (a `box` with
+    `hidden: true` is a collider fitted to a decor model); skid-3 to -6 stand alone). Build an opening's
     main line as **one floor slab**: a slab that starts on top of another kicks a fast ball into the air at the join
     (the seam snap in `Ball.postStep` now cancels it too, but one slab is cleaner). Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
