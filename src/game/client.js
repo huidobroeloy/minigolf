@@ -46,7 +46,7 @@ const HUNTER_TOOLS = { agent: 60, creativity: 25, volcano: 35, swarm: 40 };
 const HUNTER_REGEN = 8;
 // the XANA eye: how fast your ball must hit a monster to devirtualize it, and who can't be hit there
 const WEAK_SPEED = 6;
-const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'boulder', 'tumbleweed', 'guardian', 'magma', 'marabounta', 'kolossusRoam']);
+const WEAK_PROOF = new Set(['kolossusBoss', 'kolossus', 'boulder', 'tumbleweed', 'guardian', 'magma', 'marabounta', 'kolossusRoam', 'fang']);
 // where each monster carries the Eye of XANA (docs/lore.md): a fast hit only counts from that side.
 // Monsters not listed can be hit anywhere; a Creeper dies to any hit at all (codelyoko.fr: "any simple attack")
 const EYE_SIDE = { kankrelat: 1, blok: 1, hornet: 1, tarantula: 1, megatank: 1, shark: 1, kongre: 1, ninja: 1, krabe: -1 };
@@ -737,7 +737,7 @@ export class GameClient {
     if (t < sw.ev.at) return;
     // it destroys XANA's monsters without discrimination (bosses shrug it off)
     for (const m of this.course.monsters) {
-      if (m.slashed || m.spec?.boss || !m.model) continue;
+      if (m.slashed || m.spec?.boss || m.spec?.type === 'fang' || !m.model) continue;
       const p = m.model.position;
       if (sw.covered(p.x, p.z, t)) this.effects.cutOut(m, t, 9999, '#ff2a55');
     }
