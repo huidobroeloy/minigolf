@@ -1,5 +1,5 @@
-// Green audit (?debug=1 → __greenAudit({ holes })): how easy is the hole itself (not its approach lane)?
-// From the old tee (where the lane joins the hole) it fires a fan of shots at the cup and reports how
+// Green audit (?debug=1 → __greenAudit({ holes })): how easy is the hole itself (not its opening)?
+// From the old tee (where the opening joins the hole) it fires a fan of shots at the cup and reports how
 // many hole out and how many stop within 1.2 of the cup. A high score means a hole is a gimme.
 import * as THREE from 'three';
 import { Physics } from '../physics/world.js';
