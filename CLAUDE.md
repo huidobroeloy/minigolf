@@ -138,7 +138,12 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     Plates: a 3 × 4 grid, six anchored cells in the slab and six `quakePlate` movers that shake 1 s, fall away and
     reform 0.6 under the surface (a plate rising from the depths would launch a falling ball); The Blok Wall: an S-bend,
     two staggered rows of static Bloks (`p` + `ry`) opened by the eye weak point, a plaza of pillars and Ninjas;
-    cortex-1, -2, -4 and -6 stand alone). Build an opening's
+    cortex-1, -2, -4 and -6 stand alone), Carthage (lore G15: The Celestial Dome: a `ringLift` that never stops (it
+    overshoots the floor and the deck by 0.15 so you can step on and off), a jump over the void with a Manta across it
+    or a railed rim path, a slope down; The Jaws: a stream-or-Creeper split hall, then `fang` monsters (`CoreFang`:
+    snap shut on a cycle and vaporize a ball in their half of the mouth; agent-proof, no eye, the Marabounta skips them,
+    the monster audit skips them) over a hidden zone with `unsafe: true` (`course.unsafeAt`: never a respawn spot);
+    carthage-2 to -5 stand alone). Build an opening's
     main line as **one floor slab**: a slab that starts on top of another kicks a fast ball into the air at the join
     (the seam snap in `Ball.postStep` now cancels it too, but one slab is cleaner). Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
