@@ -133,7 +133,12 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
     both down; The Kalamar's Grip: a reef wall, the strait past a Kalamar or a `bubble` column over it; sea-1, -3, -5
     and -6 stand alone), Network (The Red Blocks: giant red data blocks (`dataBlock`) round a lane of floor `holes`: a
     ball at ~70%+ skims over the sinks, a slow one drops in; Hyperspeed: a hub `boost` into an arched `tube` over the
-    void, or a wall-less bridge a Kongre pack swims across; network-2, -3, -5 and -6 stand alone). Build an opening's
+    void, or a wall-less bridge a Kongre pack swims across; network-2, -3, -5 and -6 stand alone), Cortex (the owner
+    asked for intricate designs and a review page with images of all six maps, which every course now gets. Seismic
+    Plates: a 3 × 4 grid, six anchored cells in the slab and six `quakePlate` movers that shake 1 s, fall away and
+    reform 0.6 under the surface (a plate rising from the depths would launch a falling ball); The Blok Wall: an S-bend,
+    two staggered rows of static Bloks (`p` + `ry`) opened by the eye weak point, a plaza of pillars and Ninjas;
+    cortex-1, -2, -4 and -6 stand alone). Build an opening's
     main line as **one floor slab**: a slab that starts on top of another kicks a fast ball into the air at the join
     (the seam snap in `Ball.postStep` now cancels it too, but one slab is cleaner). Never put a boost at the foot of a ramp:
     a ball that rolls back into it is relaunched forever (the stuck-ball bug).
