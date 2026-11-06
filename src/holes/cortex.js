@@ -1,4 +1,5 @@
-import { patrol, orbit, spin, elevator } from './helpers.js';
+import { rect, patrol, orbit, spin, elevator } from './helpers.js';
+import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
 
 // THE CORTEX (season 4): XANA's own world inside a sphere floating in the Digital Sea. Its ground is
 // made of blocks that keep shifting, rising and falling away, and at its heart sits the Core.
@@ -6,9 +7,74 @@ import { patrol, orbit, spin, elevator } from './helpers.js';
 
 const block = (a, b, period, phase = 0) => ({ t: 'mover', kind: 'obst', s: [2.4, 0.6, 0.5], path: patrol(a, b, period, 0, phase), look: 'holo' });
 
+// The openings (docs/lore.md; Évolution, from codelyoko.fr): the Cortex "est instable et subit en permanence des
+// mouvements sismiques", its plates keep moving; and XANA walls a tower off with Bloks (ep 7).
+
+const smooth = (u) => u * u * (3 - 2 * u);
+/** A plate of ground that holds still, shakes for a second, falls away into the void and reforms. */
+const quakePlate = (x, z, period, phase) => (t) => {
+  const T = ((((t / period) + phase) % 1) + 1) % 1 * period;
+  const fall = period - 2.2;
+  if (T < fall - 1) return { x, y: -0.2, z, ry: 0 };
+  if (T < fall) return { x: x + Math.sin(T * 55) * 0.05, y: -0.2, z, ry: 0 }; // the warning shake
+  if (T < fall + 0.5) { const k = (T - fall) / 0.5; return { x, y: -0.2 - 12 * k * k, z, ry: 0 }; }
+  if (T < fall + 1.6) return { x, y: -12.2, z, ry: 0 };
+  // it reforms just under the surface and eases up into place (a plate rising from the depths would launch a falling ball)
+  return { x, y: -0.8 + 0.6 * smooth(Math.min(1, (T - fall - 1.6) / 0.6)), z, ry: 0 };
+};
+const plate = (x, z, period, phase) => ({ t: 'mover', kind: 'floor', s: [2.6, 0.4, 2.6], path: quakePlate(x, z, period, phase), mat: 'netgrid', sideLook: 'holo' });
+
+// cortex-3: seismic plates. A 3 x 4 grid of cells over the void. Six are anchored ground that never moves: down the
+// left, across the second row (the right wall stops you on the far cell) and down the right, the safe way in three
+// careful shots. The other six are plates that shake, fall away and reform, each on its own beat; the straight middle
+// line crosses three of them, so time one roll. A Ninja paces the third row, plates and anchors alike.
+const OPEN3 = {
+  par: 2, time: 60,
+  tee: [0, 0, -19.5], route: [[0, -19.5], [-2.6, -17.2], [-2.6, -13.3], [2.6, -13.3], [2.6, -6.8], [0, -1.2]],
+  parts: [
+    // the start, the six anchors and the landing are one slab; every edge it shares with a plate is open
+    { t: 'floor', poly: [[-4, -21], [4, -21], [4, -17.2], [-1.3, -17.2], [-1.3, -14.6], [3.9, -14.6], [3.9, -6.8], [4, -6.8], [4, -1.0], [-4, -1.0], [-4, -6.8], [1.3, -6.8], [1.3, -12], [-3.9, -12], [-3.9, -17.2], [-4, -17.2]],
+      open: [2, 3, 4, 8, 10, 11, 12] },
+    plate(0, -15.9, 8, 0), plate(2.6, -15.9, 10, 0.55),
+    plate(-2.6, -10.7, 11, 0.8), plate(0, -10.7, 7, 0.3), plate(-2.6, -8.1, 9, 0.35), plate(0, -8.1, 12, 0.65),
+    // the pit's open sides
+    { t: 'box', p: [4.05, -0.3, -15.9], s: [0.3, 1.4, 2.6], kind: 'wall', look: 'holo' },
+    { t: 'box', p: [-4.05, -0.3, -9.4], s: [0.3, 1.4, 5.2], kind: 'wall', look: 'holo' },
+    { t: 'monster', type: 'ninja', path: patrol([-2.6, -10.7], [2.6, -10.7], 6) },
+  ],
+};
+
+// cortex-5: the Blok wall (ep 7: XANA walls a tower off with Bloks). Three stages: an S-bend between two Cortex blocks
+// with a sliding block in the second gap; the wall itself, two staggered rows of Bloks with no straight line through
+// (thread it on a diagonal, or hit the front middle Blok square in the eye at speed: it devirtualizes for 20 s and opens
+// the middle); then the tower's plaza, where two Ninjas cross between data pillars.
+const OPEN5 = {
+  par: 2, time: 60,
+  tee: [0, 0, -25.5], route: [[0, -25.5], [2.8, -21.5], [0, -20], [-2.8, -18.5], [-1.2, -16.5], [0, -11], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: rect(-4.5, -27, 4.5, -1.0), open: [2] },
+    // the S-bend
+    { t: 'wall', pts: [[-4.5, -21.5], [1.2, -21.5]], h: 0.6, thick: 0.4 },
+    { t: 'wall', pts: [[-1.2, -18.5], [4.5, -18.5]], h: 0.6, thick: 0.4 },
+    { t: 'mover', kind: 'obst', s: [2.0, 0.6, 0.5], path: patrol([-3.4, -18.5], [-2.3, -18.5], 3), look: 'holo' },
+    // the wall of Bloks, narrowed by two Cortex blocks
+    { t: 'box', p: [-4, 0.3, -14], s: [1, 0.6, 6], kind: 'wall', look: 'holo' },
+    { t: 'box', p: [4, 0.3, -14], s: [1, 0.6, 6], kind: 'wall', look: 'holo' },
+    ...[-2.4, 0, 2.4].map((x) => ({ t: 'monster', type: 'blok', p: [x, 0, -15.5], ry: Math.PI })),
+    ...[-1.2, 1.2].map((x) => ({ t: 'monster', type: 'blok', p: [x, 0, -13], ry: Math.PI })),
+    // the tower's plaza
+    { t: 'deco', make: (THREE) => { const g = makeTower('#ff2a2a', 12, TOWER_BODY.cortex, { wisps: 24, shadows: false }); g.position.set(7.2, 0, -6.5); return g; } },
+    { t: 'cyl', p: [-2.1, 0, -7.6], r: 0.35, h: 1.4, look: 'neon' },
+    { t: 'cyl', p: [2.2, 0, -5.8], r: 0.35, h: 1.4, look: 'neon' },
+    { t: 'cyl', p: [-0.7, 0, -3.6], r: 0.35, h: 1.4, look: 'neon' },
+    { t: 'monster', type: 'ninja', path: patrol([-3.6, -9.6], [3.6, -4.2], 6) },
+    { t: 'monster', type: 'ninja', path: patrol([3.6, -9.6], [-3.6, -4.2], 6, 0, 0.5) },
+  ],
+};
+
 export default [
   {
-    id: 'cortex-1', name: 'Shifting Grid', sector: 'cortex', par: 3, time: 120,
+    id: 'cortex-1', opening: false, name: 'Shifting Grid', sector: 'cortex', par: 3, time: 120,
     tee: [0, 0, 0], cup: [1.4, 0, 21],
     parts: [
       // green: the grid has holes into the void behind and beside the cup
@@ -23,7 +89,7 @@ export default [
     ],
   },
   {
-    id: 'cortex-2', name: 'Vanishing Bridge', sector: 'cortex', par: 4, time: 150,
+    id: 'cortex-2', opening: false, name: 'Vanishing Bridge', sector: 'cortex', par: 4, time: 150,
     tee: [0, 0, 0], cup: [-1.2, 0, 24],
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 7], [-3, 7]], open: [2] },
@@ -35,7 +101,7 @@ export default [
     ],
   },
   {
-    id: 'cortex-3', name: 'Data Current', sector: 'cortex', par: 3, time: 120,
+    id: 'cortex-3', opening: OPEN3, name: 'Data Current', sector: 'cortex', par: 3, time: 120,
     tee: [0, 0, 0], cup: [-2, 0, 17.5],
     parts: [
       { t: 'floor', poly: [[-4, -1.2], [4, -1.2], [4, 20], [-4, 20]], holes: [{ c: [-2, 18.9], r: 0.5 }, { c: [-3.45, 16.9], r: 0.4 }, { c: [-0.4, 17.3], r: 0.4 }] },
@@ -47,7 +113,7 @@ export default [
     ],
   },
   {
-    id: 'cortex-4', name: 'Terrain Shift', sector: 'cortex', par: 4, time: 150,
+    id: 'cortex-4', opening: false, name: 'Terrain Shift', sector: 'cortex', par: 4, time: 150,
     tee: [0, 0, 0], cup: [1.5, 2.4, 19],
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 6], [-3, 6]], open: [2] },
@@ -60,7 +126,7 @@ export default [
     ],
   },
   {
-    id: 'cortex-5', name: 'Ninja Field', sector: 'cortex', par: 4, time: 150,
+    id: 'cortex-5', opening: OPEN5, name: 'Ninja Field', sector: 'cortex', par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 21.5],
     parts: [
       { t: 'floor', poly: [[-4.5, -1.2], [4.5, -1.2], [4.5, 24], [-4.5, 24]] },
@@ -73,7 +139,7 @@ export default [
     ],
   },
   {
-    id: 'cortex-6', name: 'The Core', sector: 'cortex', par: 5, time: 170,
+    id: 'cortex-6', opening: false, name: 'The Core', sector: 'cortex', par: 5, time: 170,
     tee: [0, 0, 0], cup: [0, 1.5, 26],
     parts: [
       { t: 'floor', poly: [[-3, -1.2], [3, -1.2], [3, 10], [-3, 10]], open: [2] },
