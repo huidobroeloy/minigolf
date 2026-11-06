@@ -183,6 +183,7 @@ export function buildCourse(def, physics, scene) {
       const mesh = addMesh(geo, mat);
       mesh.position.set(...p.p);
       mesh.rotation.y = p.ry || 0;
+      if (p.hidden) mesh.visible = false; // a collider for a decor model
       if (kind === 'floor') mesh.castShadow = false;
       physics.addBox([w / 2, h / 2, d / 2], { kind, mat: p.mat || mats.theme.floorMat, restitution: p.restitution },
         { pos: p.p, quat: mesh.quaternion });
