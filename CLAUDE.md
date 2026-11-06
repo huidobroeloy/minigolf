@@ -75,7 +75,9 @@ A browser minigolf party game for friends, not for distribution. It's inspired b
 - **Physics** (`src/physics`):
   - Rapier, fixed 120 Hz timestep.
   - The ball has zero friction. Rolling deceleration is custom, per surface (`SURFACES` in `world.js`; `glass` is the low-friction surface on the Fortune Falls board).
-  - Ground snap is skipped while `launchTimer` is running.
+  - Ground snap is skipped while `launchTimer` is running. It kills hops under 3.2, and any upward kick on a ball that
+    was rolling on flat ground a step ago and still is (not falling, not on a mover): that is a **seam kick**, a fast ball
+    clipping the edge where one floor slab starts on top of another (desert-1 and sector5-2 hopped 0.8–1.3 high).
   - **Real cups:** on a flat floor the builder cuts a hole (`CUP_R` 0.36, ball 0.18) into the slab, adds a solid
     liner (a ring of 24 box colliders, `kind: 'floor'`) and a bottom, `CUP_DEPTH` deep. The ball drops in physically
     (rim pull for slow balls, lip-outs for fast ones). In `Ball.postStep` a ball whose centre gets below the floor

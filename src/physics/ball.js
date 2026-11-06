@@ -314,6 +314,7 @@ export class Ball {
     let v = this.body.linvel();
 
     // ground probe
+    const prevFlat = this.grounded && this.groundNormal.y > 0.98 && !this.groundMeta?.mover;
     _v.set(p.x, p.y + 0.02, p.z);
     const groups = this.mods.ghost ? BALL_GHOST : BALL_NORMAL;
     const hit = this.physics.raycastDown(_v, this.radius + 0.25, this.body, groups);
@@ -324,7 +325,11 @@ export class Ball {
       // snap: kill small hops caused by seams / landing
       const pv = this.platformVel();
       const rn = (v.x - pv.x) * hit.normal.x + (v.y - pv.y) * hit.normal.y + (v.z - pv.z) * hit.normal.z;
-      if (this.launchTimer <= 0 && rn > 0 && rn < 3.2) {
+      // a fast ball rolling over the join where one floor slab starts on top of another catches the second slab's
+      // edge, and the solver throws it into the air (well over the 3.2 the plain snap allows). Rolling flat, still
+      // flat, not falling and nothing lifting it (launchTimer covers chips, vents and knocks): any kick up is that.
+      const seam = prevFlat && hit.normal.y > 0.98 && Math.abs(this.prevVel.y) < 0.6 && !hit.meta.mover;
+      if (this.launchTimer <= 0 && rn > 0 && (rn < 3.2 || seam)) {
         v = { x: v.x - hit.normal.x * rn, y: v.y - hit.normal.y * rn, z: v.z - hit.normal.z * rn };
         this.body.setLinvel(v, true);
       }
