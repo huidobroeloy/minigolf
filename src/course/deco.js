@@ -394,7 +394,7 @@ function fortuneSign() {
 }
 
 /** The Skidbladnir, roughly: a sleek white submarine with a cockpit dome and glowing engines. */
-function makeSkid() {
+export function makeSkid() {
   const g = new THREE.Group();
   const hull = new THREE.MeshStandardMaterial({ color: '#e8eef6', roughness: 0.3, metalness: 0.2 });
   const trim = new THREE.MeshStandardMaterial({ color: '#5a6a86', roughness: 0.4 });

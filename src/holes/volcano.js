@@ -1,9 +1,91 @@
 import { rect, patrol, shuttle, circlePoly } from './helpers.js';
+import { makeSkid } from '../course/deco.js';
+import { makeTower, TOWER_BODY } from '../fx/lyoko.js';
 
 // VOLCANO REPLIKA (season 4): basalt islands over lava. Touching lava is a fall (+1, back to your
 // last safe spot). Rafts ferry you over rivers, magma geysers throw you about, basalt crumbles.
 
 const lava = (x0, z0, x1, z1, y = 0) => ({ t: 'zone', kind: 'lava', rect: [x0, z0, x1, z1], y });
+
+// The openings (docs/lore.md): the Volcano is the Wii game's Replika, the only territory XANA invented. Its story
+// gives two of them: the Skidbladnir run aground there by the Replika's firewall (ch. 9), and the Skid moored at
+// one of its towers (ch. 15).
+
+/** The Skidbladnir run aground on a basalt bank outside the course (decor). */
+const grounded = (x, z, ry, tilt) => ({
+  t: 'deco',
+  make: (THREE) => {
+    const g = new THREE.Group();
+    const skid = makeSkid();
+    skid.rotation.set(0.12, ry, tilt);
+    skid.position.y = 0.5;
+    g.add(skid);
+    const rock = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 4.6, 1.4, 9), new THREE.MeshStandardMaterial({ color: '#2a201d', roughness: 0.95 }));
+    rock.position.y = -0.8;
+    g.add(rock);
+    // the cracks it ploughed open glow round it
+    const glow = new THREE.Mesh(new THREE.RingGeometry(3.4, 4.2, 9), new THREE.MeshBasicMaterial({ color: '#ff5a14', transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = -0.05;
+    g.add(glow);
+    g.position.set(x, 0, z);
+    return g;
+  },
+});
+
+/** A Volcano tower with the Skidbladnir moored beside it (decor). */
+const moored = (x, z) => ({
+  t: 'deco',
+  make: (THREE) => {
+    const g = new THREE.Group();
+    g.add(makeTower('#ffffff', 12, TOWER_BODY.volcano, { wisps: 24, shadows: false }));
+    const skid = makeSkid();
+    skid.position.set(0, 4.5, 4.6);
+    skid.rotation.y = Math.PI;
+    g.add(skid);
+    g.position.set(x, 0, z);
+    return g;
+  },
+});
+
+// volcano-1: run aground. From the wreck, cross the lava lake straight over the narrow causeway while magma
+// bombs fall on it, or go round by the right and ride the raft over (two calmer shots).
+const OPEN1 = {
+  par: 1, time: 30,
+  tee: [-1, 0, -17.2], route: [[-1, -17.2], [-1, -13], [-1, -6.5], [0, -1.2]],
+  parts: [
+    // the wreck's bank, open at the front where it drops into the lake
+    { t: 'floor', poly: rect(-5, -19, 5, -13), open: [2] },
+    grounded(-10.5, -14.5, 0.5, 0.18),
+    { t: 'cyl', p: [3.4, 0, -16.6], r: 0.45, h: 1.2, look: 'rock' },
+    // the lava lake, a step down: the causeway (1.4 wide) runs straight over it, the raft ferries balls on the right
+    { t: 'floor', y: -0.6, poly: rect(-5, -13, 5, -6.5), open: [0, 2] },
+    lava(-5, -13, 5, -6.5, -0.6),
+    { t: 'floor', poly: rect(-1.7, -13, -0.3, -6.5), walls: false },
+    { t: 'mover', kind: 'floor', s: [2.6, 0.3, 2.6], path: shuttle([2.8, -0.15, -11.7], [2.8, -0.15, -7.8], 10, 0, 0.6), mat: 'basalt', sideLook: 'rock', safeRim: true },
+    // the landing
+    { t: 'floor', poly: [[-5, -6.5], [5, -6.5], [5, -1.0], [3, -1.0], [-3, -1.0], [-5, -1.0]], open: [0, 3] },
+    { t: 'monster', type: 'magma', p: [-1, 0, -9.75], a: [-1, -12.6], b: [-1, -6.9], w: 1.4 },
+    { t: 'monster', type: 'tarantula', path: patrol([-3.6, -3.6], [3.6, -3.6], 7, 0, 0.2) },
+  ],
+};
+
+// volcano-6: the mooring. From the tower where the Skid is moored, a lava moat: ride the geyser over it in one
+// (too soft and it drops you in), or take the narrow ledge on the left under the magma bombs.
+const OPEN6 = {
+  par: 1, time: 30,
+  tee: [2, 0, -17], route: [[2, -17], [2, -12.2], [2, -4], [-4.5, -1.2]],
+  parts: [
+    { t: 'floor', poly: rect(-6, -19, 6, -1.0), open: [2] },
+    moored(-11, -14),
+    { t: 'cyl', p: [4.4, 0, -15.2], r: 0.5, h: 1.3, look: 'rock' },
+    { t: 'zone', kind: 'vent', c: [2, -12.2], r: 0.7, y: 0, launch: 9, push: [0, 1], minSpeed: 4.8 },
+    // the moat; the ledge (1.4 wide) runs along its left side
+    lava(-6, -11.3, -4.8, -6.3), lava(-3.4, -11.3, 6, -6.3),
+    { t: 'monster', type: 'magma', p: [-4.1, 0, -8.8], a: [-4.1, -11], b: [-4.1, -6.6], w: 1.4 },
+    { t: 'monster', type: 'blok', path: patrol([-4, -3.4], [3.5, -3.4], 7, 0, 0.5) },
+  ],
+};
 
 /** A boulder that rolls down a slope (z0→z1, height y0→y1), then sinks and comes back. */
 function rolling(x, z0, z1, y0, y1, period, phase, r = 0.55) {
@@ -22,7 +104,7 @@ function rolling(x, z0, z1, y0, y1, period, phase, r = 0.55) {
 
 export default [
   {
-    id: 'volcano-1', name: 'Magma Gate', sector: 'volcano', par: 3, time: 120,
+    id: 'volcano-1', opening: OPEN1, name: 'Magma Gate', sector: 'volcano', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 0, 15],
     hio: 'Dead straight over both bridges, timed so the basalt bar is out of your way.',
     parts: [
@@ -37,7 +119,7 @@ export default [
     ],
   },
   {
-    id: 'volcano-2', name: 'Lava River', sector: 'volcano', par: 4, time: 150,
+    id: 'volcano-2', opening: false, name: 'Lava River', sector: 'volcano', par: 4, time: 150,
     tee: [0, 2, 0], cup: [0, 0, 28.5],
     hio: 'Roll gently onto the magma geyser: it throws you clean over the river, onto the green.',
     parts: [
@@ -54,7 +136,7 @@ export default [
     ],
   },
   {
-    id: 'volcano-3', name: 'Crumbling Basalt', sector: 'volcano', par: 3, time: 120,
+    id: 'volcano-3', opening: false, name: 'Crumbling Basalt', sector: 'volcano', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 0, 25.5],
     hio: 'Firm and straight over the crumbling stones: no stopping, no falling.',
     parts: [
@@ -68,7 +150,7 @@ export default [
     ],
   },
   {
-    id: 'volcano-4', name: 'Eruption Ridge', sector: 'volcano', par: 5, time: 170,
+    id: 'volcano-4', opening: false, name: 'Eruption Ridge', sector: 'volcano', par: 5, time: 170,
     tee: [0, 0, 0], cup: [-4.5, 2.5, 32],
     parts: [
       { t: 'floor', poly: [[-2.5, -1.2], [2.5, -1.2], [2.5, 10], [-2.5, 10]], open: [2] },
@@ -83,7 +165,7 @@ export default [
     ],
   },
   {
-    id: 'volcano-5', name: 'Replika Core', sector: 'volcano', par: 3, time: 120,
+    id: 'volcano-5', opening: false, name: 'Replika Core', sector: 'volcano', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 1.5, 12],
     hio: 'Roll softly onto the geyser at the cone\'s foot: it lobs you into the crater.',
     parts: [
@@ -100,7 +182,7 @@ export default [
     ],
   },
   {
-    id: 'volcano-6', name: 'Obsidian Maze', sector: 'volcano', par: 4, time: 150,
+    id: 'volcano-6', opening: OPEN6, name: 'Obsidian Maze', sector: 'volcano', par: 4, time: 150,
     tee: [-4.5, 0, 0], cup: [4.5, 0, 21.5],
     parts: [
       { t: 'floor', poly: rect(-6, -1.2, 6, 24) },
