@@ -7,9 +7,69 @@ const packet = (a, b, period, phase = 0, s = [0.9, 0.5, 0.9]) => ({ t: 'mover', 
 const pillar = (x, z, r = 0.35, h = 1.6, y = 0) => ({ t: 'cyl', p: [x, y, z], r, h, look: 'neon' });
 const stream = (x0, z0, x1, z1, dir, speed = 3, y = 0) => ({ t: 'zone', kind: 'conveyor', rect: [x0, z0, x1, z1], dir, speed, y });
 
+// The openings (docs/lore.md): the Network is an ocean "with no bottom and no surface", full of giant red data blocks
+// with white graffiti, with hubs that shoot you across at hyperspeed; Kongres hunt there.
+
+/** A giant red data block with white graffiti stripes (solid). */
+const dataBlock = (x, z, w, d, h = 2.4) => [
+  { t: 'box', p: [x, h / 2 - 0.4, z], s: [w, h, d], kind: 'wall', look: '#b3122a' },
+  {
+    t: 'deco',
+    make: (THREE) => {
+      const g = new THREE.Group();
+      const m = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 });
+      for (const [k, a] of [[0, 0.5], [1, -0.4], [2, 0.25]]) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 0.06, d + 0.02), m);
+        bar.position.set(0, 0.2 + k * 0.55, 0);
+        bar.rotation.z = a;
+        g.add(bar);
+      }
+      g.position.set(x, -0.4, z);
+      return g;
+    },
+  },
+];
+
+// network-1: the red blocks. A lane between giant data blocks, pitted with data sinks: hit it hard enough and you skim
+// straight over them, or weave round them slowly; a slow ball over a sink drops into the Network.
+const OPEN1 = {
+  par: 1, time: 30,
+  tee: [0, 0, -18], route: [[0, -18], [0, -15], [0, -5], [0, -1.2]],
+  parts: [
+    { t: 'floor', poly: [[-4, -20], [4, -20], [4, -15], [1.5, -15], [1.5, -5], [4, -5], [4, -1.0], [3, -1.0], [-3, -1.0], [-4, -1.0], [-4, -5], [-1.5, -5], [-1.5, -15], [-4, -15]], open: [7],
+      holes: [{ c: [-0.5, -12.5], r: 0.65 }, { c: [0.5, -9.6], r: 0.65 }, { c: [-0.5, -6.7], r: 0.65 }] },
+    ...dataBlock(-2.6, -12.6, 2.2, 3.2), ...dataBlock(2.7, -11.4, 2.4, 3.6, 3), ...dataBlock(-2.8, -7.6, 2.6, 2.8, 2.8), ...dataBlock(2.6, -7.2, 2.2, 2.4),
+    pillar(-3, -18.2), pillar(3, -17.6, 0.3),
+  ],
+};
+
+/** A pack of Kongre eels swimming between a and b, rows offset along z (they hunt in packs). */
+const kongres = (a, b, period, y = 0, n = 3, gap = 0.9) => Array.from({ length: n }, (_, k) => {
+  const o = (k - (n - 1) / 2) * gap;
+  return { t: 'monster', type: 'kongre', path: patrol([a[0], a[1] + o], [b[0], b[1] + o], period, y, k / n), phase: k / n };
+});
+
+// network-4: hyperspeed. A hub's ring shoots you through a glass tube over the void at hyperspeed (no control over where you
+// end up in the corridor), or cross the narrow bridge on the left while a Kongre pack sweeps over it.
+const OPEN4 = {
+  par: 1, time: 30,
+  tee: [-0.6, 0, -19.5], route: [[-0.6, -19.5], [-3, -16.5], [-3, -7], [0, -1.2]],
+  parts: [
+    // island, bridge and landing are one slab; the bridge has no walls
+    { t: 'floor', poly: [[-4, -21], [4, -21], [4, -16.5], [-2.4, -16.5], [-2.4, -7], [4, -7], [4, -1.0], [2.5, -1.0], [-2.5, -1.0], [-4, -1.0], [-4, -7], [-3.6, -7], [-3.6, -16.5], [-4, -16.5]], open: [2, 3, 4, 7, 10, 11, 12] },
+    // the hub ring and its hyperspeed pad, then the tube arching over the void
+    { t: 'zone', kind: 'boost', rect: [1.2, -18.6, 2.4, -17.2], dir: [0, 1], speed: 12, align: 2 },
+    { t: 'tube', pts: [[1.8, 0, -16.9], [1.8, 0.9, -14.2], [1.8, 1.3, -11.8], [1.8, 0.9, -9.4], [1.8, 0, -6.8]], r: 0.6, color: '#7ac8ff' },
+    { t: 'deco', make: (THREE) => { const r = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.1, 10, 36), new THREE.MeshBasicMaterial({ color: '#18f0ff' })); r.position.set(1.8, 1.1, -17.9); return r; } },
+    // the pack swims right across the void, so the bridge is clear for part of each pass
+    ...kongres([-8, -11.8], [1.4, -11.8], 8),
+    pillar(3.2, -20.2, 0.3), pillar(-3.4, -3.2),
+  ],
+};
+
 export default [
   {
-    id: 'network-1', name: 'Firewall Gate', sector: 'network', par: 3, time: 120,
+    id: 'network-1', opening: OPEN1, name: 'Firewall Gate', sector: 'network', par: 3, time: 120,
     tee: [0, 0, 0], cup: [0, 0, 15],
     hio: 'Straight through the firewall’s moving gap. Time it.',
     parts: [
@@ -24,7 +84,7 @@ export default [
     ],
   },
   {
-    id: 'network-2', name: 'Data Highway', sector: 'network', par: 4, time: 150,
+    id: 'network-2', opening: false, name: 'Data Highway', sector: 'network', par: 4, time: 150,
     tee: [0, 0, 0], cup: [-6, 0, 27],
     hio: 'Ride the data stream round the bend at just the right pace.',
     parts: [
@@ -39,7 +99,7 @@ export default [
     ],
   },
   {
-    id: 'network-3', name: 'Gravity Ramps', sector: 'network', par: 4, time: 150,
+    id: 'network-3', opening: false, name: 'Gravity Ramps', sector: 'network', par: 4, time: 150,
     tee: [0, 0, 0], cup: [1.7, 1.5, 28.2], yaw: 0,
     hio: 'Come up the ramp at a slight angle: the gravity launcher keeps your drift and drops you beside the cup.',
     parts: [
@@ -58,7 +118,7 @@ export default [
     ],
   },
   {
-    id: 'network-4', name: 'Skid Docking Bay', sector: 'network', par: 4, time: 150,
+    id: 'network-4', opening: OPEN4, name: 'Skid Docking Bay', sector: 'network', par: 4, time: 150,
     tee: [0, 0, 0], cup: [12.5, 0, 17],
     hio: 'Bank off the docking clamp’s back wall into the bay.',
     parts: [
@@ -74,7 +134,7 @@ export default [
     ],
   },
   {
-    id: 'network-5', name: 'Packet Storm', sector: 'network', par: 4, time: 150,
+    id: 'network-5', opening: false, name: 'Packet Storm', sector: 'network', par: 4, time: 150,
     tee: [0, 0, 0], cup: [0, 0, 24],
     hio: 'Thread the packet traffic dead straight: every lane crosses your line at a different beat.',
     parts: [
@@ -88,7 +148,7 @@ export default [
     ],
   },
   {
-    id: 'network-6', name: 'The Hub', sector: 'network', par: 5, time: 170,
+    id: 'network-6', opening: false, name: 'The Hub', sector: 'network', par: 5, time: 170,
     tee: [0, 0, 0], cup: [0, 1, 30],
     parts: [
       // first highway, then a bend to the right
